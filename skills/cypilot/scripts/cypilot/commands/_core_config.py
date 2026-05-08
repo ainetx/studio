@@ -13,7 +13,7 @@ from ..utils._tomllib_compat import tomllib
 logger = logging.getLogger(__name__)
 
 # @cpt-begin:cpt-cypilot-algo-ralphex-delegation-discover:p1:inst-read-config
-_ADAPTER_DIRS = (".bootstrap", "cypilot", ".cypilot", ".cpt")
+_ADAPTER_DIRS = (".bootstrap", "cypilot", ".cf-constructor", ".cpt")
 
 
 def load_core_config(project_root: Path) -> dict:

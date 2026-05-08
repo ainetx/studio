@@ -1442,7 +1442,7 @@ class TestEndToEndCapabilitySurface:
         agents_toml = Path(__file__).parent.parent / "skills" / "cypilot" / "agents.toml"
         with open(agents_toml, "rb") as f:
             agents_data = tomllib.load(f)
-        assert "cypilot-ralphex" in agents_data["agents"]
+        assert "cf-constructor-ralphex" in agents_data["agents"]
 
         # Verify orchestration: discover → validate → run_delegation
         with TemporaryDirectory() as tmp:
@@ -1496,7 +1496,7 @@ class TestEndToEndCapabilitySurface:
             # Create prompt files
             agents_dir = core_skill / "agents"
             agents_dir.mkdir(parents=True)
-            for name in ("cypilot-ralphex", "cypilot-codegen", "cypilot-pr-review"):
+            for name in ("cf-constructor-ralphex", "cf-constructor-codegen", "cf-constructor-pr-review"):
                 (agents_dir / f"{name}.md").write_text(
                     f"You are {name}.\n", encoding="utf-8"
                 )
@@ -1504,7 +1504,7 @@ class TestEndToEndCapabilitySurface:
 
             # Verify ralphex is discoverable
             agents = _discover_kit_agents(cpt, root)
-            ralphex_agents = [a for a in agents if a["name"] == "cypilot-ralphex"]
+            ralphex_agents = [a for a in agents if a["name"] == "cf-constructor-ralphex"]
             assert len(ralphex_agents) == 1
 
             # Generate windsurf output
@@ -1549,13 +1549,13 @@ class TestEndToEndCapabilitySurface:
             shutil.copy2(src_agents_toml, core_skill / "agents.toml")
             agents_dir = core_skill / "agents"
             agents_dir.mkdir(parents=True)
-            for name in ("cypilot-ralphex", "cypilot-codegen", "cypilot-pr-review"):
+            for name in ("cf-constructor-ralphex", "cf-constructor-codegen", "cf-constructor-pr-review"):
                 (agents_dir / f"{name}.md").write_text(
                     f"You are {name}.\n", encoding="utf-8"
                 )
             (cpt / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
 
-            canonical_fragment = "skills/cypilot/agents/cypilot-ralphex.md"
+            canonical_fragment = "skills/cypilot/agents/cf-constructor-ralphex.md"
             for agent in ("claude", "cursor", "copilot", "openai"):
                 cfg = _default_agents_config()
                 result = _process_single_agent(agent, root, cpt, cfg, None, dry_run=False)
@@ -1564,9 +1564,9 @@ class TestEndToEndCapabilitySurface:
                 ralphex_found = False
                 for fpath in all_files:
                     content = Path(fpath).read_text(encoding="utf-8")
-                    if "cypilot-ralphex" in fpath or "cypilot_ralphex" in content:
+                    if "cf-constructor-ralphex" in fpath or "cf_constructor_ralphex" in content:
                         assert canonical_fragment in content, (
                             f"{agent} proxy must point to canonical prompt"
                         )
                         ralphex_found = True
-                assert ralphex_found, f"{agent} must generate a cypilot-ralphex proxy"
+                assert ralphex_found, f"{agent} must generate a cf-constructor-ralphex proxy"
