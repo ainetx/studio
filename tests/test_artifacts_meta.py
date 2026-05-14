@@ -486,6 +486,36 @@ class TestCreateBackup(unittest.TestCase):
             finally:
                 shutil.copy2 = orig
 
+    def test_create_backup_filename_format_pins_timestamp_shape(self):
+        """Pin the {name}.YYYYMMDD-HHMMSS.backup format.
+
+        A regression switching the strftime to ISO 8601 (with ":" separators)
+        would silently break on Windows filesystems and bypass every other
+        existing TestCreateBackup assertion. This test fails if the timestamp
+        segment changes shape.
+        """
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "data.json"
+            path.write_text("{}", encoding="utf-8")
+            backup = create_backup(path)
+            self.assertIsNotNone(backup)
+            self.assertRegex(
+                backup.name,
+                r"^data\.json\.\d{8}-\d{6}\.backup$",
+            )
+
+    def test_create_backup_directory_filename_format_pins_timestamp_shape(self):
+        """Same format pin, but for directory inputs (copytree path)."""
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mydir"
+            path.mkdir()
+            backup = create_backup(path)
+            self.assertIsNotNone(backup)
+            self.assertRegex(
+                backup.name,
+                r"^mydir\.\d{8}-\d{6}\.backup$",
+            )
+
 
 class TestGenerateDefaultRegistry(unittest.TestCase):
     def test_generate_default_registry(self):

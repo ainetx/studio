@@ -10,6 +10,7 @@
 - [2. Actor Flows (CDSL)](#2-actor-flows-cdsl)
   - [Global CLI Invocation](#global-cli-invocation)
   - [Project Initialization](#project-initialization)
+  - [Cyber Pilot Migration](#cyber-pilot-migration)
 - [3. Processes / Business Logic (CDSL)](#3-processes--business-logic-cdsl)
   - [Resolve Skill Target](#resolve-skill-target)
   - [Route Command](#route-command)
@@ -152,6 +153,66 @@ Enables users to install Cypilot globally, initialize it in any project with sen
 15. [x] - `p1` - Detect existing Cypilot installation by reading AGENTS.md TOML block with `cypilot_path` variable - `inst-init-detect-existing`
 16. [x] - `p1` - Inject/update CLAUDE.md managed block for Claude agent integration - `inst-init-inject-claude`
 17. [x] - `p1` - Human-friendly formatters for init success and error output - `inst-init-format-output`
+
+### Cyber Pilot Migration
+
+- [x] `p1` - **ID**: `cpt-cypilot-flow-core-infra-migrate-from-cypilot`
+
+**Actors**:
+
+- `cpt-cypilot-actor-user`
+- `cpt-cypilot-actor-cypilot-cli`
+
+**Success Scenarios**:
+- User runs `cfc init` in a project with a legacy Cyber Pilot install and approves migration → legacy config is copied or reused as Cyber Constructor config, root managed blocks are rewritten, and follow-up update refreshes the installation
+- User runs with `--dry-run` → planned copy, rewrite, and update actions are reported without mutating files
+- User declines migration during implicit init/update flow → Cyber Constructor either initializes side-by-side or aborts with a clear result, depending on the command path
+
+**Error Scenarios**:
+- Legacy install is missing, outside project root, or not directly migratable → command returns structured error and avoids partial writes
+- Target Cyber Constructor directory exists without `--force` → command returns structured error and preserves both directories
+- Root managed block rewrite fails after backups → command restores root files from backups and reports the failed step
+
+**Steps**:
+1. [x] - `p1` - Define migration constants and imports used by implicit init/update migration flows - `inst-migration-module`
+2. [x] - `p1` - Resolve legacy source and Cyber Constructor target as child directories of the project root - `inst-resolve-dirs`
+3. [x] - `p1` - Reject missing legacy installs and unsafe absolute or parent-directory paths - `inst-validate-dirs`
+4. [x] - `p1` - **IF** target exists without force, return error without copying or deleting files - `inst-target-exists`
+5. [x] - `p1` - **IF** replacing target, create a backup, replace from legacy source, and restore backup on replace failure - `inst-replace-target`
+6. [x] - `p1` - **ELSE** create target from legacy source and clean up partial target on copy failure - `inst-create-target`
+7. [x] - `p1` - Reuse the legacy directory in-place when source and target are the same directory - `inst-reuse-target`
+8. [x] - `p1` - **IF** not dry-run, run post-copy rewrites for core TOML, artifacts TOML, config markdown, AGENTS.md, and CLAUDE.md - `inst-post-copy-rewrites`
+9. [x] - `p1` - **ELSE** report dry-run rewrite actions without writing files - `inst-dry-run-actions`
+10. [x] - `p1` - Run follow-up update unless skipped or dry-run, preserving warning status when update fails - `inst-followup-update`
+11. [x] - `p1` - Return a structured migration result with actions, backups, warnings, and update details - `inst-return-result`
+12. [x] - `p1` - Detect a legacy install from root AGENTS.md or known legacy directories - `inst-detect-legacy`
+13. [x] - `p1` - Resolve ask/yes/no migration prompts for interactive and non-interactive callers - `inst-should-migrate`
+14. [x] - `p1` - Return an explicit declined result when user rejects migration - `inst-declined-result`
+15. [x] - `p1` - Read legacy version and accept only supported migration baseline versions - `inst-check-legacy-version`
+16. [x] - `p1` - For dry-run unsupported legacy installs, report the planned baseline update without running it - `inst-preflight-dry-run`
+17. [x] - `p1` - Prompt for unsupported legacy update and abort when user declines - `inst-prompt-legacy-update`
+18. [x] - `p1` - Run legacy `cpt update --version` with bridge bypass environment and report subprocess result - `inst-run-legacy-update`
+19. [x] - `p1` - Re-read legacy version after update and reject version mismatch - `inst-check-updated-version`
+20. [x] - `p1` - Merge legacy preflight metadata into the final migration result without overwriting migration actions - `inst-merge-preflight`
+21. [x] - `p1` - Read legacy version from known legacy skill package locations - `inst-read-version`
+22. [x] - `p1` - Normalize optional legacy version strings before comparison - `inst-normalize-version`
+23. [x] - `p1` - Prompt interactively for baseline update when needed - `inst-prompt-update-ui`
+24. [x] - `p1` - Prompt interactively for migration approval with project and legacy directory context - `inst-prompt-migration-ui`
+25. [x] - `p1` - Run follow-up Constructor update and capture JSON output when JSON mode is active - `inst-run-followup-update`
+26. [x] - `p1` - Restore target directory backup after failed replacement - `inst-restore-target`
+27. [x] - `p1` - Create root file backups before managed block rewrites - `inst-backup-root-files`
+28. [x] - `p1` - Refuse root rewrites when AGENTS.md or CLAUDE.md are dirty unless force-overwrite is set - `inst-probe-root-dirty`
+29. [x] - `p1` - Execute post-copy rewrite steps in deterministic order and restore root files on rewrite failure - `inst-run-rewrite-steps`
+30. [x] - `p1` - Resolve project root from explicit argument, root markers, or git root fallback - `inst-resolve-project-root`
+31. [x] - `p1` - Enforce child-directory constraints for source and target options - `inst-child-dir-guard`
+32. [x] - `p1` - Read legacy install directory from root AGENTS.md TOML or known legacy directories - `inst-read-legacy-install`
+33. [x] - `p1` - Probe dirty root files through git status without failing when git is unavailable - `inst-probe-git-dirty`
+34. [x] - `p1` - Replace root managed blocks and warn when malformed legacy blocks must be preserved - `inst-replace-root-blocks`
+35. [x] - `p1` - Remove well-formed legacy managed blocks while preserving malformed content for manual cleanup - `inst-remove-legacy-block`
+36. [x] - `p1` - Migrate core TOML kit keys, kit paths, kit sources, and obsolete system section - `inst-migrate-core-toml`
+37. [x] - `p1` - Migrate artifacts TOML systems from legacy kit slug to canonical SDLC kit slug - `inst-migrate-artifacts-toml`
+38. [x] - `p1` - Rewrite config markdown terminology and command references from Cypilot/cpt to Cyber Constructor/cfc - `inst-migrate-config-markdown`
+39. [x] - `p1` - Render human migration summary with actions and warnings - `inst-human-output`
 
 ## 3. Processes / Business Logic (CDSL)
 

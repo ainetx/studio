@@ -36,6 +36,7 @@ from .init import (
     COPY_ARCHITECTURE_ITEMS,
     COPY_DIRS,
     CORE_SUBDIR,
+    DEFAULT_INSTALL_DIR,
     _copy_from_cache,
     _core_readme,
     _inject_root_agents,
@@ -57,11 +58,26 @@ def cmd_update(argv: List[str]) -> int:
         description="Update Cyber Constructor installation (refresh .core, regenerate .gen)",
     )
     p.add_argument("--project-root", default=None, help="Project root directory")
+    p.add_argument("--from-dir", default=None, help="Cyber Pilot directory relative to project root when migrating")
     p.add_argument("--dry-run", action="store_true", help="Show what would be done")
     p.add_argument("--no-interactive", action="store_true",
                    help="Disable interactive prompts (auto-skip customized markers)")
     p.add_argument("-y", "--yes", action="store_true",
                    help="Auto-approve all prompts (no interaction)")
+    p.add_argument(
+        "--migrate-from-cypilot",
+        choices=("ask", "yes", "no"),
+        default="ask",
+        metavar="{ask,yes,no}",
+        help="Migrate an existing Cyber Pilot project. Use --migrate-from-cypilot={ask,yes,no} (default: ask)",
+    )
+    p.add_argument(
+        "--update-legacy-cypilot",
+        choices=("ask", "yes", "no"),
+        default="ask",
+        metavar="{ask,yes,no}",
+        help="Update unsupported Cyber Pilot installs to the migration baseline first. Use --update-legacy-cypilot={ask,yes,no} (default: ask)",
+    )
     args = p.parse_args(argv)
     # @cpt-end:cpt-cypilot-flow-version-config-update:p1:inst-user-update
 
@@ -70,6 +86,10 @@ def cmd_update(argv: List[str]) -> int:
 
     cwd = Path.cwd().resolve()
     project_root = Path(args.project_root).resolve() if args.project_root else find_project_root(cwd)
+    if project_root is None:
+        from .migrate_from_cypilot import resolve_cypilot_project_root
+
+        project_root = resolve_cypilot_project_root(args.project_root)
 
     if project_root is None:
         ui.result(
@@ -84,6 +104,55 @@ def cmd_update(argv: List[str]) -> int:
 
     install_rel = _read_cypilot_var(project_root)
     if not install_rel:
+        from .migrate_from_cypilot import (
+            detect_legacy_cypilot_install,
+            ensure_supported_legacy_version,
+            migrate_from_cypilot,
+            merge_legacy_preflight_result,
+            migration_declined_result,
+            should_migrate_from_cypilot,
+            _human_migrate_ok,
+        )
+
+        legacy_rel = args.from_dir or detect_legacy_cypilot_install(project_root)
+        if legacy_rel:
+            migrate = (
+                args.dry_run and args.migrate_from_cypilot == "ask"
+            ) or should_migrate_from_cypilot(
+                args.migrate_from_cypilot,
+                interactive=not args.no_interactive and not args.yes,
+                project_root=project_root,
+                legacy_rel=legacy_rel,
+                decline_hint="Press N to abort update.",
+            )
+            if not migrate:
+                ui.result(migration_declined_result(project_root, legacy_rel, dry_run=args.dry_run))
+                return 1
+
+            supported, preflight = ensure_supported_legacy_version(
+                project_root=project_root,
+                legacy_rel=legacy_rel,
+                update_choice=args.update_legacy_cypilot,
+                interactive=not args.no_interactive and not args.yes,
+                dry_run=args.dry_run,
+            )
+            if not supported:
+                ui.result(preflight)
+                return 1
+
+            rc, result = migrate_from_cypilot(
+                project_root=project_root,
+                from_dir=legacy_rel,
+                to_dir=DEFAULT_INSTALL_DIR,
+                dry_run=args.dry_run,
+                force=False,
+                yes=args.yes,
+                skip_update=False,
+            )
+            merge_legacy_preflight_result(result, preflight)
+            ui.result(result, human_fn=_human_migrate_ok)
+            return rc
+
         ui.result(
             {"status": "ERROR", "message": "Cyber Constructor not initialized in this project. Run 'cfc init' first.", "project_root": project_root.as_posix()},
             human_fn=lambda d: (
@@ -94,6 +163,53 @@ def cmd_update(argv: List[str]) -> int:
             ),
         )
         return 1
+
+    from .migrate_from_cypilot import (
+        detect_legacy_cypilot_install,
+        ensure_supported_legacy_version,
+        migrate_from_cypilot,
+        merge_legacy_preflight_result,
+        should_migrate_from_cypilot,
+        _human_migrate_ok,
+    )
+
+    legacy_rel = args.from_dir or detect_legacy_cypilot_install(project_root)
+    legacy_migration_declined = False
+    if legacy_rel:
+        migrate = should_migrate_from_cypilot(
+            args.migrate_from_cypilot,
+            interactive=not args.no_interactive and not args.yes,
+            project_root=project_root,
+            legacy_rel=legacy_rel,
+            heading="Cyber Pilot detected alongside Cyber Constructor.",
+            prompt="Migrate it into the current Cyber Constructor install now? [y/N] ",
+            decline_hint="Press N to continue regular Cyber Constructor update.",
+        )
+        if migrate:
+            supported, preflight = ensure_supported_legacy_version(
+                project_root=project_root,
+                legacy_rel=legacy_rel,
+                update_choice=args.update_legacy_cypilot,
+                interactive=not args.no_interactive and not args.yes,
+                dry_run=args.dry_run,
+            )
+            if not supported:
+                ui.result(preflight)
+                return 1
+
+            rc, result = migrate_from_cypilot(
+                project_root=project_root,
+                from_dir=legacy_rel,
+                to_dir=install_rel,
+                dry_run=args.dry_run,
+                force=True,
+                yes=args.yes,
+                skip_update=False,
+            )
+            merge_legacy_preflight_result(result, preflight)
+            ui.result(result, human_fn=_human_migrate_ok)
+            return rc
+        legacy_migration_declined = True
 
     cypilot_dir = (project_root / install_rel).resolve()
     if not cypilot_dir.is_dir():
@@ -123,6 +239,10 @@ def cmd_update(argv: List[str]) -> int:
 
     # @cpt-begin:cpt-cypilot-flow-version-config-update:p1:inst-whatsnew
     actions: Dict[str, Any] = {}
+    if legacy_migration_declined:
+        actions["legacy_cypilot"] = "detected"
+        actions["migration"] = "declined"
+        actions["migration_decline_action"] = "regular_update"
     errors: List[Dict[str, str]] = []
     warnings: List[str] = []
 

@@ -1,9 +1,9 @@
 # <p align="center"><img src="images/constructor.png" alt="Cyber Constructor Banner" width="100%" /></p>
  
  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-  ![Version](https://img.shields.io/badge/version-4.0.0-green.svg)
+  ![Version](https://img.shields.io/badge/version-4.1.0-green.svg)
   
-**Version**: 4.0.0
+**Version**: 4.1.0
 
 **Status**: Active
 

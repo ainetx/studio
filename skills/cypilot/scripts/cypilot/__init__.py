@@ -17,7 +17,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     from .cli import main as _main
     return _main(argv)
 
-__version__ = "v4.0.0"
+__version__ = "v4.1.0"
 
 __all__ = [
     # Main entry point

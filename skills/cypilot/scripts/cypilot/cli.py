@@ -194,7 +194,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     ]
     delegation_commands = ["delegate"]
     diagnostics_commands = ["doctor"]
-    all_commands = analysis_commands + kit_commands + search_commands + workspace_commands + utility_commands + delegation_commands + diagnostics_commands + legacy_aliases
+    all_commands = (
+        analysis_commands + kit_commands + search_commands
+        + workspace_commands + utility_commands + delegation_commands
+        + diagnostics_commands + legacy_aliases
+    )
 
     # Handle --help / -h at top level (or no subcommand)
     if not argv_list or argv_list[0] in ("-h", "--help"):
@@ -275,7 +279,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # @cpt-dod:cpt-cypilot-dod-core-infra-agents-integrity:p1
     # @cpt-begin:cpt-cypilot-algo-core-infra-route-command:p1:inst-verify-agents
     # Verify root AGENTS.md and CLAUDE.md integrity on every invocation (silent re-inject if stale)
-    if ctx is not None and cmd != "init":
+    if ctx is not None and cmd not in ("init", "update"):
         try:
             from .commands.init import _inject_root_agents, _inject_root_claude
             from .utils.files import find_project_root, _read_cypilot_var

@@ -440,10 +440,25 @@ def cmd_init(argv: List[str]) -> int:
     p = argparse.ArgumentParser(prog="init", description="Initialize Cyber Constructor in a project")
     p.add_argument("--project-root", default=None, help="Project root directory")
     p.add_argument("--install-dir", default=None, help="Cyber Constructor directory relative to project root (default: .cf-constructor)")
+    p.add_argument("--from-dir", default=None, help="Cyber Pilot directory relative to project root when migrating")
     p.add_argument("--project-name", default=None, help="Project name (default: project root folder name)")
     p.add_argument("--yes", action="store_true", help="Do not prompt; accept defaults")
     p.add_argument("--dry-run", action="store_true", help="Compute changes without writing files")
     p.add_argument("--force", action="store_true", help="Overwrite existing files")
+    p.add_argument(
+        "--migrate-from-cypilot",
+        choices=("ask", "yes", "no"),
+        default="ask",
+        metavar="{ask,yes,no}",
+        help="Migrate an existing Cyber Pilot project. Use --migrate-from-cypilot={ask,yes,no} (default: ask)",
+    )
+    p.add_argument(
+        "--update-legacy-cypilot",
+        choices=("ask", "yes", "no"),
+        default="ask",
+        metavar="{ask,yes,no}",
+        help="Update unsupported Cyber Pilot installs to the migration baseline first. Use --update-legacy-cypilot={ask,yes,no} (default: ask)",
+    )
     args = p.parse_args(argv)
     # @cpt-end:cpt-cypilot-flow-core-infra-project-init:p1:inst-user-init
 
@@ -496,6 +511,74 @@ def cmd_init(argv: List[str]) -> int:
     # @cpt-end:cpt-cypilot-flow-core-infra-project-init:p1:inst-return-exists
     # @cpt-end:cpt-cypilot-flow-core-infra-project-init:p1:inst-if-exists
 
+    legacy_migration_declined = False
+    legacy_install_rel: Optional[str] = None
+    if existing_install_rel is None:
+        from .migrate_from_cypilot import (
+            detect_legacy_cypilot_install,
+            ensure_supported_legacy_version,
+            migrate_from_cypilot,
+            merge_legacy_preflight_result,
+            should_migrate_from_cypilot,
+            _human_migrate_ok,
+        )
+
+        legacy_rel = args.from_dir or detect_legacy_cypilot_install(project_root)
+        if legacy_rel:
+            legacy_install_rel = legacy_rel
+            migrate = should_migrate_from_cypilot(
+                args.migrate_from_cypilot,
+                interactive=interactive,
+                project_root=project_root,
+                legacy_rel=legacy_rel,
+                decline_hint="Press N to initialize Cyber Constructor side-by-side and keep Cyber Pilot unchanged.",
+            )
+            if migrate:
+                supported, preflight = ensure_supported_legacy_version(
+                    project_root=project_root,
+                    legacy_rel=legacy_rel,
+                    update_choice=args.update_legacy_cypilot,
+                    interactive=interactive,
+                    dry_run=args.dry_run,
+                )
+                if not supported:
+                    ui.result(preflight)
+                    return 1
+
+                migration_was_interactive = (
+                    args.migrate_from_cypilot == "ask"
+                    and interactive
+                    and sys.stdin.isatty()
+                )
+                if args.install_dir is None and migration_was_interactive:
+                    default_target = legacy_rel.strip()
+                    sys.stderr.write("\n")
+                    sys.stderr.write(
+                        "  \033[2mPress Enter to migrate in place "
+                        "(recommended), or type a different path to install "
+                        "side-by-side.\033[0m\n"
+                    )
+                    target_rel = _prompt_path(
+                        "Cyber Constructor directory (relative to project root)?",
+                        default_target,
+                    )
+                    target_rel = target_rel.strip() or default_target
+                else:
+                    target_rel = args.install_dir or DEFAULT_INSTALL_DIR
+                rc, result = migrate_from_cypilot(
+                    project_root=project_root,
+                    from_dir=legacy_rel,
+                    to_dir=target_rel,
+                    dry_run=args.dry_run,
+                    force=False,
+                    yes=args.yes,
+                    skip_update=False,
+                )
+                merge_legacy_preflight_result(result, preflight)
+                ui.result(result, human_fn=_human_migrate_ok)
+                return rc
+            legacy_migration_declined = True
+
     # @cpt-begin:cpt-cypilot-flow-core-infra-project-init:p1:inst-if-interactive
     # @cpt-begin:cpt-cypilot-flow-core-infra-project-init:p1:inst-prompt-dir
     default_install_dir = existing_install_rel or DEFAULT_INSTALL_DIR
@@ -511,6 +594,35 @@ def cmd_init(argv: List[str]) -> int:
     # @cpt-end:cpt-cypilot-flow-core-infra-project-init:p1:inst-if-interactive
 
     cypilot_dir = (project_root / install_rel).resolve()
+    if legacy_migration_declined and legacy_install_rel:
+        legacy_dir = (project_root / legacy_install_rel).resolve()
+        if cypilot_dir == legacy_dir:
+            ui.result(
+                {
+                    "status": "ERROR",
+                    "message": (
+                        "Migration was declined, but --install-dir resolves to the existing Cyber Pilot "
+                        "directory. Choose a different --install-dir or approve migration."
+                    ),
+                    "project_root": project_root.as_posix(),
+                    "install_dir": install_rel,
+                    "legacy_cypilot_dir": legacy_dir.as_posix(),
+                    "actions": {
+                        "legacy_cypilot": "detected",
+                        "migration": "declined",
+                        "migration_decline_action": "rejected_legacy_install_dir",
+                    },
+                },
+                human_fn=lambda d: (
+                    ui.error(str(d["message"])),
+                    ui.detail("Legacy Cyber Pilot directory", str(d["legacy_cypilot_dir"])),
+                    ui.blank(),
+                    ui.hint("Choose a side-by-side directory:  cfc init --install-dir .cf-constructor --migrate-from-cypilot=no"),
+                    ui.hint("Or approve migration:             cfc init --install-dir cypilot --migrate-from-cypilot=yes"),
+                    ui.blank(),
+                ),
+            )
+            return 1
 
     # @cpt-begin:cpt-cypilot-flow-core-infra-project-init:p1:inst-define-root
     root_system = _define_root_system(project_root)
@@ -540,6 +652,10 @@ def cmd_init(argv: List[str]) -> int:
         return 1
 
     actions: Dict[str, str] = {}
+    if legacy_migration_declined:
+        actions["legacy_cypilot"] = "detected"
+        actions["migration"] = "declined"
+        actions["migration_decline_action"] = "side_by_side_init"
     errors: List[Dict[str, str]] = []
     backups: List[str] = []
 

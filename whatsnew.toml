@@ -2,12 +2,34 @@
 # Entries are shown once during `cfc update` when the user hasn't seen them yet.
 # Keys are version strings; only entries missing from config/whatsnew.toml are displayed.
 
+["v4.1.0"]
+date = "2026-05-14"
+title = "Cyber Constructor 4.1.0"
+summary = "Cyber Pilot migration path and legacy bridge support"
+details = """\
+New:
+- `cfc init` and `cfc update` can detect supported Cyber Pilot installs and
+  migrate them into Cyber Constructor.
+- Migration rewrites root AGENTS.md / CLAUDE.md managed blocks from legacy
+  `@cpt` markers to `@cf` markers and updates kit references to the
+  Cyber Constructor SDLC kit.
+- Unsupported legacy installs can be updated to the supported migration
+  baseline before migration.
+- Migration reports created backups in human output so users can review and
+  clean up timestamped backup files after a successful run.
+
+Fixes:
+- Root managed-block rewrites refuse dirty AGENTS.md / CLAUDE.md files and
+  now direct users to commit or stash those files before retrying.
+- Follow-up update output is captured in JSON mode for agent-friendly
+  migration results.\
+"""
+
 ["v4.0.0"]
 date = "2026-05-08"
 title = "Cyber Constructor 4.0.0"
-summary = """
-Project rebrands from Cypilot to Cyber Constructor.
-
+summary = "Project rebrands from Cypilot to Cyber Constructor"
+details = """\
 Breaking changes:
 - New defaults: install dir .cf-constructor, global cache ~/.cf-constructor/cache,
   logs ~/.cf-constructor/logs.
@@ -36,7 +58,7 @@ New:
 Unchanged (intentional):
 - Internal Python package cypilot_proxy.
 - Skill bundle directory skills/cypilot/.
-- All cpt-cypilot-* IDs and @cpt-* markers in source code.
+- All cpt-cypilot-* IDs and @cpt-* markers in source code.\
 """
 
 ["v3.0.3-beta"]
