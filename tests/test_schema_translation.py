@@ -290,6 +290,25 @@ class TestTranslateCodexSchema(unittest.TestCase):
         result = _translate_codex_schema(agent)
         self.assertEqual(result["model"], "gpt-4o")
 
+    def test_codex_model_fast_maps_to_codex_fast_tier(self):
+        """`fast` semantic tier maps to the codex-fast model identifier.
+
+        Codex CLI's documented "fast, efficient mini" model is gpt-5.4-mini
+        (see https://developers.openai.com/codex/models). Writing the literal
+        string "fast" into a codex agent .toml would be unrecognized by the
+        Codex CLI; the translation must happen at schema-translation time.
+        """
+        agent = _make_agent(model="fast")
+        result = _translate_codex_schema(agent)
+        self.assertEqual(result["model"], "gpt-5.4-mini")
+
+    def test_codex_model_inherit_preserved(self):
+        """`inherit` stays as the literal `inherit` and is later dropped from
+        the rendered TOML (no `model = ...` line)."""
+        agent = _make_agent(model="inherit")
+        result = _translate_codex_schema(agent)
+        self.assertEqual(result["model"], "inherit")
+
     def test_codex_developer_instructions_field(self):
         agent = _make_agent(description="My codex agent")
         result = _translate_codex_schema(agent)

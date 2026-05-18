@@ -1080,4 +1080,14 @@ def _human_migrate_ok(data: Dict[str, Any]) -> None:  # pyright: ignore
         ui.detail("Backups created", "")
         for backup_path in data["backups"]:
             ui.detail("  ", str(backup_path))
+    if data.get("status") in ("PASS", None) and not data.get("dry_run"):
+        ui.blank()
+        ui.warn(
+            "Strongly recommended next step:\n"
+            "    In your IDE chat: cf-constructor migrate from cypilot\n"
+            "    Runs Scanner -> Planner -> Migrator -> Verifier with your\n"
+            "    approval before each agent. Catches residual cypilot/cpt\n"
+            "    references in source code, CI, docs, agent configs, and\n"
+            "    workspaces -- files the deterministic migration did not touch."
+        )
     # @cpt-end:cpt-cypilot-flow-core-infra-migrate-from-cypilot:p1:inst-human-output

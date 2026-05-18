@@ -472,7 +472,18 @@ def _agent_template_claude(agent: Dict[str, Any]) -> List[str]:
 
 
 _CURSOR_MODEL_MAP: Dict[str, str] = {
-    "fast": "claude-3.5-sonnet",
+    "fast": "claude-sonnet-4-6",
+}
+
+# Codex CLI: map the semantic "fast" tier to the codex-specific fast model.
+# Codex's docs (https://developers.openai.com/codex/models) document
+# `gpt-5.4-mini` as the "fast, efficient mini model for responsive coding
+# tasks" — the right peer to Anthropic's Sonnet tier for high-volume
+# mechanical agent work (scanner, planner, migrator, verifier, pr-review).
+# Used by _translate_codex_schema; the existing "inherit" → no-model-line
+# behavior in _render_toml_agent is preserved.
+_CODEX_MODEL_MAP: Dict[str, str] = {
+    "fast": "gpt-5.4-mini",
 }
 
 
@@ -1171,13 +1182,41 @@ _ALL_RECOGNIZED_AGENTS = ["windsurf", "cursor", "claude", "copilot", "openai"]
 # rather than generic tool directories to avoid false positives when
 # unrelated tool files exist (e.g. .cursor/commands/other.md).
 _AGENT_MARKERS: Dict[str, List[str]] = {
-    "claude":   [".claude/skills/cf-constructor/SKILL.md"],
-    "windsurf": [".windsurf/workflows/cf-constructor.md"],
-    "cursor":   [".cursor/commands/cf-constructor.md"],
-    "copilot":  [".github/.cf-constructor-installed"],
+    "claude":   [
+        ".claude/skills/cf-constructor/SKILL.md",
+        # Pre-rebrand cypilot installs wrote the SKILL bundle here.
+        # Including the legacy path makes detection succeed during
+        # `cfc init --migrate-from-cypilot=yes`, so `_maybe_regenerate_agents`
+        # in cmd_update (run as the follow-up step of migration) actually
+        # regenerates cf-constructor-named files for this tool.
+        ".claude/skills/cypilot/SKILL.md",
+    ],
+    "windsurf": [
+        ".windsurf/workflows/cf-constructor.md",
+        # Pre-rebrand path (parallel marker; existing follow-link fallback
+        # checks `.windsurf/skills/{cf-constructor|cypilot}/SKILL.md`).
+        ".windsurf/workflows/cypilot.md",
+    ],
+    "cursor":   [
+        ".cursor/commands/cf-constructor.md",
+        # Pre-rebrand parallel marker. Note the EXISTING legacy fallback
+        # below checks `.cursor/rules/cypilot.mdc` (a different cursor
+        # convention) with a follow-link content check — both are needed
+        # because cursor's file layout evolved between versions.
+        ".cursor/commands/cypilot.md",
+    ],
+    "copilot":  [
+        ".github/.cf-constructor-installed",
+        ".github/.cypilot-installed",  # pre-rebrand parallel marker
+    ],
     # Fresh OpenAI installs create .codex/.cf-constructor-installed.
-    # Legacy fallback handled by _is_agent_installed().
-    "openai":   [".codex/.cf-constructor-installed"],
+    # The cypilot-named parallel marker is included here; richer legacy
+    # fallbacks (.codex/agents/*.toml follow-link, .agents/skills/SKILL.md)
+    # remain in _is_agent_installed() for defense in depth.
+    "openai":   [
+        ".codex/.cf-constructor-installed",
+        ".codex/.cypilot-installed",  # pre-rebrand parallel marker
+    ],
 }
 
 # Non-OpenAI tool markers — used to disambiguate the shared
@@ -1287,9 +1326,148 @@ def _is_agent_installed(agent: str, project_root: Path) -> bool:
 
 # Legacy tool-specific skill paths replaced by shared .agents/skills/
 _LEGACY_TOOL_SKILL_PATHS: Dict[str, List[str]] = {
-    "windsurf": [".windsurf/skills/cf-constructor/SKILL.md", ".windsurf/skills/cypilot/SKILL.md"],
-    "cursor": [".cursor/rules/cf-constructor.mdc", ".cursor/rules/cypilot.mdc"],
+    "claude": [
+        ".claude/skills/cypilot/SKILL.md",
+    ],
+    "windsurf": [
+        ".windsurf/skills/cf-constructor/SKILL.md",
+        ".windsurf/skills/cypilot/SKILL.md",
+        ".windsurf/workflows/cypilot.md",
+    ],
+    "cursor": [
+        ".cursor/rules/cf-constructor.mdc",
+        ".cursor/rules/cypilot.mdc",
+        ".cursor/commands/cypilot.md",
+    ],
+    "copilot": [
+        ".github/prompts/cypilot.prompt.md",
+    ],
+    # openai (codex) skill-like files are cleaned by the new subagent helper
+    # below; there's no direct equivalent of a "skill" file at a fixed
+    # legacy path.
 }
+
+
+# Per-tool sub-agent directories that hold pre-rebrand `cypilot-*` files
+# left over from cypilot 3.x agent-generation. Sub-agent cleanup uses a
+# glob match (cypilot-*.<ext>) plus the same _is_pure_cypilot_generated
+# safety check as _LEGACY_TOOL_SKILL_PATHS — files with user-added content
+# are preserved.
+_CYPILOT_LEGACY_SUBAGENT_GLOBS: Dict[str, List[str]] = {
+    "claude":   [".claude/agents/cypilot-*.md"],
+    "cursor":   [".cursor/agents/cypilot-*.md"],
+    "copilot":  [".github/agents/cypilot-*.agent.md"],
+    "openai":   [".codex/agents/cypilot-*.toml"],
+    # windsurf doesn't have a per-tool sub-agent directory convention
+    # in cypilot's generator; nothing to glob here.
+}
+
+
+def _cleanup_cypilot_legacy_subagents(
+    agent: str,
+    project_root: Path,
+    dry_run: bool,
+) -> List[str]:
+    """Delete pre-rebrand cypilot-*.<ext> sub-agent files for *agent*.
+
+    Returns a list of relative path strings that were deleted (or would be
+    deleted under dry-run). Files with user-added content (per
+    _is_pure_cypilot_generated) are skipped, not deleted.
+    """
+    deleted: List[str] = []
+    globs = _CYPILOT_LEGACY_SUBAGENT_GLOBS.get(agent, [])
+    for glob_pat in globs:
+        # Resolve the glob's parent dir; iterdir + name-prefix matches the
+        # `cypilot-*` shape without needing a full glob() implementation
+        # (keeps behavior deterministic and avoids surprises with hidden
+        # files / case-sensitivity differences across platforms).
+        glob_path = Path(glob_pat)
+        parent_rel = glob_path.parent
+        name_prefix = glob_path.name.split("*", 1)[0]  # "cypilot-"
+        name_suffix = glob_path.name.rsplit("*", 1)[1]  # e.g. ".md" or ".agent.md" or ".toml"
+
+        parent_abs = project_root / parent_rel
+        if not parent_abs.is_dir():
+            continue
+        try:
+            entries = list(parent_abs.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if not entry.is_file():
+                continue
+            if not entry.name.startswith(name_prefix):
+                continue
+            if not entry.name.endswith(name_suffix):
+                continue
+            try:
+                content = entry.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            # Use stem (without suffix) as the "expected name" for the
+            # content check — same convention the existing cleanup loop
+            # uses for skill stubs.
+            stem = entry.name
+            for ext in (".agent.md", ".md", ".toml"):
+                if stem.endswith(ext):
+                    stem = stem[: -len(ext)]
+                    break
+            if not _is_pure_cypilot_generated(content, expected_name=stem):
+                continue
+            rel = (parent_rel / entry.name).as_posix()
+            if dry_run:
+                deleted.append(rel)
+            else:
+                try:
+                    entry.unlink()
+                    deleted.append(rel)
+                except OSError:
+                    pass  # silent — best-effort cleanup
+    return deleted
+
+
+# Per-tool legacy `.cypilot-installed` marker files. These are integration
+# markers (zero/minimal content) used by pre-rebrand cypilot to signal
+# "this tool is set up". Safe to delete unconditionally when the file's
+# content starts with the well-known "# Cypilot" header — anything else
+# is preserved.
+_CYPILOT_LEGACY_MARKER_PATHS: Dict[str, List[str]] = {
+    "copilot": [".github/.cypilot-installed"],
+    "openai":  [".codex/.cypilot-installed"],
+}
+
+
+def _cleanup_cypilot_legacy_markers(
+    agent: str,
+    project_root: Path,
+    dry_run: bool,
+) -> List[str]:
+    """Delete pre-rebrand `.cypilot-installed` integration markers for *agent*.
+
+    Markers are well-known stub files; content gate: the file MUST start
+    with `# Cypilot` (case-sensitive) to be eligible. Anything else
+    (user-authored file at the same path) is preserved.
+    """
+    deleted: List[str] = []
+    for rel in _CYPILOT_LEGACY_MARKER_PATHS.get(agent, []):
+        abs_path = project_root / rel
+        if not abs_path.is_file():
+            continue
+        try:
+            content = abs_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if not content.startswith("# Cypilot"):
+            continue
+        if dry_run:
+            deleted.append(rel)
+        else:
+            try:
+                abs_path.unlink()
+                deleted.append(rel)
+            except OSError:
+                pass
+    return deleted
 
 # Cyber Constructor installation markers for agents that share generic directories
 _INSTALL_MARKERS: Dict[str, Tuple[str, str]] = {
@@ -1718,6 +1896,14 @@ def _process_single_agent(
                 skills_result["errors"].append(f"failed to delete {rel_path}")
         else:
             skills_result["deleted"].append(rel_path)
+
+    # ── Clean up legacy cypilot-* sub-agent files (per-tool) ────────────────
+    for rel in _cleanup_cypilot_legacy_subagents(agent, project_root, dry_run):
+        skills_result["deleted"].append(rel)
+
+    # ── Clean up legacy .cypilot-installed markers (per-tool) ───────────────
+    for rel in _cleanup_cypilot_legacy_markers(agent, project_root, dry_run):
+        skills_result["deleted"].append(rel)
 
     # ── Install markers ───────────────────────────────────────────────────
     # Tools that share generic directories need a unique Cyber Constructor-specific
@@ -2831,7 +3017,7 @@ def _translate_codex_schema(agent: "_AgentEntry") -> Dict[str, Any]:
     }
 
     if agent.model:
-        result["model"] = agent.model
+        result["model"] = _CODEX_MODEL_MAP.get(agent.model, agent.model)
 
     # @cpt-end:cpt-cypilot-algo-project-extensibility-translate-agent-schema:p1:inst-step-codex
     return result

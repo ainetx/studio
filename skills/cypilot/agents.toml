@@ -70,3 +70,68 @@ prompt_file = "agents/cf-constructor-phase-compiler.md"
 mode = "readwrite"
 isolation = true
 model = "inherit"
+
+# ---------------------------------------------------------------------------
+# Migrate-from-Cypilot sub-agent set
+#
+# Coordinated by `skills/cypilot/migrate-from-cypilot.md` (the orchestrator
+# loaded by the workflow-routing keyword `migrate from cypilot`). The
+# orchestrator dispatches each agent sequentially with explicit user-approval
+# gates and a bounded migrator↔verifier loop.
+#
+# All four agents operate on the user's project IN-PLACE (isolation = false)
+# so the migrator's edits are visible to the verifier and to subsequent
+# orchestrator passes without requiring a commit between phases.
+# ---------------------------------------------------------------------------
+
+[agents.cf-constructor-migrate-scanner]
+description = """\
+Cyber Constructor migration scanner. Read-only sub-agent for post-deterministic \
+cleanup: scans the project for residual cypilot/cpt/Cypilot/Cyber Pilot \
+references the mechanical `cfc init --migrate-from-cypilot=yes` did not touch \
+(source code, CI, docs, agent configs, workspaces, build files). Emits a \
+structured findings list for the planner to categorize. Dispatched by the \
+`migrate from cypilot` orchestrator after user approval."""
+prompt_file = "agents/cf-constructor-migrate-scanner.md"
+mode = "readonly"
+isolation = false
+model = "fast"
+
+[agents.cf-constructor-migrate-planner]
+description = """\
+Cyber Constructor migration planner. Read-only sub-agent that takes the \
+scanner's findings and produces a migration plan grouped by execution category: \
+A (auto-fixable string substitutions), B (needs-review context-sensitive), and \
+C (cascade operations — workspace rename, member-repo cascade, agent-config \
+regeneration). Emits a plan the orchestrator presents to the user for review \
+BEFORE dispatching the migrator."""
+prompt_file = "agents/cf-constructor-migrate-planner.md"
+mode = "readonly"
+isolation = false
+model = "fast"
+
+[agents.cf-constructor-migrate-migrator]
+description = """\
+Cyber Constructor migration migrator. Write-capable sub-agent that applies a \
+pre-approved migration plan to disk: category A substitutions mechanically, \
+category B items via interactive walk, category C operations printed for \
+manual execution. Returns a migration manifest of every change applied. \
+Operates in-place (isolation = false) so its edits are visible to the verifier \
+without requiring a commit."""
+prompt_file = "agents/cf-constructor-migrate-migrator.md"
+mode = "readwrite"
+isolation = false
+model = "fast"
+
+[agents.cf-constructor-migrate-verifier]
+description = """\
+Cyber Constructor migration verifier. Read-only sub-agent that closes the \
+migration loop: confirms the migrator's manifest landed correctly on disk, \
+re-runs scanner patterns over the changed-files surface to catch regressions, \
+and surfaces residue (regressed, missed-by-plan, or noticed-but-not-in-plan \
+items) for the orchestrator to feed back into another migrator pass. Bounded \
+by the orchestrator's 3-iteration cap."""
+prompt_file = "agents/cf-constructor-migrate-verifier.md"
+mode = "readonly"
+isolation = false
+model = "fast"
