@@ -137,6 +137,59 @@
           }
         }
       }
+    },
+    "layout": {
+      "type": "object",
+      "properties": {
+        "vis_nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "x", "y"],
+            "properties": {
+              "id": { "type": "string" },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "label": { "type": "string" },
+              "shape": { "type": "string" },
+              "category": { "type": "string" },
+              "group": { "type": "string" }
+            }
+          }
+        },
+        "bucket_rects": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["id", "x", "y", "w", "h", "label"],
+            "properties": {
+              "id": { "type": "string" },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "w": { "type": "number" },
+              "h": { "type": "number" },
+              "label": { "type": "string" }
+            }
+          }
+        },
+        "category_bands": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["x", "y", "w", "h", "label"],
+            "properties": {
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "w": { "type": "number" },
+              "h": { "type": "number" },
+              "label": { "type": "string" },
+              "fill": { "type": "string" },
+              "stroke": { "type": "string" },
+              "title_color": { "type": "string" }
+            }
+          }
+        }
+      }
     }
   }
 }

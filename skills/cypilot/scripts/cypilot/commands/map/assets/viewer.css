@@ -103,6 +103,20 @@ html, body {
   color: #fff;
 }
 
+.stat-row.active {
+  background: #2d2d50;
+  outline: 1px solid #6080ff;
+}
+
+.stat-row.active .label {
+  color: #a0c4ff;
+}
+
+.stat-row.active .count {
+  background: #4060c0;
+  color: #fff;
+}
+
 /* Search box */
 #search-wrap {
   display: flex;
@@ -151,6 +165,8 @@ html, body {
   transition: transform 0.2s ease;
   display: flex;
   flex-direction: column;
+  z-index: 10;
+  position: relative;
 }
 
 #inspector.open {

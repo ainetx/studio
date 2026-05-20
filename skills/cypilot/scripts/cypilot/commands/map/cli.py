@@ -14,6 +14,7 @@ from .categorize import (
 )
 from .cpt_edges import build_cpt_edges
 from .enrich import enrich_edges
+from .layout import compute_layout
 from .links import extract_file_links
 from .render_html import RenderHtmlInput, render_html
 from .render_json import RenderJsonInput, render_json
@@ -69,6 +70,10 @@ def cmd_map(argv: List[str]) -> int:
 
     enrich_edges(edges, nodes_all, project_root_by_source=project_root_by_source)
 
+    vis_nodes, bucket_rects, category_bands = compute_layout(
+        nodes_all, edges, category_style=None, verbose=args.verbose,
+    )
+
     art_toml = primary_root / "artifacts.toml"
     if not art_toml.exists():
         print(
@@ -87,6 +92,9 @@ def cmd_map(argv: List[str]) -> int:
         edges=edges,
         workspace={"primary": "local", "sources": sources},
         scan=scan_meta,
+        vis_nodes=vis_nodes,
+        bucket_rects=bucket_rects,
+        category_bands=category_bands,
     ))
 
     sidecar_path = None

@@ -8,8 +8,8 @@ import datetime as dt
 import hashlib
 import json
 from collections import Counter
-from dataclasses import dataclass
-from typing import Dict, List, Sequence
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Sequence
 
 from .model import Edge, Node
 
@@ -20,6 +20,10 @@ class RenderJsonInput:
     edges: Sequence[Edge]
     workspace: dict
     scan: dict
+    # Layout outputs (optional — None means "no positions; viewer uses physics")
+    vis_nodes: Optional[list] = None
+    bucket_rects: Optional[dict] = None
+    category_bands: Optional[dict] = None
 
 
 def render_json(inp: RenderJsonInput) -> str:
@@ -36,6 +40,11 @@ def render_json(inp: RenderJsonInput) -> str:
         "edges": edges_sorted,
         "dangling_cpt_uses": dangling,
         "categories": categories,
+        "layout": {
+            "vis_nodes": inp.vis_nodes or [],
+            "bucket_rects": inp.bucket_rects or {},
+            "category_bands": inp.category_bands or {},
+        },
     }
     return json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=False)
 

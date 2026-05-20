@@ -3,6 +3,11 @@
  * Reads window.MAP_DATA (JSON payload from render_json).
  * Option B (minimal first iteration): full markdown preview and
  * tab-based UI deferred; core graph + inspector + sidebar implemented.
+ *
+ * Layout strategy: when data.layout.vis_nodes is non-empty (produced by
+ * layout.py), node positions are pre-computed and pinned (x/y/fixed).
+ * Physics is disabled and category bands are drawn via network.on("afterDrawing").
+ * If vis_nodes is absent or empty, physics fallback is used with a console warning.
  */
 (function () {
   "use strict";
@@ -90,12 +95,35 @@
       sidebar.appendChild(dangSect);
     }
 
-    /* Category breakdown */
+    /* Category breakdown — clickable rows that select & zoom to category nodes */
     if (data.categories && Object.keys(data.categories).length > 0) {
       const catSect = section("Categories");
+      // Build a per-category node ID lookup (filled once network is built).
+      // We attach a click handler that defers to window._cfcNetwork.
+      let activeCatRow = null;
       Object.keys(data.categories).sort().forEach(function (cat) {
         const info = data.categories[cat];
-        catSect.appendChild(statRow(cat, info.node_count));
+        const row = statRow(cat, info.node_count);
+        row.classList.add("clickable");
+        row.title = "Click to focus " + cat + " nodes";
+        row.addEventListener("click", function () {
+          const network = window._cfcNetwork;
+          if (!network) return;
+          // Remove active from previous row
+          if (activeCatRow && activeCatRow !== row) {
+            activeCatRow.classList.remove("active");
+          }
+          row.classList.toggle("active");
+          activeCatRow = row.classList.contains("active") ? row : null;
+
+          const idsInCat = (data.nodes || [])
+            .filter(function (n) { return n.category === cat; })
+            .map(function (n) { return n.id; });
+          if (idsInCat.length === 0) return;
+          network.selectNodes(idsInCat);
+          network.fit({ nodes: idsInCat, animation: { duration: 400, easingFunction: "easeInOutQuad" } });
+        });
+        catSect.appendChild(row);
       });
       sidebar.appendChild(catSect);
     }
@@ -140,10 +168,29 @@
   /* ── Graph ───────────────────────────────────────────────────── */
   function buildGraph(data) {
     const primary = (data.workspace || {}).primary || "";
+    const layout = data.layout || {};
+    const layoutVisNodes = layout.vis_nodes || [];
+    const categoryBands = layout.category_bands || {};
 
-    /* Nodes */
+    /* Build position lookup by id from layout data */
+    const posById = {};
+    layoutVisNodes.forEach(function (lv) {
+      posById[lv.id] = lv;
+    });
+    const hasPositions = layoutVisNodes.length > 0;
+    if (!hasPositions) {
+      console.warn("cfc map: no pre-computed positions found — falling back to physics layout");
+    }
+
+    /* Nodes: merge layout positions into vis-network node objects */
     const visNodes = (data.nodes || []).map(function (n) {
-      return makeVisNode(n, primary, data.categories || {});
+      const vn = makeVisNode(n, primary, data.categories || {});
+      if (hasPositions && posById[n.id]) {
+        vn.x = posById[n.id].x;
+        vn.y = posById[n.id].y;
+        vn.fixed = { x: true, y: true };
+      }
+      return vn;
     });
 
     /* Edges */
@@ -155,16 +202,21 @@
     const edgesDS = new vis.DataSet(visEdges);
 
     const container = document.getElementById("graph");
-    const network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
-      layout: { improvedLayout: true },
-      physics: {
-        enabled: true,
-        barnesHut: { gravitationalConstant: -4000, springLength: 120, springConstant: 0.04 },
-        stabilization: { iterations: 200 },
-      },
+
+    /* Network options differ depending on whether we have pre-computed positions */
+    const networkOptions = {
+      layout: { improvedLayout: !hasPositions },
+      physics: hasPositions
+        ? { enabled: false }
+        : {
+            enabled: true,
+            barnesHut: { gravitationalConstant: -4000, springLength: 120, springConstant: 0.04 },
+            stabilization: { iterations: 200 },
+          },
       interaction: {
-        tooltipDelay: 300,
-        hideEdgesOnDrag: true,
+        hover: true,
+        tooltipDelay: 200,
+        dragNodes: !hasPositions,  // disable drag when positions are pinned
       },
       edges: {
         smooth: { type: "dynamic" },
@@ -175,12 +227,58 @@
         borderWidth: 1.5,
         font: { size: 12 },
       },
-    });
+    };
+
+    const network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, networkOptions);
+
+    /* Draw category bands as canvas overlays behind nodes.
+     * We use afterDrawing because it fires after the canvas is cleared each frame,
+     * letting us paint rectangles at absolute canvas coordinates. */
+    if (hasPositions && Object.keys(categoryBands).length > 0) {
+      network.on("afterDrawing", function (ctx) {
+        Object.keys(categoryBands).forEach(function (cat) {
+          const band = categoryBands[cat];
+          // Convert graph coordinates to canvas coordinates
+          const topLeft = network.canvasToDOM({ x: band.x, y: band.y });
+          const bottomRight = network.canvasToDOM({ x: band.x + band.w, y: band.y + band.h });
+          const cx = topLeft.x;
+          const cy = topLeft.y;
+          const cw = bottomRight.x - topLeft.x;
+          const ch = bottomRight.y - topLeft.y;
+
+          /* Background fill */
+          ctx.save();
+          ctx.globalAlpha = 0.08;
+          // Use stroke color as fill (band.fill uses color-mix which canvas can't parse)
+          ctx.fillStyle = band.title_color || "#4060c0";
+          ctx.fillRect(cx, cy, cw, ch);
+          ctx.restore();
+
+          /* Border */
+          ctx.save();
+          ctx.globalAlpha = 0.30;
+          ctx.strokeStyle = band.title_color || "#4060c0";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(cx, cy, cw, ch);
+          ctx.restore();
+
+          /* Label at top of band */
+          ctx.save();
+          ctx.globalAlpha = 0.80;
+          ctx.fillStyle = band.title_color || "#4060c0";
+          ctx.font = "bold 11px sans-serif";
+          ctx.fillText(band.label || cat, cx + 6, cy + 14);
+          ctx.restore();
+        });
+      });
+    }
 
     /* Click handlers */
     network.on("click", function (params) {
       if (params.nodes.length > 0) {
         const nodeId = params.nodes[0];
+        // Skip band-group nodes (none in this impl since we use afterDrawing approach)
         const node = findById(data.nodes, nodeId);
         if (node) showNodeInspector(node, data, primary);
       } else if (params.edges.length > 0) {
@@ -192,10 +290,20 @@
       }
     });
 
-    /* Store reference for search */
+    /* Store reference for search and sidebar */
     window._cfcNetwork = network;
     window._cfcNodesDS = nodesDS;
     return network;
+  }
+
+  function tooltipFor(n) {
+    const lines = [
+      "<b>" + (n.rel_path || n.id) + "</b>",
+      "kind: " + n.kind,
+      n.category ? "category: " + n.category : "",
+      n.cpt_defs && n.cpt_defs.length ? "defs: " + n.cpt_defs.join(", ") : "",
+    ];
+    return lines.filter(Boolean).join("<br>");
   }
 
   function makeVisNode(n, primary, categories) {
@@ -209,7 +317,7 @@
       return Object.assign({}, NODE_PHANTOM_STYLE, {
         id: n.id,
         label: "⚠ " + raw,
-        title: "Undefined cpt-ID: " + raw,
+        title: tooltipFor(n),
         group: "phantom-cpt",
       });
     }
@@ -218,7 +326,7 @@
       return Object.assign({}, NODE_SOURCE_STYLE, {
         id: n.id,
         label: label,
-        title: n.id,
+        title: tooltipFor(n),
         group: "source",
       });
     }
@@ -228,7 +336,7 @@
     return {
       id: n.id,
       label: label,
-      title: n.id,
+      title: tooltipFor(n),
       shape: "box",
       color: {
         background: style.background || "#e8eaff",
@@ -258,6 +366,8 @@
   /* ── Inspector ───────────────────────────────────────────────── */
   function showNodeInspector(node, data, primary) {
     const insp = document.getElementById("inspector");
+    // Ensure inspector is visible before populating
+    insp.classList.add("open");
     insp.innerHTML = "";
 
     /* Header */
@@ -316,11 +426,12 @@
     }
 
     insp.appendChild(body);
-    insp.classList.add("open");
   }
 
   function showEdgeInspector(edge, data) {
     const insp = document.getElementById("inspector");
+    // Ensure inspector is visible before populating
+    insp.classList.add("open");
     insp.innerHTML = "";
 
     const header = el("div", { id: "inspector-header" });
@@ -354,7 +465,6 @@
     }
 
     insp.appendChild(body);
-    insp.classList.add("open");
   }
 
   function closeInspector() {
