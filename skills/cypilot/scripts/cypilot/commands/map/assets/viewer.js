@@ -706,16 +706,31 @@
     });
     if (useEntries.length > 0) {
       body.appendChild(fieldHeading("cpt-IDs used (" + useEntries.length + ")"));
-      useEntries.slice(0, 20).forEach(function (u) {
+      const listEl = el("div", { className: "ref-list" });
+      const INITIAL = 20;
+      function renderUse(u) {
         const card = el("div", { className: "ref-card" });
         card.appendChild(cptChip(u.cpt_id, "definer"));
         const meta = "line " + u.line + (u.marker_kind ? " · " + u.marker_kind : "");
         card.appendChild(el("div", {}, el("span", {}, meta)));
         card.appendChild(renderSnippet(u.snippet));
-        body.appendChild(card);
+        return card;
+      }
+      useEntries.slice(0, INITIAL).forEach(function (u) {
+        listEl.appendChild(renderUse(u));
       });
-      if (useEntries.length > 20) {
-        body.appendChild(el("p", {}, "… and " + (useEntries.length - 20) + " more."));
+      body.appendChild(listEl);
+      if (useEntries.length > INITIAL) {
+        const remaining = useEntries.length - INITIAL;
+        const btn = el("button", { className: "snippet-toggle load-more" },
+                       "show all (" + remaining + " more)");
+        btn.addEventListener("click", function () {
+          useEntries.slice(INITIAL).forEach(function (u) {
+            listEl.appendChild(renderUse(u));
+          });
+          if (btn.parentNode) btn.parentNode.removeChild(btn);
+        });
+        body.appendChild(btn);
       }
     }
 

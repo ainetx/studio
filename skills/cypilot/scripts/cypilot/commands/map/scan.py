@@ -42,6 +42,44 @@ _MAX_SNIPPET_LINES = 80
 _MAX_SNIPPET_CHARS = 6000
 
 
+def _section_around(lines_raw, line_no: int) -> str:
+    """Return the markdown section containing ``line_no``.
+
+    Walks back to the nearest line that starts with ``#`` and forward to the
+    line before the next ``#``. Used for cpt definitions, where the surrounding
+    section gives meaningful context (the bare definition line alone is just
+    a checkbox bullet without prose).
+    """
+    n = len(lines_raw)
+    if not (1 <= line_no <= n):
+        return ""
+    target_idx = line_no - 1
+
+    heading_idx = 0
+    for i in range(target_idx, -1, -1):
+        if lines_raw[i].lstrip().startswith("#"):
+            heading_idx = i
+            break
+
+    section_end = n - 1
+    for i in range(target_idx + 1, n):
+        if lines_raw[i].lstrip().startswith("#"):
+            section_end = i - 1
+            break
+
+    # Cap at _MAX_SNIPPET_LINES from the heading to avoid huge sections.
+    section_end = min(section_end, heading_idx + _MAX_SNIPPET_LINES - 1)
+
+    # Trim trailing blank lines.
+    while section_end > heading_idx and not lines_raw[section_end].strip():
+        section_end -= 1
+
+    text = "\n".join(line.rstrip() for line in lines_raw[heading_idx:section_end + 1])
+    if len(text) > _MAX_SNIPPET_CHARS:
+        text = text[:_MAX_SNIPPET_CHARS].rstrip() + "\n…"
+    return text
+
+
 def _paragraph_around(lines_raw, line_no: int) -> str:
     """Return the contiguous block of non-blank lines around a 1-based line index.
 
@@ -196,8 +234,17 @@ def _split_md_cpt(path: Path) -> Tuple[List[str], List[CptUse]]:
         cpt_id = f"{base_id}:{priority}" if priority else base_id
 
         line_no = int(h.get("line", 0))
-        snippet = _paragraph_around(lines_raw, line_no) if line_no > 0 else ""
         hit_type = h.get("type", "reference")
+        if line_no > 0:
+            # Definitions: include the whole section (heading + bullets + prose).
+            # References: just the local paragraph.
+            snippet = (
+                _section_around(lines_raw, line_no)
+                if hit_type == "definition"
+                else _paragraph_around(lines_raw, line_no)
+            )
+        else:
+            snippet = ""
 
         if hit_type == "definition":
             if cpt_id not in seen_defs:
