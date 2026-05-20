@@ -33,6 +33,13 @@ def cmd_map(argv: List[str]) -> int:
     p.add_argument("--no-source", action="store_true")
     p.add_argument("--local-only", action="store_true")
     p.add_argument("--inline-data", action="store_true")
+    p.add_argument(
+        "--include-adapter",
+        action="store_true",
+        help="Scan inside the cf-constructor / cypilot adapter directory too. "
+             "Useful when markdown references {cypilot_path}/... paths that "
+             "should resolve to nodes in the graph.",
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
 
@@ -53,6 +60,7 @@ def cmd_map(argv: List[str]) -> int:
             project_root=src_root,
             source_name=src["name"],
             no_source=args.no_source,
+            include_adapter=args.include_adapter,
         )
         all_nodes.extend(scan_repo(opts))
         project_root_by_source[src["name"]] = src_root
@@ -226,6 +234,9 @@ def _flatten_vars(data, primary_root: Path) -> Dict[str, str]:
     if isinstance(system, dict):
         for k, v in system.items():
             store(str(k), v)
+    # Legacy aliases for backward compatibility with older markdown.
+    if "cf-constructor-path" in flat and "cypilot_path" not in flat:
+        flat["cypilot_path"] = flat["cf-constructor-path"]
 
     kits = (data or {}).get("kits") or {}
     if isinstance(kits, dict):

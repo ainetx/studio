@@ -125,6 +125,9 @@ class ScanOptions:
     source_name: str
     no_source: bool = False
     extra_skip_dirs: Sequence[str] = field(default_factory=list)
+    # When True, the adapter directory (.bootstrap / .cf-constructor) is
+    # walked too. Default skip is still `.git` plus any extras.
+    include_adapter: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -172,9 +175,10 @@ def scan_repo(opts: ScanOptions) -> List[Node]:
     """
     root = opts.project_root.resolve()
     skip_dirs: Set[str] = set(DEFAULT_SKIP_DIRS) | set(opts.extra_skip_dirs)
-    adapter = _detect_adapter_dir(root)
-    if adapter:
-        skip_dirs.add(adapter)
+    if not opts.include_adapter:
+        adapter = _detect_adapter_dir(root)
+        if adapter:
+            skip_dirs.add(adapter)
 
     nodes: List[Node] = []
     nodes.extend(_scan_markdown(root, opts.source_name, skip_dirs))
