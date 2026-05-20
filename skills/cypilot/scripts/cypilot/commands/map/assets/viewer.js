@@ -384,19 +384,31 @@
     return lines.filter(Boolean).join("<br>");
   }
 
-  function makeVisNode(n, primary, categories) {
-    let label = n.rel_path || n.id;
-    if (n.kind !== "phantom-cpt" && n.source && n.source !== primary) {
-      label = "[" + n.source + "] " + (n.rel_path || n.id);
+  function shortLabel(n) {
+    /* filename only; cross-repo prefix is preserved as "[source] filename". */
+    const rel = n.rel_path || "";
+    const base = rel ? rel.split("/").pop() : n.id;
+    if (n.kind !== "phantom-cpt" && n.source && n.source !== window.MAP_DATA.workspace.primary) {
+      return "[" + n.source + "] " + base;
     }
+    return base;
+  }
+
+  /* Hard cap on node visual width so labels do not blow up the grid layout. */
+  const NODE_WIDTH = 80;
+
+  function makeVisNode(n, primary, categories) {
+    const label = shortLabel(n);
 
     if (n.kind === "phantom-cpt") {
       const raw = n.id.replace(/^phantom:/, "");
       return Object.assign({}, NODE_PHANTOM_STYLE, {
         id: n.id,
-        label: "⚠ " + raw,
+        label: "⚠ " + raw.split(":")[0].replace(/^cpt-/, ""),
         title: tooltipFor(n),
         group: "phantom-cpt",
+        widthConstraint: { maximum: NODE_WIDTH },
+        font: { color: "#c41212", size: 11 },
       });
     }
 
@@ -406,6 +418,8 @@
         label: label,
         title: tooltipFor(n),
         group: "source",
+        widthConstraint: { maximum: NODE_WIDTH },
+        font: { face: "monospace", size: 11 },
       });
     }
 
@@ -415,6 +429,8 @@
       id: n.id,
       label: label,
       title: tooltipFor(n),
+      widthConstraint: { maximum: NODE_WIDTH },
+      font: { size: 11 },
       shape: "box",
       color: {
         background: style.background || "#e8eaff",
