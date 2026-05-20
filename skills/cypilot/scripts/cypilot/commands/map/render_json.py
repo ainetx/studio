@@ -1,6 +1,6 @@
 """Canonical JSON output for cfc map.
 
-@cpt-flow:cpt-cypilot-flow-map-render-json:p1
+@cpt-algo:cpt-cypilot-algo-map-render-json:p1
 """
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import datetime as dt
 import hashlib
 import json
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence
 
 from .model import Edge, Node
@@ -27,6 +27,7 @@ class RenderJsonInput:
 
 
 def render_json(inp: RenderJsonInput) -> str:
+    # @cpt-begin:cpt-cypilot-algo-map-render-json:p1:inst-render-json
     nodes_sorted = sorted([n.to_dict() for n in inp.nodes], key=lambda d: d["id"])
     edges_sorted = sorted([e.to_dict() for e in inp.edges], key=lambda d: d["id"])
     dangling = _dangling_section(inp.nodes, inp.edges)
@@ -47,9 +48,11 @@ def render_json(inp: RenderJsonInput) -> str:
         },
     }
     return json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=False)
+    # @cpt-end:cpt-cypilot-algo-map-render-json:p1:inst-render-json
 
 
 def _dangling_section(nodes: Sequence[Node], edges: Sequence[Edge]) -> List[dict]:
+    # @cpt-begin:cpt-cypilot-algo-map-render-json:p1:inst-dangling-section
     by_id: Dict[str, Node] = {n.id: n for n in nodes}
     out: List[dict] = []
     seen: set[tuple] = set()
@@ -69,9 +72,11 @@ def _dangling_section(nodes: Sequence[Node], edges: Sequence[Edge]) -> List[dict
             out.append({"cpt_id": r.cpt_id, "node_id": e.from_id, "line": r.line, "snippet": r.snippet})
     out.sort(key=lambda d: (d["cpt_id"], d["node_id"], d["line"]))
     return out
+    # @cpt-end:cpt-cypilot-algo-map-render-json:p1:inst-dangling-section
 
 
 def _categories_section(nodes: Sequence[Node]) -> Dict[str, dict]:
+    # @cpt-begin:cpt-cypilot-algo-map-render-json:p1:inst-categories-section
     cats: Dict[str, Dict[str, int]] = {}
     origins: Dict[str, Counter] = {}
     for n in nodes:
@@ -91,12 +96,15 @@ def _categories_section(nodes: Sequence[Node]) -> Dict[str, dict]:
             "style": _deterministic_style(cat),
         }
     return out
+    # @cpt-end:cpt-cypilot-algo-map-render-json:p1:inst-categories-section
 
 
 def _deterministic_style(name: str) -> Dict[str, str]:
+    # @cpt-begin:cpt-cypilot-algo-map-render-json:p1:inst-deterministic-style
     h = hashlib.sha256(name.encode("utf-8")).hexdigest()
     hue = int(h[:6], 16) % 360
     return {
         "color": f"hsl({hue}, 60%, 30%)",
         "background": f"hsl({hue}, 60%, 95%)",
     }
+    # @cpt-end:cpt-cypilot-algo-map-render-json:p1:inst-deterministic-style

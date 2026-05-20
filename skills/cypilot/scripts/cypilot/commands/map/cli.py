@@ -1,6 +1,8 @@
 """cfc map CLI entry point.
 
 @cpt-flow:cpt-cypilot-flow-map-cli:p1
+@cpt-dod:cpt-cypilot-dod-dependency-mapping-graph:p1
+@cpt-state:cpt-cypilot-state-dependency-map:p1
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ from cypilot.utils._tomllib_compat import tomllib
 
 
 def cmd_map(argv: List[str]) -> int:
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-cmd-map
     p = argparse.ArgumentParser(
         prog="cfc map",
         description="Build an interactive markdown↔source map via cpt identifiers.",
@@ -50,6 +53,7 @@ def cmd_map(argv: List[str]) -> int:
     sources = _discover_sources(primary_root, local_only=args.local_only)
     override = _load_override(primary_root, args.config)
 
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-collect-nodes
     all_nodes = []
     project_root_by_source: Dict[str, Path] = {}
     for src in sources:
@@ -70,7 +74,9 @@ def cmd_map(argv: List[str]) -> int:
         override=override,
         source_roots=project_root_by_source,
     ))
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-collect-nodes
 
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-build-edges
     template_vars = _load_template_vars(primary_root)
     file_edges = extract_file_links(
         all_nodes, project_root=primary_root, template_vars=template_vars,
@@ -80,7 +86,9 @@ def cmd_map(argv: List[str]) -> int:
     nodes_all = list(all_nodes) + list(phantoms)
 
     enrich_edges(edges, nodes_all, project_root_by_source=project_root_by_source)
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-build-edges
 
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-layout-render
     vis_nodes, bucket_rects, category_bands = compute_layout(
         nodes_all, edges, category_style=None, verbose=args.verbose,
     )
@@ -123,10 +131,13 @@ def cmd_map(argv: List[str]) -> int:
             sidecar_path.write_text(sidecar_js, encoding="utf-8")
 
     _print_summary(scan_meta, sources, nodes_all, edges, out_path, sidecar_path, args.config)
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-layout-render
     return 0
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-cmd-map
 
 
 def _discover_sources(primary_root: Path, local_only: bool) -> List[dict]:
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-discover-sources
     sources: List[dict] = [
         {"name": "local", "path": str(primary_root), "reachable": True, "role": "full"}
     ]
@@ -153,9 +164,11 @@ def _discover_sources(primary_root: Path, local_only: bool) -> List[dict]:
     except Exception:  # pylint: disable=broad-exception-caught  # federation discovery is best-effort
         pass
     return sources
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-discover-sources
 
 
 def _load_override(primary_root: Path, explicit: Optional[str]) -> Optional[OverrideConfig]:
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-load-override
     if explicit:
         path = Path(explicit).resolve()
     else:
@@ -179,6 +192,7 @@ def _load_override(primary_root: Path, explicit: Optional[str]) -> Optional[Over
             background=style.get("background"),
         ))
     return OverrideConfig(categories=cats)
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-load-override
 
 
 def _load_template_vars(primary_root: Path) -> Dict[str, str]:
@@ -193,9 +207,9 @@ def _load_template_vars(primary_root: Path) -> Dict[str, str]:
     System variables (``cf-constructor-path``, ``project_root``, ``cypilot_path``)
     are exposed at the top level.
     """
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-load-template-vars
     import json
     import subprocess
-    import sys
 
     candidates = [
         ["cfc", "--json", "resolve-vars"],
@@ -219,9 +233,11 @@ def _load_template_vars(primary_root: Path) -> Dict[str, str]:
     if data is None:
         return {}
     return _flatten_vars(data, primary_root)
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-load-template-vars
 
 
 def _flatten_vars(data, primary_root: Path) -> Dict[str, str]:
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-flatten-vars
     flat: Dict[str, str] = {}
 
     def store(key: str, val: str) -> None:
@@ -250,6 +266,7 @@ def _flatten_vars(data, primary_root: Path) -> Dict[str, str]:
                 store(f"{kit_slug}.{name}", val)         # qualified: sdlc.adr_template
                 store(f"kits.{kit_slug}.{name}", val)    # fully qualified
     return flat
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-flatten-vars
 
 
 def _relativize(abs_path: str, project_root: Path) -> str:
@@ -262,12 +279,14 @@ def _relativize(abs_path: str, project_root: Path) -> str:
 
 def skip_dirs_for_meta(primary_root: Path):
     """Surface the effective skip-dir set for the stdout summary."""
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-skip-dirs-for-meta
     from .scan import DEFAULT_SKIP_DIRS, _detect_adapter_dir
     skips = set(DEFAULT_SKIP_DIRS)
     adapter = _detect_adapter_dir(primary_root)
     if adapter:
         skips.add(adapter)
     return skips
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-skip-dirs-for-meta
 
 
 def _count_systems(primary_root: Path, docs_only: bool = False) -> int:
@@ -298,6 +317,7 @@ def _print_summary(
     sidecar_path: Optional[Path],
     config_path: Optional[str],
 ) -> None:
+    # @cpt-begin:cpt-cypilot-flow-map-cli:p1:inst-print-summary
     md = sum(1 for n in nodes if n.kind == "markdown")
     src = sum(1 for n in nodes if n.kind == "source")
     phantom = sum(1 for n in nodes if n.kind == "phantom-cpt")
@@ -321,3 +341,4 @@ def _print_summary(
     print(f"Wrote        : {out_path}")
     if sidecar_path is not None:
         print(f"               {sidecar_path}")
+    # @cpt-end:cpt-cypilot-flow-map-cli:p1:inst-print-summary

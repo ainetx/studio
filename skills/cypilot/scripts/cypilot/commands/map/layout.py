@@ -3,7 +3,7 @@
 Ported from md-fabric.py (lines 687–1310) with adaptations for the Node/Edge
 model (no buckets/views — each category is a single bucket).
 
-@cpt-flow:cpt-cypilot-flow-map-layout:p1
+@cpt-algo:cpt-cypilot-algo-map-layout:p1
 """
 from __future__ import annotations
 
@@ -49,20 +49,24 @@ _PAD_BOTTOM: int = 40
 
 def _deterministic_style(name: str) -> dict[str, str]:
     """Derive hsl colours deterministically from category name (sha256)."""
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-deterministic-style
     hue = int(hashlib.sha256(name.encode()).hexdigest()[:6], 16) % 360
     return {
         "color": f"hsl({hue}, 60%, 30%)",
         "background": f"hsl({hue}, 60%, 95%)",
     }
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-deterministic-style
 
 
 def _node_colors(category: str, category_style: dict[str, dict[str, str]] | None) -> dict[str, str]:
     """Return {background, border} for a markdown/source node."""
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-node-colors
     if category_style and category in category_style:
         s = category_style[category]
         return {"background": s.get("background", "#ffffff"), "border": s.get("color", "#555555")}
     s = _deterministic_style(category)
     return {"background": s["background"], "border": s["color"]}
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-node-colors
 
 
 def _category_band_style(
@@ -70,6 +74,7 @@ def _category_band_style(
     category_style: dict[str, dict[str, str]] | None,
 ) -> dict[str, str]:
     """Return fill/stroke/title_color for the band rectangle."""
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-category-band-style
     if category_style and category in category_style:
         s = category_style[category]
         color = s.get("color", _deterministic_style(category)["color"])
@@ -84,24 +89,27 @@ def _category_band_style(
     stroke = f"color-mix(in srgb, {color} 30%, transparent)"
     title_c = color
     return {"fill": fill, "stroke": stroke, "title_color": title_c}
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-category-band-style
 
 
 # ---------------------------------------------------------------------------
 # Dimension helpers
 # ---------------------------------------------------------------------------
 
-def _dims(n: int, total_files_in_category: int) -> tuple[int, int, int]:
+def _dims(n: int, _total_files_in_category: int) -> tuple[int, int, int]:
     """Return (width, height, cols) for a category's single bucket.
 
     Targets a roughly-square arrangement to keep each band readable.
-    The `total_files_in_category` parameter is retained for API stability
+    The second parameter is retained for API stability
     but no longer affects the column count.
     """
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-dims
     cols = max(1, math.ceil(math.sqrt(n * 1.3)))
     rows = math.ceil(n / cols)
     w = max(180, 2 * _PAD_H + 18 + (cols - 1) * _SPACING)
     h = max(130, _PAD_TOP + _PAD_BOTTOM + 36 + (rows - 1) * _SPACING)
     return w, h, cols
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-dims
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +124,7 @@ def _make_vis_node(
     degrees: dict[str, int],
 ) -> dict[str, Any]:
     """Build a vis-network node dict from a Node."""
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-make-vis-node
     if node.kind == "phantom-cpt":
         label = node.id.replace("phantom:", "⚠ ")
         return {
@@ -170,6 +179,7 @@ def _make_vis_node(
     if font:
         entry["font"] = font
     return entry
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-make-vis-node
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +191,7 @@ def _layout_metrics(
     positions: dict[str, tuple[int, int]],
     category_inputs: list[dict[str, Any]],
 ) -> rectpack.StackedLayoutMetrics:
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-layout-metrics
     if not choices:
         return rectpack.StackedLayoutMetrics(0, 0, 0.0, 0.0, 0.0, 0.0)
     total_width = max(
@@ -205,6 +216,7 @@ def _layout_metrics(
         total_category_density=total_category_density,
         aspect_error=aspect_error,
     )
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-layout-metrics
 
 
 def _layout_score(
@@ -213,6 +225,7 @@ def _layout_score(
     category_links: dict[tuple[str, str], int],
     choice_by_cat: dict[str, rectpack.LayoutCandidate],
 ) -> tuple[float, float, float, float, float, float]:
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-layout-score
     density_loss = 1.0 - metrics.total_density
     category_loss = 1.0 - metrics.total_category_density
 
@@ -246,12 +259,14 @@ def _layout_score(
         affinity_loss,
         float(metrics.total_height),
     )
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-layout-score
 
 
 def _layout_improves(
     baseline: rectpack.StackedLayoutMetrics,
     candidate: rectpack.StackedLayoutMetrics,
 ) -> bool:
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-layout-improves
     eps = 1e-9
     return (
         candidate.total_density + eps >= baseline.total_density
@@ -262,6 +277,7 @@ def _layout_improves(
             or candidate.aspect_error < baseline.aspect_error - eps
         )
     )
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-layout-improves
 
 
 def _greedy_affinity_order(
@@ -270,6 +286,7 @@ def _greedy_affinity_order(
     category_links: dict[tuple[str, str], int],
     category_link_totals: dict[str, int],
 ) -> tuple[str, ...]:
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-greedy-affinity-order
     def _affinity(left: str, right: str) -> int:
         if left == right:
             return 0
@@ -292,6 +309,7 @@ def _greedy_affinity_order(
         order.append(next_cat)
         remaining.remove(next_cat)
     return tuple(order)
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-greedy-affinity-order
 
 
 def _row_pack_positions(
@@ -299,6 +317,7 @@ def _row_pack_positions(
     width_limit: int,
     choice_by_cat: dict[str, rectpack.LayoutCandidate],
 ) -> dict[str, tuple[int, int]]:
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-row-pack-positions
     positions: dict[str, tuple[int, int]] = {}
     cur_x = 0
     cur_y = 0
@@ -313,6 +332,7 @@ def _row_pack_positions(
         cur_x += choice.width + CATEGORY_REPACK_GAP
         row_height = max(row_height, choice.height)
     return positions
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-row-pack-positions
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +358,7 @@ def compute_layout(
         keyed by category name; each value {x, y, w, h, label, style}.
     """
     # Sort nodes by id for determinism
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-compute-layout
     sorted_nodes = sorted(nodes, key=lambda n: n.id)
 
     # Compute edge degrees
@@ -369,6 +390,7 @@ def compute_layout(
         category_link_totals[right] = category_link_totals.get(right, 0) + 1
 
     # Build rectpack layout candidates per category
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-build-candidates
     category_inputs: list[dict[str, Any]] = []
 
     for cat_id in cat_order:
@@ -424,8 +446,10 @@ def compute_layout(
 
     if not category_inputs:
         return [], {}, {}
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-build-candidates
 
     # Optimize stacked arrangement
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-optimize-stacked
     best_choices, _chosen_indexes, _snapshots = rectpack.optimize_stacked_categories(
         [(entry["cat_id"], entry["candidates"]) for entry in category_inputs],
         category_gap=CATEGORY_GAP,
@@ -460,8 +484,10 @@ def compute_layout(
     chosen_positions = stacked_positions
     stacked_metrics = _layout_metrics(best_choices, stacked_positions, category_inputs)
     chosen_metrics = stacked_metrics
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-optimize-stacked
 
     # --- Try rectpack repack across categories ---
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-repack-across
     repacked = rectpack.try_repack_rectangles(
         [
             (entry["cat_id"], candidate.width, candidate.height)
@@ -485,8 +511,10 @@ def compute_layout(
                 print(f"[layout] category repack kept")
         elif verbose:
             print(f"[layout] category repack rolled back")
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-repack-across
 
     # --- Try affinity-ordered row-packs ---
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-affinity-row-pack
     seed_categories = sorted(
         choice_by_cat,
         key=lambda cat_id: (
@@ -553,12 +581,15 @@ def compute_layout(
                 print(f"[layout] affinity layout kept")
         elif verbose:
             print(f"[layout] affinity layout rolled back")
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-affinity-row-pack
 
     # --- Build output ---
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-build-output
     vis_nodes: list[dict[str, Any]] = []
     bucket_rects: dict[str, dict[str, Any]] = {}
     cat_bands: dict[str, dict[str, Any]] = {}
 
+    # @cpt-begin:cpt-cypilot-algo-map-layout:p1:inst-emit-bands-and-nodes
     for entry, candidate in zip(category_inputs, best_choices):
         cat_id = entry["cat_id"]
         cat_nodes = entry["nodes"]
@@ -597,4 +628,8 @@ def compute_layout(
             ny = int(by_local + cat_y + _PAD_TOP + (i // cols) * _SPACING)
             vis_nodes.append(_make_vis_node(node, nx, ny, category_style, degrees))
 
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-emit-bands-and-nodes
+
     return vis_nodes, bucket_rects, cat_bands
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-build-output
+    # @cpt-end:cpt-cypilot-algo-map-layout:p1:inst-compute-layout

@@ -1,6 +1,6 @@
 """Data model for cfc map graph.
 
-@cpt-flow:cpt-cypilot-flow-map-data-model:p1
+@cpt-algo:cpt-cypilot-algo-map-data-model:p1
 """
 from __future__ import annotations
 
@@ -16,14 +16,19 @@ MarkerKind = Literal["scope", "block-begin", "block-end", "md-ref", "md-def"]
 
 def node_id(source: str, rel_path: str) -> str:
     """Canonical node id: '<source>:<rel-path>'."""
+    # @cpt-begin:cpt-cypilot-algo-map-data-model:p1:inst-node-id
     return f"{source}:{rel_path}"
+    # @cpt-end:cpt-cypilot-algo-map-data-model:p1:inst-node-id
 
 
 def phantom_id(cpt_id: str) -> str:
     """Canonical phantom node id for an undefined cpt-ID."""
+    # @cpt-begin:cpt-cypilot-algo-map-data-model:p1:inst-phantom-id
     return f"phantom:{cpt_id}"
+    # @cpt-end:cpt-cypilot-algo-map-data-model:p1:inst-phantom-id
 
 
+# @cpt-begin:cpt-cypilot-algo-map-data-model:p1:inst-cpt-use
 @dataclass(frozen=True)
 class CptUse:
     cpt_id: str
@@ -38,8 +43,10 @@ class CptUse:
             "snippet": self.snippet,
             "marker_kind": self.marker_kind,
         }
+# @cpt-end:cpt-cypilot-algo-map-data-model:p1:inst-cpt-use
 
 
+# @cpt-begin:cpt-cypilot-algo-map-data-model:p1:inst-ref
 @dataclass(frozen=True)
 class Ref:
     cpt_id: Optional[str]
@@ -56,8 +63,10 @@ class Ref:
             "def_line": self.def_line,
             "def_snippet": self.def_snippet,
         }
+# @cpt-end:cpt-cypilot-algo-map-data-model:p1:inst-ref
 
 
+# @cpt-begin:cpt-cypilot-algo-map-data-model:p1:inst-node
 @dataclass
 class Node:
     id: str
@@ -86,8 +95,10 @@ class Node:
             "cpt_defs": list(self.cpt_defs),
             "cpt_uses": [u.to_dict() for u in self.cpt_uses],
         }
+# @cpt-end:cpt-cypilot-algo-map-data-model:p1:inst-node
 
 
+# @cpt-begin:cpt-cypilot-algo-map-data-model:p1:inst-edge
 @dataclass
 class Edge:
     id: str
@@ -108,3 +119,4 @@ class Edge:
             "cross_repo": self.cross_repo,
             "dangling": self.dangling,
         }
+# @cpt-end:cpt-cypilot-algo-map-data-model:p1:inst-edge

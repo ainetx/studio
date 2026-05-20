@@ -4,7 +4,7 @@ For every cpt-edge with a real (non-phantom) target, look up the content block
 defining the cpt-id at the target node and embed it into edge.refs[*].def_line /
 def_snippet. File-link and dangling edges are skipped.
 
-@cpt-flow:cpt-cypilot-flow-map-enrich:p1
+@cpt-algo:cpt-cypilot-algo-map-enrich:p1
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ def enrich_edges(
     project_root_by_source: Dict[str, Path],
 ) -> None:
     """Mutate edges in place: replace each ref with one carrying def_line/def_snippet."""
+    # @cpt-begin:cpt-cypilot-algo-map-enrich:p1:inst-enrich-edges
     by_id: Dict[str, Node] = {n.id: n for n in nodes}
 
     for e in edges:
@@ -63,6 +64,7 @@ def enrich_edges(
                 )
             )
         e.refs = new_refs
+    # @cpt-end:cpt-cypilot-algo-map-enrich:p1:inst-enrich-edges
 
 
 def _resolve_def(
@@ -77,6 +79,7 @@ def _resolve_def(
     The stored cpt_id is phase-qualified (e.g. "cpt-foo:p1"); the markdown definition
     format uses the base id ("cpt-foo"), so we strip the phase suffix before matching.
     """
+    # @cpt-begin:cpt-cypilot-algo-map-enrich:p1:inst-resolve-def
     base_id = cpt_id.split(":")[0]
 
     # Ask get_content_scoped for the content block associated with this id.
@@ -107,6 +110,7 @@ def _resolve_def(
         return def_line, None
 
     return def_line, snippet
+    # @cpt-end:cpt-cypilot-algo-map-enrich:p1:inst-resolve-def
 
 
 def _find_def_line(path: Path, base_id: str) -> Optional[int]:
@@ -114,6 +118,7 @@ def _find_def_line(path: Path, base_id: str) -> Optional[int]:
 
     Returns the 1-based line number, or None if not found.
     """
+    # @cpt-begin:cpt-cypilot-algo-map-enrich:p1:inst-find-def-line
     from cypilot.utils.document import scan_cpt_ids
 
     hits = scan_cpt_ids(path)
@@ -121,10 +126,12 @@ def _find_def_line(path: Path, base_id: str) -> Optional[int]:
         if h.get("type") == "definition" and h.get("id") == base_id:
             return int(h["line"])
     return None
+    # @cpt-end:cpt-cypilot-algo-map-enrich:p1:inst-find-def-line
 
 
 def _lines_around(path: Path, center_line: int, context: int = 3) -> Optional[str]:
     """Return a few lines surrounding center_line (1-based) from path."""
+    # @cpt-begin:cpt-cypilot-algo-map-enrich:p1:inst-lines-around
     lines = read_text_safe(path)
     if lines is None:
         return None
@@ -132,3 +139,4 @@ def _lines_around(path: Path, center_line: int, context: int = 3) -> Optional[st
     end = min(len(lines), center_line - 1 + context)
     selected = lines[start:end]
     return "\n".join(l.rstrip() for l in selected) or None
+    # @cpt-end:cpt-cypilot-algo-map-enrich:p1:inst-lines-around

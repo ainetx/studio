@@ -1,6 +1,6 @@
 """Markdown→markdown file-link edges.
 
-@cpt-flow:cpt-cypilot-flow-map-file-links:p1
+@cpt-algo:cpt-cypilot-algo-map-file-links:p1
 @cpt-algo:cpt-cypilot-algo-map-resolve-link:p1
 """
 from __future__ import annotations
@@ -37,6 +37,7 @@ def extract_file_links(nodes: Sequence[Node],
             When set, `{var}` references in link targets AND in prose path patterns
             are expanded before resolution.
     """
+    # @cpt-begin:cpt-cypilot-algo-map-file-links:p1:inst-extract-file-links
     if project_root is None:
         return []
 
@@ -58,7 +59,7 @@ def extract_file_links(nodes: Sequence[Node],
 
         targets_seen: set[str] = set()
 
-        def emit(resolved: str, match_start: int, raw_target: str) -> None:
+        def emit(resolved: str, match_start: int) -> None:
             nonlocal edge_id
             if resolved is None or resolved == src.rel_path or resolved in targets_seen:
                 return
@@ -86,7 +87,7 @@ def extract_file_links(nodes: Sequence[Node],
             target = m.group("target").strip()
             expanded = _expand_vars(target, template_vars)
             resolved = _resolve(src.rel_path, expanded, known)
-            emit(resolved, m.start(), target)
+            emit(resolved, m.start())
 
         # Pass 2: prose references like `{cypilot_path}/.core/skills/foo.md`.
         for m in _VAR_PATH_RE.finditer(content):
@@ -94,9 +95,10 @@ def extract_file_links(nodes: Sequence[Node],
             expanded = _expand_vars(full, template_vars)
             # Treat as absolute project-root-relative.
             resolved = _resolve(src.rel_path, "/" + expanded.lstrip("/"), known)
-            emit(resolved, m.start(), full)
+            emit(resolved, m.start())
 
     return edges
+    # @cpt-end:cpt-cypilot-algo-map-file-links:p1:inst-extract-file-links
 
 
 def _expand_vars(target: str, template_vars: Dict[str, str]) -> str:
@@ -105,6 +107,7 @@ def _expand_vars(target: str, template_vars: Dict[str, str]) -> str:
     Variables that are not in ``template_vars`` are left alone (so `_resolve`
     can later decide they don't match any known node).
     """
+    # @cpt-begin:cpt-cypilot-algo-map-file-links:p1:inst-expand-vars
     if "{" not in target or not template_vars:
         return target
 
@@ -113,10 +116,12 @@ def _expand_vars(target: str, template_vars: Dict[str, str]) -> str:
         return template_vars.get(key, m.group(0))
 
     return re.sub(r"\{([a-zA-Z_][a-zA-Z0-9_.\-]*)\}", repl, target)
+    # @cpt-end:cpt-cypilot-algo-map-file-links:p1:inst-expand-vars
 
 
 def _load_markdown_content(project_root: Path, rel_path: str) -> Optional[str]:
     """Load markdown content from disk."""
+    # @cpt-begin:cpt-cypilot-algo-map-file-links:p1:inst-load-markdown-content
     from cypilot.utils.document import read_text_safe
 
     file_path = project_root / rel_path
@@ -131,10 +136,12 @@ def _load_markdown_content(project_root: Path, rel_path: str) -> Optional[str]:
     if isinstance(content, list):
         return "\n".join(content)
     return content
+    # @cpt-end:cpt-cypilot-algo-map-file-links:p1:inst-load-markdown-content
 
 
 def _resolve(source_rel: str, target: str, known: set[str]) -> Optional[str]:
     """Resolve a markdown link target to a known rel_path. Returns None if not found."""
+    # @cpt-begin:cpt-cypilot-algo-map-file-links:p1:inst-resolve
     target = target.strip()
     if not target or target.startswith(("http://", "https://", "mailto:")):
         return None
@@ -147,9 +154,11 @@ def _resolve(source_rel: str, target: str, known: set[str]) -> Optional[str]:
         if cand in known:
             return cand
     return None
+    # @cpt-end:cpt-cypilot-algo-map-file-links:p1:inst-resolve
 
 
 def _slug_candidates(source_rel: str, target: str) -> List[str]:
+    # @cpt-begin:cpt-cypilot-algo-map-file-links:p1:inst-slug-candidates
     parts = source_rel.split("/")
     source_dir = "/".join(parts[:-1])
     candidates: List[str] = []
@@ -166,9 +175,11 @@ def _slug_candidates(source_rel: str, target: str) -> List[str]:
     if not joined.endswith(".md"):
         candidates.append(joined + ".md")
     return candidates
+    # @cpt-end:cpt-cypilot-algo-map-file-links:p1:inst-slug-candidates
 
 
 def _posix_normpath(path: str) -> str:
+    # @cpt-begin:cpt-cypilot-algo-map-file-links:p1:inst-posix-normpath
     parts: List[str] = []
     for seg in path.split("/"):
         if not seg or seg == ".":
@@ -179,11 +190,14 @@ def _posix_normpath(path: str) -> str:
             continue
         parts.append(seg)
     return "/".join(parts)
+    # @cpt-end:cpt-cypilot-algo-map-file-links:p1:inst-posix-normpath
 
 
 def _line_at(content: str, offset: int) -> str:
+    # @cpt-begin:cpt-cypilot-algo-map-file-links:p1:inst-line-at
     line_start = content.rfind("\n", 0, offset) + 1
     line_end = content.find("\n", offset)
     if line_end == -1:
         line_end = len(content)
     return content[line_start:line_end]
+    # @cpt-end:cpt-cypilot-algo-map-file-links:p1:inst-line-at

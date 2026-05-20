@@ -1,6 +1,6 @@
 """Scan layer for cfc map: walks the project root and produces a flat list of Node objects.
 
-@cpt-flow:cpt-cypilot-flow-map-scan:p1
+@cpt-algo:cpt-cypilot-algo-map-scan:p1
 @cpt-algo:cpt-cypilot-algo-map-scan-walker:p1
 """
 from __future__ import annotations
@@ -29,6 +29,7 @@ def _detect_adapter_dir(project_root: Path) -> Optional[str]:
     assignment. Returns the basename (e.g. ".bootstrap" or ".cf-constructor")
     or None when not found.
     """
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-detect-adapter-dir
     import re
     for name in ("CLAUDE.md", "AGENTS.md"):
         path = project_root / name
@@ -48,6 +49,7 @@ def _detect_adapter_dir(project_root: Path) -> Optional[str]:
             # Take just the basename — adapter is a single dir at project root.
             return Path(value).name or None
     return None
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-detect-adapter-dir
 
 # Snippet caps. The viewer shows the first ~4 lines by default and lets the
 # user expand to the full snippet, so the backend can afford to bake a
@@ -64,6 +66,7 @@ def _section_around(lines_raw, line_no: int) -> str:
     section gives meaningful context (the bare definition line alone is just
     a checkbox bullet without prose).
     """
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-section-around
     n = len(lines_raw)
     if not (1 <= line_no <= n):
         return ""
@@ -92,6 +95,7 @@ def _section_around(lines_raw, line_no: int) -> str:
     if len(text) > _MAX_SNIPPET_CHARS:
         text = text[:_MAX_SNIPPET_CHARS].rstrip() + "\n…"
     return text
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-section-around
 
 
 
@@ -143,8 +147,7 @@ def _walk_files(root: Path, extensions: Sequence[str], skip_dirs: Set[str],
     add them to ``skip_dirs`` explicitly. This lets ``.claude``, ``.windsurf``,
     ``.codex`` etc. show up in the map by default.
     """
-    import os
-
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-walk-files
     ext_set = {e.lower() for e in extensions}
     out: List[Path] = []
     root = root.resolve()
@@ -162,6 +165,7 @@ def _walk_files(root: Path, extensions: Sequence[str], skip_dirs: Set[str],
                 continue
             out.append(fp)
     return out
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-walk-files
 
 
 # ---------------------------------------------------------------------------
@@ -169,10 +173,8 @@ def _walk_files(root: Path, extensions: Sequence[str], skip_dirs: Set[str],
 # ---------------------------------------------------------------------------
 
 def scan_repo(opts: ScanOptions) -> List[Node]:
-    """Walk the project root and return a flat list of Node objects.
-
-    @cpt-flow:cpt-cypilot-flow-map-scan:p1
-    """
+    """Walk the project root and return a flat list of Node objects."""
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-scan-repo
     root = opts.project_root.resolve()
     skip_dirs: Set[str] = set(DEFAULT_SKIP_DIRS) | set(opts.extra_skip_dirs)
     if not opts.include_adapter:
@@ -187,6 +189,7 @@ def scan_repo(opts: ScanOptions) -> List[Node]:
         nodes.extend(_scan_sources(root, opts.source_name, skip_dirs))
 
     return nodes
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-scan-repo
 
 
 # ---------------------------------------------------------------------------
@@ -194,15 +197,14 @@ def scan_repo(opts: ScanOptions) -> List[Node]:
 # ---------------------------------------------------------------------------
 
 def _scan_markdown(root: Path, source_name: str, skip_dirs: Set[str]) -> List[Node]:
-    """Walk .md files under root and return markdown Nodes.
-
-    @cpt-algo:cpt-cypilot-algo-map-scan-walker:p1
-    """
+    """Walk .md files under root and return markdown Nodes."""
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-scan-markdown
     from cypilot.utils.document import to_relative_posix
 
     nodes: List[Node] = []
     md_files = _walk_files(root, [".md"], skip_dirs)
 
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-build-md-nodes
     for path in md_files:
         # Skip dirs — iter_text_files already filters most; add our extras.
         rel = to_relative_posix(path, root)
@@ -227,8 +229,10 @@ def _scan_markdown(root: Path, source_name: str, skip_dirs: Set[str]) -> List[No
             cpt_uses=cpt_uses,
         )
         nodes.append(n)
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-build-md-nodes
 
     return nodes
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-scan-markdown
 
 
 def _split_md_cpt(path: Path) -> Tuple[List[str], List[CptUse]]:
@@ -238,6 +242,7 @@ def _split_md_cpt(path: Path) -> Tuple[List[str], List[CptUse]]:
     cpt_id is formed as ``{id}:{priority}`` so it matches the phase-qualified
     IDs used in source markers (``@cpt-flow:cpt-...:p1``).
     """
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-split-md-cpt
     from cypilot.utils.document import read_text_safe, scan_cpt_ids
 
     hits = scan_cpt_ids(path)
@@ -284,6 +289,7 @@ def _split_md_cpt(path: Path) -> Tuple[List[str], List[CptUse]]:
             ))
 
     return cpt_defs, cpt_uses
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-split-md-cpt
 
 
 # ---------------------------------------------------------------------------
@@ -293,11 +299,10 @@ def _split_md_cpt(path: Path) -> Tuple[List[str], List[CptUse]]:
 def _scan_sources(root: Path, source_name: str, skip_dirs: Set[str]) -> List[Node]:
     """Scan source files driven by [[systems.codebase]] entries in artifacts.toml.
 
-    @cpt-algo:cpt-cypilot-algo-map-scan-walker:p1
-
     Returns empty list if artifacts.toml is absent or broken (defensive).
     DOCS-ONLY systems contribute no source nodes.
     """
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-scan-sources
     registry_path = root / "artifacts.toml"
     if not registry_path.is_file():
         return []
@@ -333,10 +338,12 @@ def _scan_sources(root: Path, source_name: str, skip_dirs: Set[str]) -> List[Nod
                 nodes.append(node)
 
     return nodes
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-scan-sources
 
 
 def _load_registry(registry_path: Path):
     """Load ArtifactsMeta directly from an artifacts.toml at the given path."""
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-load-registry
     from cypilot.utils._tomllib_compat import tomllib
     from cypilot.utils.artifacts_meta import ArtifactsMeta
 
@@ -345,10 +352,12 @@ def _load_registry(registry_path: Path):
     if not isinstance(data, dict):
         return None
     return ArtifactsMeta.from_dict(data)
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-load-registry
 
 
 def _walk_source_dir(cb_dir: Path, ext_set: Set[str], skip_dirs: Set[str]) -> List[Path]:
     """Walk a codebase directory, yielding files matching the given extensions."""
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-walk-source-dir
     result: List[Path] = []
     for dirpath, dirnames, filenames in os.walk(cb_dir):
         dirnames[:] = [d for d in dirnames if d not in skip_dirs]
@@ -357,10 +366,12 @@ def _walk_source_dir(cb_dir: Path, ext_set: Set[str], skip_dirs: Set[str]) -> Li
             if suffix in ext_set:
                 result.append(Path(dirpath) / fn)
     return result
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-walk-source-dir
 
 
 def _make_source_node(path: Path, root: Path, source_name: str) -> Optional[Node]:
     """Parse a source file with CodeFile.from_path and build a Node."""
+    # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-make-source-node
     from cypilot.utils.codebase import CodeFile
     from cypilot.utils.document import to_relative_posix
 
@@ -389,6 +400,7 @@ def _make_source_node(path: Path, root: Path, source_name: str) -> Optional[Node
     if cf is not None:
         # Scope markers → marker_kind="scope"; embed 3 lines after the marker
         # so the surrounding code is visible.
+        # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-extract-scope-markers
         for sm in cf.scope_markers:
             cpt_id = f"{sm.id}:p{sm.phase}"
             cpt_uses.append(CptUse(
@@ -397,7 +409,9 @@ def _make_source_node(path: Path, root: Path, source_name: str) -> Optional[Node
                 snippet=_code_snippet(sm.line, sm.line + 4) or sm.raw.rstrip(),
                 marker_kind="scope",
             ))
+        # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-extract-scope-markers
         # Block markers → begin + end with the inner body included for begin.
+        # @cpt-begin:cpt-cypilot-algo-map-scan:p1:inst-extract-block-markers
         for bm in cf.block_markers:
             cpt_id = f"{bm.id}:p{bm.phase}"
             inner_hi = min(bm.start_line + _MAX_SNIPPET_LINES, bm.end_line)
@@ -416,6 +430,7 @@ def _make_source_node(path: Path, root: Path, source_name: str) -> Optional[Node
                         or f"@cpt-end:{bm.id}:p{bm.phase}:inst-{bm.inst}",
                 marker_kind="block-end",
             ))
+        # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-extract-block-markers
 
     return Node(
         id=node_id(source_name, rel),
@@ -430,6 +445,7 @@ def _make_source_node(path: Path, root: Path, source_name: str) -> Optional[Node
         cpt_defs=[],
         cpt_uses=cpt_uses,
     )
+    # @cpt-end:cpt-cypilot-algo-map-scan:p1:inst-make-source-node
 
 
 # ---------------------------------------------------------------------------

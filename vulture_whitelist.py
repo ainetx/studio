@@ -27,3 +27,11 @@ _MergedComponents  # used as string type hint in agents.py
 _ProvenanceRecord  # used as string type hint in agents.py
 assemble_component  # public API for future use
 INCLUDE_ERROR = ManifestLayerState.INCLUDE_ERROR  # valid enum value for future use
+
+# cfc map module — symbols retained for layout/configuration completeness.
+from cypilot.commands.map.layout import MAX_ROW_W  # noqa: E402
+from cypilot.commands.map.categorize import OverrideCategory  # noqa: E402
+
+MAX_ROW_W  # documented packing cap, retained for future tuning
+_oc = OverrideCategory(name="", paths=[], color=None, background=None)
+_oc.background  # set by md-map.toml [categories.<name>.style] entries

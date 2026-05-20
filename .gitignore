@@ -81,3 +81,8 @@ docs/superpowers/
 
 # uv lockfile — project does not adopt uv as canonical lock manager yet
 uv.lock
+
+# cfc map generated artifacts (local-only)
+md-map.html
+md-map.html.js
+md-map.json

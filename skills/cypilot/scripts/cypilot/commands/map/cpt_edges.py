@@ -1,7 +1,8 @@
 """cpt-doc and cpt-impl edges, plus phantom-cpt nodes for undefined ids.
 
-@cpt-flow:cpt-cypilot-flow-map-cpt-edges:p1
+@cpt-algo:cpt-cypilot-algo-map-cpt-edges:p1
 @cpt-algo:cpt-cypilot-algo-map-build-cpt-edges:p1
+@cpt-dod:cpt-cypilot-dod-dependency-mapping-phantoms:p1
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ def build_cpt_edges(nodes: Sequence[Node]) -> Tuple[List[Edge], List[Node]]:
     # Two entries per def: phase-qualified ("cpt-foo:p1") and base ("cpt-foo").
     # Phase-qualified takes priority; base-id serves as fallback for md-refs that
     # omit the phase annotation.
+    # @cpt-begin:cpt-cypilot-algo-map-cpt-edges:p1:inst-build-cpt-edges
     def_map: Dict[str, Node] = {}
     base_def_map: Dict[str, Node] = {}
     for n in nodes:
@@ -46,6 +48,7 @@ def build_cpt_edges(nodes: Sequence[Node]) -> Tuple[List[Edge], List[Node]]:
     edge_id = 0
     by_key: Dict[Tuple[str, str, str], Edge] = {}
 
+    # @cpt-begin:cpt-cypilot-algo-map-cpt-edges:p1:inst-iterate-uses
     for src in nodes:
         if src.kind == "phantom-cpt":
             continue
@@ -106,4 +109,6 @@ def build_cpt_edges(nodes: Sequence[Node]) -> Tuple[List[Edge], List[Node]]:
                 edge_id += 1
             else:
                 existing.refs.append(ref)
+    # @cpt-end:cpt-cypilot-algo-map-cpt-edges:p1:inst-iterate-uses
     return edges, list(phantoms.values())
+    # @cpt-end:cpt-cypilot-algo-map-cpt-edges:p1:inst-build-cpt-edges

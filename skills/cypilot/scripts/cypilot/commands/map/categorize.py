@@ -1,6 +1,6 @@
 """Category resolution: override → registry → parent-dir.
 
-@cpt-flow:cpt-cypilot-flow-map-categorize:p1
+@cpt-algo:cpt-cypilot-algo-map-categorize:p1
 @cpt-algo:cpt-cypilot-algo-map-categorize-chain:p1
 """
 from __future__ import annotations
@@ -40,6 +40,7 @@ class CategorizeOptions:
 def categorize_nodes(nodes: Sequence[Node], opts: CategorizeOptions) -> None:
     """Mutate nodes in place, filling .category and .category_origin."""
     # Build per-source registry indices (primary + any federated sources).
+    # @cpt-begin:cpt-cypilot-algo-map-categorize:p1:inst-categorize-nodes
     source_roots: dict = dict(opts.source_roots or {})
     # Always include primary root under "local" (and as default).
     primary_index = _build_registry_index(opts.project_root)
@@ -71,18 +72,22 @@ def categorize_nodes(nodes: Sequence[Node], opts: CategorizeOptions) -> None:
         # (3) Parent dir
         n.category = _parent_dir_category(n.rel_path or "")
         n.category_origin = "parent-dir"
+    # @cpt-end:cpt-cypilot-algo-map-categorize:p1:inst-categorize-nodes
 
 
 def _match_override(rel_path: str, override: OverrideConfig) -> Optional[str]:
+    # @cpt-begin:cpt-cypilot-algo-map-categorize:p1:inst-match-override
     for cat in override.categories:
         for pat in cat.paths:
             if _glob_match(pat, rel_path):
                 return cat.name
     return None
+    # @cpt-end:cpt-cypilot-algo-map-categorize:p1:inst-match-override
 
 
 def _glob_match(pattern: str, rel_path: str) -> bool:
     """Gitignore-style glob match: supports ** (multi-segment) and * (single-segment)."""
+    # @cpt-begin:cpt-cypilot-algo-map-categorize:p1:inst-glob-match
     if "**" in pattern:
         regex_parts: List[str] = []
         i = 0
@@ -102,6 +107,7 @@ def _glob_match(pattern: str, rel_path: str) -> bool:
         regex = "^" + "".join(regex_parts) + "$"
         return re.match(regex, rel_path) is not None
     return fnmatch.fnmatch(rel_path, pattern)
+    # @cpt-end:cpt-cypilot-algo-map-categorize:p1:inst-glob-match
 
 
 @dataclass(frozen=True)
@@ -112,6 +118,7 @@ class _RegistryEntry:
 
 def _node_slug_path(system_node) -> str:
     """Build slash-joined slug from root to this node using parent chain."""
+    # @cpt-begin:cpt-cypilot-algo-map-categorize:p1:inst-node-slug-path
     parts: List[str] = []
     node = system_node
     while node is not None:
@@ -120,10 +127,12 @@ def _node_slug_path(system_node) -> str:
         node = node.parent
     parts.reverse()
     return "/".join(parts)
+    # @cpt-end:cpt-cypilot-algo-map-categorize:p1:inst-node-slug-path
 
 
 def _build_registry_index(project_root: Path) -> List[_RegistryEntry]:
     """Walk artifacts.toml and emit (path_prefix → category) entries, longest-first."""
+    # @cpt-begin:cpt-cypilot-algo-map-categorize:p1:inst-build-registry-index
     art_toml = project_root / "artifacts.toml"
     if not art_toml.exists():
         return []
@@ -154,18 +163,23 @@ def _build_registry_index(project_root: Path) -> List[_RegistryEntry]:
     # Longest prefix first so more-specific entries win
     entries.sort(key=lambda e: -len(e.path_prefix))
     return entries
+    # @cpt-end:cpt-cypilot-algo-map-categorize:p1:inst-build-registry-index
 
 
 def _match_registry(rel_path: str, index: List[_RegistryEntry]) -> Optional[str]:
+    # @cpt-begin:cpt-cypilot-algo-map-categorize:p1:inst-match-registry
     for e in index:
         prefix = e.path_prefix.rstrip("/")
         if rel_path == prefix or rel_path.startswith(prefix + "/"):
             return e.category
     return None
+    # @cpt-end:cpt-cypilot-algo-map-categorize:p1:inst-match-registry
 
 
 def _parent_dir_category(rel_path: str) -> str:
+    # @cpt-begin:cpt-cypilot-algo-map-categorize:p1:inst-parent-dir-category
     parts = rel_path.split("/")
     if len(parts) <= 1:
         return "_root"
     return parts[-2]
+    # @cpt-end:cpt-cypilot-algo-map-categorize:p1:inst-parent-dir-category

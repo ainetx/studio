@@ -1,6 +1,7 @@
 """Self-contained HTML output.
 
-@cpt-flow:cpt-cypilot-flow-map-render-html:p1
+@cpt-algo:cpt-cypilot-algo-map-render-html:p1
+@cpt-dod:cpt-cypilot-dod-dependency-mapping-html:p1
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ def render_html(inp: RenderHtmlInput) -> Tuple[str, Optional[str]]:
     When inline_data=True: returns (html with embedded data, None).
     When inline_data=False: returns (html referencing sidecar, js sidecar content).
     """
+    # @cpt-begin:cpt-cypilot-algo-map-render-html:p1:inst-render-html
     viewer_js = (ASSETS / "viewer.js").read_text(encoding="utf-8")
     viewer_css = (ASSETS / "viewer.css").read_text(encoding="utf-8")
     marked_js = (VENDOR / "marked.min.js").read_text(encoding="utf-8")
@@ -45,8 +47,10 @@ def render_html(inp: RenderHtmlInput) -> Tuple[str, Optional[str]]:
         purify_js=purify_js,
     )
     return html, sidecar_js
+    # @cpt-end:cpt-cypilot-algo-map-render-html:p1:inst-render-html
 
 
+# @cpt-begin:cpt-cypilot-algo-map-render-html:p1:inst-html-template
 _TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
@@ -87,3 +91,4 @@ _TEMPLATE = """<!doctype html>
 </body>
 </html>
 """
+# @cpt-end:cpt-cypilot-algo-map-render-html:p1:inst-html-template
