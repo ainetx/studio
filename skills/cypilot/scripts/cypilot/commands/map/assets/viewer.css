@@ -390,41 +390,39 @@ html, body {
 }
 .muted { color: #888; font-style: italic; font-size: 10.5px; }
 
-/* Collapsible snippet wrapper.
- * Default: first ~4 lines visible with a fade-out + "show more" button.
- * .expanded removes the clamp; .short hides the toggle entirely. */
-.snippet-wrap {
+/* Collapsible snippet:
+ *   .snippet-wrap        container; never clipped
+ *   .snippet-clip        the only element with overflow:hidden + max-height
+ *   .snippet-toggle      sibling of the clip → always clickable */
+.snippet-wrap { position: relative; margin-top: 4px; }
+.snippet-wrap > .snippet,
+.snippet-wrap > .content-block,
+.snippet-clip > .snippet,
+.snippet-clip > .content-block { margin-top: 0; }
+
+.snippet-clip {
   position: relative;
-  margin-top: 4px;
 }
-.snippet-wrap.collapsed {
+.snippet-clip.collapsed {
   max-height: 5.6em;   /* ≈ 4 lines at line-height 1.4 */
   overflow: hidden;
 }
-.snippet-wrap.expanded {
+.snippet-clip.expanded {
   max-height: none;
-}
-.snippet-wrap.short {
-  max-height: none;
-}
-.snippet-wrap > .snippet,
-.snippet-wrap > .content-block {
-  margin-top: 0;
 }
 
 .snippet-fade {
   position: absolute;
-  left: 0; right: 0; bottom: 22px;
+  left: 0; right: 0; bottom: 0;
   height: 26px;
   pointer-events: none;
   background: linear-gradient(to bottom, rgba(247,247,250,0), rgba(247,247,250,0.95));
 }
-.snippet-wrap.expanded .snippet-fade { display: none; }
-.snippet-wrap.short .snippet-fade { display: none; }
+.snippet-clip.expanded .snippet-fade { display: none; }
 
 .snippet-toggle {
   display: inline-block;
-  margin-top: 2px;
+  margin-top: 4px;
   padding: 1px 8px;
   font-size: 10px;
   font-family: inherit;
@@ -435,7 +433,6 @@ html, body {
   cursor: pointer;
 }
 .snippet-toggle:hover { background: #dde2f5; }
-.snippet-wrap.short .snippet-toggle { display: none; }
 
 /* Clickable cpt-ID chips */
 .cpt-id.link, .cpt-link {

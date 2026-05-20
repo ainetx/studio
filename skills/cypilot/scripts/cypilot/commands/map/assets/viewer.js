@@ -1023,22 +1023,30 @@
   function collapsible(innerEl, rawText) {
     const lineCount = (rawText || "").split("\n").length;
     const isShort = lineCount <= 4 && (rawText || "").length <= 200;
-    const wrap = el("div", { className: "snippet-wrap collapsed" });
-    wrap.appendChild(innerEl);
-    if (!isShort) {
-      const fade = el("div", { className: "snippet-fade" });
-      wrap.appendChild(fade);
-      const btn = el("button", { className: "snippet-toggle" }, "show more");
-      btn.addEventListener("click", function (ev) {
-        ev.stopPropagation();
-        const expanded = wrap.classList.toggle("expanded");
-        wrap.classList.toggle("collapsed", !expanded);
-        btn.textContent = expanded ? "show less" : "show more";
-      });
-      wrap.appendChild(btn);
-    } else {
+    const wrap = el("div", { className: "snippet-wrap" });
+    if (isShort) {
+      // No clip; just emit the content directly inside the wrap.
       wrap.classList.add("short");
+      wrap.appendChild(innerEl);
+      return wrap;
     }
+    // The clip element is the only thing that gets max-height + overflow:hidden.
+    // Button lives outside the clip so it stays clickable when collapsed.
+    const clip = el("div", { className: "snippet-clip collapsed" });
+    clip.appendChild(innerEl);
+    const fade = el("div", { className: "snippet-fade" });
+    clip.appendChild(fade);
+    wrap.appendChild(clip);
+
+    const btn = el("button", { className: "snippet-toggle" }, "show more");
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const expanded = clip.classList.toggle("expanded");
+      clip.classList.toggle("collapsed", !expanded);
+      btn.textContent = expanded ? "show less" : "show more";
+    });
+    wrap.appendChild(btn);
     return wrap;
   }
 
