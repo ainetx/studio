@@ -32,6 +32,14 @@
     shape: "diamond",
   };
 
+  /* ── Focus state ────────────────────────────────────────────── */
+  // activeDepth: how many hops from the selected focus node(s) to show edges
+  let activeDepth = 1;
+  // currentFocusIds: Set of node IDs that are the current focus (null = no focus)
+  let currentFocusIds = null;
+  // allEdgesData: flat array of all edge objects from data.edges — set in buildGraph
+  let allEdgesData = [];
+
   /* ── Bootstrap ──────────────────────────────────────────────── */
   document.addEventListener("DOMContentLoaded", function () {
     const data = window.MAP_DATA;
@@ -51,6 +59,36 @@
     /* Logo / title */
     const logo = el("div", { className: "logo" }, "cfc map");
     sidebar.appendChild(logo);
+
+    /* Depth control */
+    const depthWrap = el("div", { className: "depth-control" });
+    const depthLabel = document.createElement("label");
+    depthLabel.textContent = "Depth: ";
+    const depthInput = el("input", {
+      id: "depth-input",
+      type: "number",
+    });
+    depthInput.setAttribute("min", "0");
+    depthInput.setAttribute("max", "5");
+    depthInput.setAttribute("value", "1");
+    depthLabel.appendChild(depthInput);
+    depthWrap.appendChild(depthLabel);
+    depthWrap.appendChild(el("small", {}, "0 = focus only; ≥1 includes N hops"));
+    sidebar.appendChild(depthWrap);
+
+    function onDepthChange() {
+      let v = parseInt(depthInput.value, 10);
+      if (isNaN(v)) v = 1;
+      if (v < 0) v = 0;
+      if (v > 5) v = 5;
+      depthInput.value = v;
+      activeDepth = v;
+      if (currentFocusIds !== null) {
+        applyFocus(currentFocusIds);
+      }
+    }
+    depthInput.addEventListener("change", onDepthChange);
+    depthInput.addEventListener("input", onDepthChange);
 
     /* Workspace info */
     const ws = data.workspace || {};
@@ -109,18 +147,28 @@
         row.addEventListener("click", function () {
           const network = window._cfcNetwork;
           if (!network) return;
-          // Remove active from previous row
-          if (activeCatRow && activeCatRow !== row) {
-            activeCatRow.classList.remove("active");
-          }
-          row.classList.toggle("active");
-          activeCatRow = row.classList.contains("active") ? row : null;
 
           const idsInCat = (data.nodes || [])
             .filter(function (n) { return n.category === cat; })
             .map(function (n) { return n.id; });
           if (idsInCat.length === 0) return;
-          network.selectNodes(idsInCat);
+
+          // Toggle: clicking the active category row clears the focus
+          if (activeCatRow === row && row.classList.contains("active")) {
+            row.classList.remove("active");
+            activeCatRow = null;
+            clearFocus();
+            return;
+          }
+
+          // Remove active from previous row
+          if (activeCatRow && activeCatRow !== row) {
+            activeCatRow.classList.remove("active");
+          }
+          row.classList.add("active");
+          activeCatRow = row;
+
+          setFocus(new Set(idsInCat));
           network.fit({ nodes: idsInCat, animation: { duration: 400, easingFunction: "easeInOutQuad" } });
         });
         catSect.appendChild(row);
@@ -193,9 +241,10 @@
       return vn;
     });
 
-    /* Edges */
-    const visEdges = (data.edges || []).map(function (e) {
-      return makeVisEdge(e);
+    /* Edges — hidden by default until a focus is set */
+    allEdgesData = data.edges || [];
+    const visEdges = allEdgesData.map(function (e) {
+      return Object.assign(makeVisEdge(e), { hidden: true });
     });
 
     const nodesDS = new vis.DataSet(visNodes);
@@ -278,21 +327,50 @@
     network.on("click", function (params) {
       if (params.nodes.length > 0) {
         const nodeId = params.nodes[0];
-        // Skip band-group nodes (none in this impl since we use afterDrawing approach)
         const node = findById(data.nodes, nodeId);
         if (node) showNodeInspector(node, data, primary);
+
+        // Toggle focus: clicking the same focused single-node clears it
+        if (currentFocusIds && currentFocusIds.size === 1 && currentFocusIds.has(nodeId)) {
+          clearFocus();
+        } else {
+          setFocus(new Set([nodeId]));
+        }
       } else if (params.edges.length > 0) {
         const edgeId = params.edges[0];
         const edge = findById(data.edges, edgeId);
         if (edge) showEdgeInspector(edge, data);
+        // Keep the edge visible — no focus change
       } else {
-        closeInspector();
+        // Check if click landed inside a category band
+        const canvasPos = params.pointer.canvas;
+        const hitCat = hitTestCategoryBand(canvasPos, categoryBands);
+        if (hitCat) {
+          const idsInCat = (data.nodes || [])
+            .filter(function (n) { return n.category === hitCat; })
+            .map(function (n) { return n.id; });
+          if (currentFocusIds && idsInCat.every(function (id) { return currentFocusIds.has(id); }) &&
+              currentFocusIds.size === idsInCat.length) {
+            // Same category band clicked again — clear focus
+            clearFocus();
+          } else {
+            setFocus(new Set(idsInCat));
+          }
+        } else {
+          // Empty canvas click — clear focus
+          clearFocus();
+          closeInspector();
+        }
       }
     });
 
+    /* Expose DS for applyFocus / clearFocus */
+    window._cfcEdgesDS = edgesDS;
+    window._cfcNodesDS = nodesDS;
+    window._cfcAllNodeIds = visNodes.map(function (vn) { return vn.id; });
+
     /* Store reference for search and sidebar */
     window._cfcNetwork = network;
-    window._cfcNodesDS = nodesDS;
     return network;
   }
 
@@ -361,6 +439,105 @@
       title: e.type + (isD ? " (dangling)" : "") + (e.cross_repo ? " [cross-repo]" : ""),
       label: e.type === "file-link" ? "" : e.type,
     };
+  }
+
+  /* ── BFS edge/node reachability ─────────────────────────────── */
+  function nodesWithinDepth(rootIds, depth, edges) {
+    if (depth === 0) return { nodes: new Set(rootIds), edges: new Set() };
+    const adj = {};          // node id → [edge ids]
+    const edgeNodes = {};    // edge id → [node id, node id]
+    for (var i = 0; i < edges.length; i++) {
+      var e = edges[i];
+      edgeNodes[e.id] = [e.from, e.to];
+      if (!adj[e.from]) adj[e.from] = [];
+      adj[e.from].push(e.id);
+      if (!adj[e.to]) adj[e.to] = [];
+      adj[e.to].push(e.id);
+    }
+    var visited = new Set(rootIds);
+    var reachableEdges = new Set();
+    var frontier = new Set(rootIds);
+    for (var h = 0; h < depth; h++) {
+      var next = new Set();
+      frontier.forEach(function (nid) {
+        (adj[nid] || []).forEach(function (eid) {
+          reachableEdges.add(eid);
+          var pair = edgeNodes[eid];
+          var other = pair[0] === nid ? pair[1] : pair[0];
+          if (!visited.has(other)) {
+            visited.add(other);
+            next.add(other);
+          }
+        });
+      });
+      if (!next.size) break;
+      frontier = next;
+    }
+    return { nodes: visited, edges: reachableEdges };
+  }
+
+  /* ── Category band hit-testing ───────────────────────────────── */
+  function hitTestCategoryBand(canvasPos, categoryBands) {
+    var cats = Object.keys(categoryBands);
+    for (var i = 0; i < cats.length; i++) {
+      var cat = cats[i];
+      var band = categoryBands[cat];
+      if (canvasPos.x >= band.x && canvasPos.x <= band.x + band.w &&
+          canvasPos.y >= band.y && canvasPos.y <= band.y + band.h) {
+        return cat;
+      }
+    }
+    return null;
+  }
+
+  /* ── Focus management ────────────────────────────────────────── */
+  function setFocus(nodeIdSet) {
+    currentFocusIds = nodeIdSet;
+    applyFocus(nodeIdSet);
+  }
+
+  function clearFocus() {
+    currentFocusIds = null;
+    const edgesDS = window._cfcEdgesDS;
+    const nodesDS = window._cfcNodesDS;
+    const allNodeIds = window._cfcAllNodeIds || [];
+    if (edgesDS) {
+      edgesDS.update(allEdgesData.map(function (e) {
+        return { id: e.id, hidden: true };
+      }));
+    }
+    if (nodesDS) {
+      nodesDS.update(allNodeIds.map(function (id) {
+        return { id: id, opacity: 1.0 };
+      }));
+    }
+    const network = window._cfcNetwork;
+    if (network) network.selectNodes([]);
+  }
+
+  function applyFocus(nodeIdSet) {
+    const edgesDS = window._cfcEdgesDS;
+    const nodesDS = window._cfcNodesDS;
+    const allNodeIds = window._cfcAllNodeIds || [];
+    if (!edgesDS || !nodesDS) return;
+
+    const result = nodesWithinDepth(Array.from(nodeIdSet), activeDepth, allEdgesData);
+    const reachableNodes = result.nodes;
+    const reachableEdges = result.edges;
+
+    // Show/hide edges
+    edgesDS.update(allEdgesData.map(function (e) {
+      return { id: e.id, hidden: !reachableEdges.has(e.id) };
+    }));
+
+    // Dim nodes not in the reachable set (and not the focus)
+    nodesDS.update(allNodeIds.map(function (id) {
+      return { id: id, opacity: reachableNodes.has(id) ? 1.0 : 0.18 };
+    }));
+
+    // Select focus nodes in vis
+    const network = window._cfcNetwork;
+    if (network) network.selectNodes(Array.from(nodeIdSet));
   }
 
   /* ── Inspector ───────────────────────────────────────────────── */

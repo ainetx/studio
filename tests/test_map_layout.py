@@ -50,3 +50,14 @@ def test_layout_phantom_has_red_style():
     p = phantom_vis[0]
     assert p["shape"] == "diamond"
     assert "c41212" in (p.get("color", {}).get("border", "") or "")
+
+
+def test_dims_targets_square_layout_for_small_categories():
+    from cypilot.commands.map.layout import _dims
+    # n=20 must produce more than 2 rows (square-ish)
+    w, h, cols = _dims(20, 20)
+    rows = -(-20 // cols)  # ceil division
+    assert rows >= 3, f"expected at least 3 rows for n=20, got {rows}"
+    # n=6 → cols=3 → rows=2 is still fine
+    _, _, cols6 = _dims(6, 6)
+    assert cols6 == 3

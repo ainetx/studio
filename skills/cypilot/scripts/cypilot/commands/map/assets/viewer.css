@@ -301,6 +301,46 @@ html, body {
 .edge-file-link { background: #888888; }
 .edge-dangling  { background: #c41212; }
 
+/* ── Depth control ── */
+.depth-control {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 6px;
+  background: #22223a;
+  border-radius: 5px;
+  border: 1px solid #3a3a66;
+}
+
+.depth-control label {
+  color: #c0c0e0;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.depth-control small {
+  color: #7070a0;
+  font-size: 10px;
+}
+
+#depth-input {
+  width: 52px;
+  padding: 2px 6px;
+  background: #2d2d50;
+  border: 1px solid #4040aa;
+  border-radius: 4px;
+  color: #e0e0f0;
+  font-size: 12px;
+  outline: none;
+}
+
+#depth-input:focus {
+  border-color: #80a0ff;
+}
+
 /* ── Scrollbar tweaks ── */
 ::-webkit-scrollbar {
   width: 6px;

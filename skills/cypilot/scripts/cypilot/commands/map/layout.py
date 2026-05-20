@@ -91,10 +91,13 @@ def _category_band_style(
 # ---------------------------------------------------------------------------
 
 def _dims(n: int, total_files_in_category: int) -> tuple[int, int, int]:
-    """Return (width, height, cols) for a bucket with n nodes."""
+    """Return (width, height, cols) for a category's single bucket.
+
+    Targets a roughly-square arrangement to keep each band readable.
+    The `total_files_in_category` parameter is retained for API stability
+    but no longer affects the column count.
+    """
     cols = max(1, math.ceil(math.sqrt(n * 1.3)))
-    if total_files_in_category < 50:
-        cols = max(cols, math.ceil(n / 2))
     rows = math.ceil(n / cols)
     w = max(180, 2 * _PAD_H + 18 + (cols - 1) * _SPACING)
     h = max(130, _PAD_TOP + _PAD_BOTTOM + 36 + (rows - 1) * _SPACING)
