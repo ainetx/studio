@@ -220,7 +220,7 @@
           activeCatRow = row;
 
           setFocus(new Set(idsInCat));
-          network.fit({ nodes: idsInCat, animation: { duration: 400, easingFunction: "easeInOutQuad" } });
+          zoomToNodes(idsInCat);
         });
         catSect.appendChild(row);
       });
@@ -393,6 +393,7 @@
           clearFocus();
         } else {
           setFocus(new Set([nodeId]));
+          zoomToNode(nodeId);
         }
       } else if (params.edges.length > 0) {
         const edgeId = params.edges[0];
@@ -413,6 +414,7 @@
             clearFocus();
           } else {
             setFocus(new Set(idsInCat));
+            zoomToNodes(idsInCat);
           }
         } else {
           // Empty canvas click — clear focus
@@ -1074,7 +1076,7 @@
     refreshToolbarState();
 
     setFocus(new Set([nodeId]));
-    network.fit({ nodes: [nodeId], animation: { duration: 350 } });
+    zoomToNode(nodeId);
     const node = (data.nodes || []).filter(function (n) { return n.id === nodeId; })[0];
     if (node) showNodeInspector(node, data, primary, { highlightCptId: opts.highlightCptId });
   }
@@ -1105,6 +1107,24 @@
     if (!network) return;
     const cur = network.getScale();
     network.moveTo({ scale: cur * factor, animation: { duration: 150 } });
+  }
+
+  /* Tight-zoom helpers used by node / category click handlers. */
+  function zoomToNode(nodeId, scale) {
+    const network = window._cfcNetwork;
+    if (!network) return;
+    network.focus(nodeId, {
+      scale: scale || 1.6,
+      animation: { duration: 400, easingFunction: "easeInOutQuad" },
+    });
+  }
+  function zoomToNodes(nodeIds) {
+    const network = window._cfcNetwork;
+    if (!network || !nodeIds || !nodeIds.length) return;
+    network.fit({
+      nodes: nodeIds,
+      animation: { duration: 400, easingFunction: "easeInOutQuad" },
+    });
   }
 
   function fitAll() {
