@@ -201,6 +201,12 @@ html, body {
 }
 
 /* ── Graph (center, fills) ── */
+#graph-wrap {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  display: flex;
+}
 #graph {
   flex: 1;
   background: #f9f9fb;

@@ -66,7 +66,8 @@ _TEMPLATE = """<!doctype html>
 <body>
 <div id="app">
   <aside id="sidebar"></aside>
-  <main id="graph">
+  <div id="graph-wrap">
+    <main id="graph"></main>
     <div id="toolbar">
       <button id="tb-back"     title="Back (previous node)">◀</button>
       <button id="tb-fwd"      title="Forward (next node)">▶</button>
@@ -74,7 +75,7 @@ _TEMPLATE = """<!doctype html>
       <button id="tb-zoom-out" title="Zoom out">−</button>
       <button id="tb-fit"      title="Fit all">⛶</button>
     </div>
-  </main>
+  </div>
   <section id="inspector"></section>
 </div>
 {data_script}
