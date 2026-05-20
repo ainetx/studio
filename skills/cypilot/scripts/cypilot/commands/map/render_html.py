@@ -68,12 +68,14 @@ _TEMPLATE = """<!doctype html>
   <aside id="sidebar"></aside>
   <div id="graph-wrap">
     <main id="graph"></main>
+    <div id="hand-overlay"></div>
     <div id="toolbar">
       <button id="tb-back"     title="Back (previous node)">◀</button>
       <button id="tb-fwd"      title="Forward (next node)">▶</button>
       <button id="tb-zoom-in"  title="Zoom in">+</button>
       <button id="tb-zoom-out" title="Zoom out">−</button>
       <button id="tb-fit"      title="Fit all">⛶</button>
+      <button id="tb-hand"     title="Hand tool — drag anywhere to pan">✋</button>
     </div>
   </div>
   <section id="inspector"></section>

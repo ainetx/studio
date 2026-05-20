@@ -1118,12 +1118,63 @@
     const zi   = document.getElementById("tb-zoom-in");
     const zo   = document.getElementById("tb-zoom-out");
     const fit  = document.getElementById("tb-fit");
+    const hand = document.getElementById("tb-hand");
     if (back) back.addEventListener("click", navGoBack);
     if (fwd)  fwd.addEventListener("click",  navGoForward);
     if (zi)   zi.addEventListener("click",   function () { zoomBy(1.25); });
     if (zo)   zo.addEventListener("click",   function () { zoomBy(1 / 1.25); });
     if (fit)  fit.addEventListener("click",  fitAll);
+    if (hand) hand.addEventListener("click", function () { setHandMode(!handMode); });
+    wireHandOverlay();
     refreshToolbarState();
+  }
+
+  /* Hand-tool mode: drag anywhere on the graph to pan, regardless of whether
+   * the cursor is over a node. Implemented via a transparent overlay element
+   * that captures pointer events when active. */
+  let handMode = false;
+  function setHandMode(on) {
+    handMode = !!on;
+    const overlay = document.getElementById("hand-overlay");
+    const btn = document.getElementById("tb-hand");
+    const wrap = document.getElementById("graph-wrap");
+    if (overlay) overlay.classList.toggle("active", handMode);
+    if (btn) btn.classList.toggle("active", handMode);
+    if (wrap) wrap.classList.toggle("hand-mode", handMode);
+  }
+  function wireHandOverlay() {
+    const overlay = document.getElementById("hand-overlay");
+    if (!overlay) return;
+    let dragging = false;
+    let last = null;
+
+    overlay.addEventListener("mousedown", function (e) {
+      if (!handMode) return;
+      e.preventDefault();
+      dragging = true;
+      last = { x: e.clientX, y: e.clientY };
+      overlay.classList.add("grabbing");
+    });
+    window.addEventListener("mousemove", function (e) {
+      if (!handMode || !dragging) return;
+      const dx = e.clientX - last.x;
+      const dy = e.clientY - last.y;
+      last = { x: e.clientX, y: e.clientY };
+      const network = window._cfcNetwork;
+      if (!network) return;
+      const scale = network.getScale() || 1;
+      const cur = network.getViewPosition();
+      network.moveTo({ position: { x: cur.x - dx / scale, y: cur.y - dy / scale } });
+    });
+    window.addEventListener("mouseup", function () {
+      dragging = false;
+      overlay.classList.remove("grabbing");
+    });
+    overlay.addEventListener("wheel", function (e) {
+      if (!handMode) return;
+      e.preventDefault();
+      zoomBy(e.deltaY > 0 ? 1 / 1.12 : 1.12);
+    }, { passive: false });
   }
 
   /* Build a clickable chip-row for a cpt-id with two actions:

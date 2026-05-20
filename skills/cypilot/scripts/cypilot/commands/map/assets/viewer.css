@@ -250,6 +250,26 @@ html, body {
   color: #bbb;
   cursor: not-allowed;
 }
+#toolbar button.active {
+  background: #3050a0;
+  border-color: #3050a0;
+  color: #fff;
+}
+#toolbar button.active:hover { background: #4060c0; color: #fff; }
+
+/* Hand-tool transparent overlay — captures pointer events while active. */
+#hand-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 4;            /* above canvas, below toolbar (z-index 5) */
+  pointer-events: none;
+  cursor: grab;
+}
+#hand-overlay.active { pointer-events: auto; }
+#hand-overlay.active.grabbing,
+#graph-wrap.hand-mode.grabbing { cursor: grabbing; }
+#graph-wrap.hand-mode #hand-overlay { cursor: grab; }
+#graph-wrap.hand-mode #hand-overlay.grabbing { cursor: grabbing; }
 
 /* ── Inspector (right, 320px, hidden by default) ── */
 #inspector {
