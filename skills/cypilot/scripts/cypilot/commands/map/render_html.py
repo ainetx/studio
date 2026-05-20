@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 ASSETS = Path(__file__).resolve().parent / "assets"
+VENDOR = ASSETS / "vendor"
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,8 @@ def render_html(inp: RenderHtmlInput) -> Tuple[str, Optional[str]]:
     """
     viewer_js = (ASSETS / "viewer.js").read_text(encoding="utf-8")
     viewer_css = (ASSETS / "viewer.css").read_text(encoding="utf-8")
+    marked_js = (VENDOR / "marked.min.js").read_text(encoding="utf-8")
+    purify_js = (VENDOR / "purify.min.js").read_text(encoding="utf-8")
 
     if inp.inline_data:
         data_script = f"<script>window.MAP_DATA = {inp.json_payload};</script>"
@@ -38,6 +41,8 @@ def render_html(inp: RenderHtmlInput) -> Tuple[str, Optional[str]]:
         css=viewer_css,
         data_script=data_script,
         viewer_js=viewer_js,
+        marked_js=marked_js,
+        purify_js=purify_js,
     )
     return html, sidecar_js
 
@@ -48,6 +53,12 @@ _TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <title>cfc map</title>
 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script>
+{marked_js}
+</script>
+<script>
+{purify_js}
+</script>
 <style>
 {css}
 </style>

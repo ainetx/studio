@@ -406,6 +406,25 @@
     window._cfcAllNodeIds = visNodes.map(function (vn) { return vn.id; });
     window._cfcAllNodesData = data.nodes || [];
 
+    /* Build cpt-ID indices once, exposed to inspector + search.
+     *   _cfcCptDefiners[cpt_id] = Set<node_id>  (typically size 1)
+     *   _cfcCptUsers[cpt_id]    = Set<node_id>  (consumers; excludes md-def entries) */
+    const definers = {};
+    const users = {};
+    (data.nodes || []).forEach(function (n) {
+      (n.cpt_defs || []).forEach(function (d) {
+        if (!definers[d]) definers[d] = new Set();
+        definers[d].add(n.id);
+      });
+      (n.cpt_uses || []).forEach(function (u) {
+        if (u.marker_kind === "md-def") return;
+        if (!users[u.cpt_id]) users[u.cpt_id] = new Set();
+        users[u.cpt_id].add(n.id);
+      });
+    });
+    window._cfcCptDefiners = definers;
+    window._cfcCptUsers = users;
+
     /* Store reference for search and sidebar */
     window._cfcNetwork = network;
     return network;
@@ -655,24 +674,29 @@
       if (u.marker_kind === "md-def") defSiteById[u.cpt_id] = u;
     });
 
-    /* cpt definitions — render with snippet from the matching md-def entry */
+    /* For source nodes we keep snippets as plain code, not Markdown. */
+    const renderSnippet = node.kind === "source"
+      ? function (text) { return el("pre", { className: "snippet code" }, text || ""); }
+      : function (text) { return mdElement(text || "", { className: "snippet" }); };
+
+    /* cpt definitions — clickable chip opens picker of consumer nodes */
     if (node.cpt_defs && node.cpt_defs.length > 0) {
       body.appendChild(fieldHeading("cpt-IDs defined (" + node.cpt_defs.length + ")"));
       node.cpt_defs.forEach(function (d) {
         const card = el("div", { className: "ref-card" });
-        card.appendChild(el("div", { className: "cpt-id" }, d));
+        card.appendChild(cptChip(d, "users"));
         const site = defSiteById[d];
         if (site) {
           card.appendChild(el("div", {}, el("span", {}, "line " + site.line)));
-          card.appendChild(el("div", { className: "snippet" }, site.snippet || ""));
+          card.appendChild(renderSnippet(site.snippet));
         } else {
-          card.appendChild(el("div", { className: "snippet" }, "(definition site not located)"));
+          card.appendChild(el("div", { className: "snippet muted" }, "(definition site not located)"));
         }
         body.appendChild(card);
       });
     }
 
-    /* cpt uses — skip md-def entries (those are shown under definitions above) */
+    /* cpt uses — clickable chip jumps to definer node */
     const useEntries = (node.cpt_uses || []).filter(function (u) {
       return u.marker_kind !== "md-def";
     });
@@ -680,10 +704,10 @@
       body.appendChild(fieldHeading("cpt-IDs used (" + useEntries.length + ")"));
       useEntries.slice(0, 20).forEach(function (u) {
         const card = el("div", { className: "ref-card" });
-        card.appendChild(el("div", { className: "cpt-id" }, u.cpt_id));
+        card.appendChild(cptChip(u.cpt_id, "definer"));
         const meta = "line " + u.line + (u.marker_kind ? " · " + u.marker_kind : "");
         card.appendChild(el("div", {}, el("span", {}, meta)));
-        card.appendChild(el("div", { className: "snippet" }, u.snippet || ""));
+        card.appendChild(renderSnippet(u.snippet));
         body.appendChild(card);
       });
       if (useEntries.length > 20) {
@@ -694,13 +718,18 @@
     /* Content */
     body.appendChild(fieldHeading("Content"));
     if (node.content) {
-      const cb = el("div", { className: "content-block" }, node.content.slice(0, 4000));
-      body.appendChild(cb);
-      if (node.content.length > 4000) {
-        body.appendChild(el("p", {}, "(truncated to 4000 chars)"));
+      const truncated = node.content.length > 8000;
+      const text = node.content.slice(0, 8000);
+      if (node.kind === "source") {
+        body.appendChild(el("pre", { className: "content-block code" }, text));
+      } else {
+        body.appendChild(mdElement(text, { className: "content-block" }));
+      }
+      if (truncated) {
+        body.appendChild(el("p", { className: "muted" }, "(truncated to 8000 chars)"));
       }
     } else {
-      body.appendChild(el("p", {}, "(content not embedded)"));
+      body.appendChild(el("p", { className: "muted" }, "(content not embedded)"));
     }
 
     insp.appendChild(body);
@@ -729,15 +758,21 @@
 
     if (edge.refs && edge.refs.length > 0) {
       body.appendChild(fieldHeading("References (" + edge.refs.length + ")"));
-      edge.refs.forEach(function (r, i) {
+      // Use side may be source code → keep as plain. Def side is always markdown.
+      const useNode = (window._cfcAllNodesData || []).filter(function (n) { return n.id === edge.from; })[0];
+      const useIsSource = useNode && useNode.kind === "source";
+      const useRender = useIsSource
+        ? function (t) { return el("pre", { className: "snippet code" }, t || ""); }
+        : function (t) { return mdElement(t || "", { className: "snippet" }); };
+      edge.refs.forEach(function (r) {
         const card = el("div", { className: "ref-card" });
-        if (r.cpt_id) card.appendChild(el("div", { className: "cpt-id" }, r.cpt_id));
-        card.appendChild(el("div", {}, "line " + r.line));
-        if (r.snippet) card.appendChild(el("div", { className: "snippet" }, r.snippet));
+        if (r.cpt_id) card.appendChild(cptChip(r.cpt_id, "definer"));
+        card.appendChild(el("div", {}, "use site — line " + r.line));
+        if (r.snippet) card.appendChild(useRender(r.snippet));
         if (r.def_line != null) {
-          card.appendChild(el("div", {}, "defined at line " + r.def_line));
+          card.appendChild(el("div", {}, "definition — line " + r.def_line));
         }
-        if (r.def_snippet) card.appendChild(el("div", { className: "snippet" }, r.def_snippet));
+        if (r.def_snippet) card.appendChild(mdElement(r.def_snippet, { className: "snippet" }));
         body.appendChild(card);
       });
     }
@@ -867,6 +902,122 @@
 
   function code(text) {
     return el("code", {}, text);
+  }
+
+  /* Open a node by id: focus, zoom, open inspector. */
+  function jumpToNode(nodeId) {
+    const network = window._cfcNetwork;
+    const data = window.MAP_DATA || {};
+    const primary = (data.workspace || {}).primary || "local";
+    if (!network) return;
+    setFocus(new Set([nodeId]));
+    network.fit({ nodes: [nodeId], animation: { duration: 350 } });
+    const node = (data.nodes || []).filter(function (n) { return n.id === nodeId; })[0];
+    if (node) showNodeInspector(node, data, primary);
+  }
+
+  /* Build a clickable chip for a cpt-id that jumps to its definer (or shows
+   * a picker if there are multiple, or if direction === "users"). */
+  function cptChip(cptId, direction) {
+    const span = el("span", { className: "cpt-id link cpt-link" }, cptId);
+    span.title = direction === "users"
+      ? "Click to see nodes that use this cpt-id"
+      : "Click to jump to the node defining this cpt-id";
+    span.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      if (direction === "users") {
+        showCptPicker(span, cptId, "users");
+      } else {
+        const definers = window._cfcCptDefiners || {};
+        const set = definers[cptId];
+        if (!set || set.size === 0) {
+          // Try basename fallback (definers store base; uses may be phase-qualified or vice versa).
+          const base = cptId.split(":")[0];
+          const baseSet = definers[base];
+          if (baseSet && baseSet.size > 0) return navigateOne(span, baseSet);
+          flashNotFound(span);
+          return;
+        }
+        navigateOne(span, set);
+      }
+    });
+    return span;
+  }
+
+  function navigateOne(anchor, idSet) {
+    const ids = Array.from(idSet);
+    if (ids.length === 1) {
+      jumpToNode(ids[0]);
+    } else {
+      showCptPickerForList(anchor, ids);
+    }
+  }
+
+  function flashNotFound(anchor) {
+    const note = el("span", { className: "muted" }, "  (not defined)");
+    anchor.parentNode.insertBefore(note, anchor.nextSibling);
+    setTimeout(function () { if (note.parentNode) note.parentNode.removeChild(note); }, 1500);
+  }
+
+  function showCptPicker(anchor, cptId, direction) {
+    const idx = direction === "users" ? window._cfcCptUsers : window._cfcCptDefiners;
+    const set = (idx || {})[cptId] || new Set();
+    showCptPickerForList(anchor, Array.from(set));
+  }
+
+  function showCptPickerForList(anchor, nodeIds) {
+    // Remove any existing picker right after this anchor.
+    if (anchor._cptPicker && anchor._cptPicker.parentNode) {
+      anchor._cptPicker.parentNode.removeChild(anchor._cptPicker);
+      anchor._cptPicker = null;
+      return;
+    }
+    const picker = el("div", { className: "cpt-picker" });
+    if (!nodeIds.length) {
+      picker.appendChild(el("div", { className: "empty" }, "no other nodes reference this id"));
+    } else {
+      const byId = {};
+      (window._cfcAllNodesData || []).forEach(function (n) { byId[n.id] = n; });
+      nodeIds.forEach(function (nid) {
+        const n = byId[nid];
+        const item = el("div", { className: "picker-item" });
+        const kindLabel = n ? n.kind : "?";
+        item.appendChild(el("span", { className: "kind " + kindLabel }, kindLabel));
+        item.appendChild(document.createTextNode(n ? (n.rel_path || nid) : nid));
+        item.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          jumpToNode(nid);
+        });
+        picker.appendChild(item);
+      });
+    }
+    anchor.parentNode.insertBefore(picker, anchor.nextSibling);
+    anchor._cptPicker = picker;
+  }
+
+  /* Render Markdown safely. Uses vendored marked.js → DOMPurify chain.
+   * If either library is missing, falls back to a textContent paragraph. */
+  function mdElement(text, opts) {
+    opts = opts || {};
+    const wrap = el("div", { className: "md " + (opts.className || "") });
+    if (!text) return wrap;
+    if (typeof window.marked === "undefined" || typeof window.DOMPurify === "undefined") {
+      wrap.appendChild(el("pre", {}, text));
+      return wrap;
+    }
+    try {
+      const html = window.marked.parse(text, { gfm: true, breaks: false, mangle: false, headerIds: false });
+      wrap.innerHTML = window.DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: ["p","a","strong","em","code","pre","kbd","ul","ol","li","blockquote",
+                        "h1","h2","h3","h4","h5","h6","br","hr","table","thead","tbody","tr","th","td",
+                        "img","input","del","ins","sup","sub"],
+        ALLOWED_ATTR: ["href","title","alt","src","class","type","checked","disabled","colspan","rowspan"],
+        ALLOW_DATA_ATTR: false,
+      });
+    } catch (err) {
+      wrap.appendChild(el("pre", {}, text));
+    }
+    return wrap;
   }
 
   function fieldHeading(text) {
