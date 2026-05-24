@@ -7,7 +7,8 @@ description: "Invoke when the GIT_COMMIT_MODE session flag is unset and the orch
 
 <!-- toc -->
 
-- [Phase 0.x: GIT_COMMIT_MODE Probe](#phase-0x-git_commit_mode-probe)
+- [Phase 0.x: GIT_COMMIT_MODE Probe](#phase-0x-gitcommitmode-probe)
+- [Mode Semantics](#mode-semantics)
 
 <!-- /toc -->
 
@@ -19,6 +20,8 @@ description: "Invoke when the GIT_COMMIT_MODE session flag is unset and the orch
 - Do NOT re-probe on subsequent `/cf-constructor-generate` runs within the same chat.
 
 If `GIT_COMMIT_MODE` is unset, emit exactly this menu and end the turn (hard interaction boundary — MUST NOT proceed until the user replies):
+
+Why this input is needed: write-capable sub-agents require an explicit git permission boundary so they cannot accidentally commit or stage changes without your intent.
 
 ```text
 How should write-capable sub-agents interact with git in this session?
@@ -34,18 +37,23 @@ Suggested: 3 (safest — no accidental commits; use 1 when a CONTRIBUTING guide 
 Reply with 1, 2, or 3.
 ```
 
-After emitting the prompt, MUST end the assistant turn immediately. Absence of a reply is NOT option `3`. Replies are trimmed of leading/trailing whitespace before matching. Replies containing the literal token `1`, `2`, or `3` embedded in a longer phrase (e.g., "option 2 please") are accepted. Digit-only replies are matched only when the single digit `1`, `2`, or `3` appears as a complete token (not as a substring of a multi-digit number). E.g., `12` does not match `1`; `2.` matches `2`.
+After emitting the prompt, MUST end the assistant turn immediately. Absence of
+a reply is NOT option `3`. Replies are trimmed of leading/trailing whitespace
+before matching. Accept only a **complete token** `1`, `2`, or `3` (for
+example, `option 2 please` is valid because `2` appears as its own token;
+`12`, `v3`, or `mode-2x` are not valid because the digit is embedded inside a
+larger token). `2.` still counts as token `2`.
 
 Reply parsing:
 
 | Reply (case-insensitive, trimmed) | Action |
 |---|---|
-| contains `1` | Set `GIT_COMMIT_MODE=commit` |
-| contains `2` | Set `GIT_COMMIT_MODE=stage` |
-| contains `3` | Set `GIT_COMMIT_MODE=none` |
+| contains complete token `1` | Set `GIT_COMMIT_MODE=commit` |
+| contains complete token `2` | Set `GIT_COMMIT_MODE=stage` |
+| contains complete token `3` | Set `GIT_COMMIT_MODE=none` |
 | anything else | Re-emit the prompt; do NOT proceed |
 
-### Mode Semantics
+## Mode Semantics
 
 Mode semantics (carried into every write-capable sub-agent dispatch payload):
 

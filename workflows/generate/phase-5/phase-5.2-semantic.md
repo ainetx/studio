@@ -25,12 +25,52 @@ When `INLINE_FALLBACK=true` (set per `workflows/shared/inline-fallback-probe.md`
 
 On `reduce: N` validate `1 ≤ N ≤ current MAX_ITER`; on out-of-range reply re-prompt with `reduce: N must satisfy 1 ≤ N ≤ {current MAX_ITER}; reply again or `continue`.` and do not change `MAX_ITER` until a valid value is provided. On valid `reduce: N` set `MAX_ITER = N` and continue; on `continue` proceed with the original `MAX_ITER`. (Bound parallels `workflows/generate/phase-5/phase-5.4-approval.md` § `extend: <M>` which requires `M > current MAX_ITER`.)
 
+A stop token at this warning prompt is handled by
+`workflows/shared/stop-token-policy.md`. It always cancels the current Phase 5
+entry before any validator/reviewer/author dispatch for this review-loop run.
+When `manifest.paths_written` is non-empty (a file-writing generate run already
+completed Phase 4 or a prior fix iteration), do NOT route this stop through
+`workflows/generate/phase-6/index.md` because no valid `Validation Results`
+body exists yet. Instead emit the sanctioned terminal handoff below and end the
+generate run. When no files have been written yet (for example an
+analyze→generate external entry), return control to the user without Phase 6.
+
+#### Pre-Review Warning Handoff
+
+Emit this block only for the file-writing stop path above:
+
+```text
+Pre-Review Warning Handoff
+Files were already written, but automatic review did not run because you stopped at the inline long-loop warning before any validator, reviewer, or author dispatch.
+
+Suggested next step: run `/cf-constructor-analyze` on the written files when you want review coverage.
+You may also resume `/cf-constructor-generate(mode=fix)` later if you want to continue the review/fix loop from these files.
+```
+
 `PROMPT_REVIEW=true` is set on the generate-side when the kit's `artifacts.toml`
 marks the kind with `is_prompt_document = true` OR when any written path is a
 current prompt/instruction target: `workflows/**`, `skills/**/SKILL.md`,
 `skills/cypilot/**/*.md`, `skills/**/agents/*.md`, `AGENTS.md`, or
 agent/workflow prompt config. Intent verbs still route through analyze-side
 mode detection.
+
+Before dispatching reviewers, derive typed target sets from the current review
+surface (`manifest.paths_written` on normal generate entry, or `target_paths`
+on analyze→generate external entry):
+
+- `prompt_targets` = review-surface paths matching prompt/workflow/instruction
+  files (`workflows/**`, `skills/**/SKILL.md`, `skills/cypilot/**/*.md`,
+  `skills/**/agents/*.md`, `requirements/**/*.md`, `AGENTS.md`, and prompt
+  config files)
+- `code_targets` = review-surface paths matching code/test/build files owned by
+  the code reviewer methodology, excluding any path already classified into
+  `prompt_targets`
+- `artifact_targets` = review-surface paths not in `prompt_targets` and not in
+  `code_targets`
+
+Prompt reviewers and prompt bug-finders MUST receive only `prompt_targets`.
+Code reviewers and code bug-finders MUST receive only `code_targets`. Artifact
+reviewers MUST receive only `artifact_targets`.
 
 Decision priority (top-to-bottom; first match wins for the artifact/code axis, plus consistency and bug-finder rows may be additive):
 
@@ -47,12 +87,12 @@ Consistency precondition: `cf-constructor-semantic-reviewer-consistency` require
 
 Each reviewer's dispatch contract lives in its prompt file under `{cf-constructor-path}/.core/skills/cypilot/agents/`. The orchestrator MUST supply the exact JSON fields each reviewer declares (mirrors `workflows/generate/phase-5/phase-5.1-det-gate.md` § validator dispatch). Per-reviewer enumeration:
 
-- `cf-constructor-semantic-reviewer-artifact` — supply: `target_paths = target_paths` (external analyze→generate entry) or `manifest.paths_written` (normal generate entry), `kit_rules_path` = resolved from `rules.md` (`null` in RELAXED non-kit), `checklist_path` = `{kit_path}/artifacts/{KIND}/checklist.md` (`null` when no kit applies), `template_path` = `{kit_path}/artifacts/{KIND}/template.md` (`null` when unavailable), `example_path` = `{kit_path}/artifacts/{KIND}/examples/example.md` (`null` when unavailable), `cross_ref_paths` = parent/sibling artifacts identified in `workflows/generate/phase-0.5-clarify.md`, `rules_mode = {STRICT|RELAXED}`, `traceability_mode` from `artifacts.toml`.
-- `cf-constructor-semantic-reviewer-code` — supply: `design_artifact_path` from `workflows/generate/phase-0.5-clarify.md`, `code_paths = target_paths` (external analyze→generate entry) or `manifest.paths_written` (normal generate entry), `cross_ref_paths`, `rules_mode`, `traceability_mode` from `artifacts.toml`, `kit_rules_path` resolved from `rules.md`.
-- `cf-constructor-semantic-reviewer-prompt` — supply: `target_paths = target_paths` (external analyze→generate entry) or `manifest.paths_written` (normal generate entry), `kit_rules_path` resolved from `rules.md` (when loaded), `rules_mode`, `cross_ref_paths`.
-- `cf-constructor-semantic-reviewer-consistency` — supply: `target_paths = target_paths` (external analyze→generate entry) or `manifest.paths_written` (normal generate entry), `baseline_path` (always supplied; value is the resolved baseline path from `rules.md` or the user-specified baseline, or `null` when no baseline applies), `kit_rules_path` (when loaded), `rules_mode`, `namespace_prefix = "Rcons"`.
-- `cf-constructor-code-bug-finder` — supply: `design_artifact_path` from `workflows/generate/phase-0.5-clarify.md`, `code_paths = manifest.paths_written` (normal generate entry) or `target_paths` (external entry), `cross_ref_paths`, `rules_mode`, `kit_rules_path` resolved from `rules.md`. Only dispatched when `CODE_BUG_REVIEW=true`.
-- `cf-constructor-prompt-bug-finder` — supply: `target_paths = manifest.paths_written` (normal generate entry) or `target_paths` (external entry), filtered to prompt/workflow/instruction files, `kit_rules_path` resolved from `rules.md` (when loaded), `rules_mode`, `cross_ref_paths`. Only dispatched when `PROMPT_BUG_REVIEW=true`.
+- `cf-constructor-semantic-reviewer-artifact` — supply: `target_paths = artifact_targets`, `kit_rules_path` = resolved from `rules.md` (`null` in RELAXED non-kit), `checklist_path` = `{kit_path}/artifacts/{KIND}/checklist.md` (`null` when no kit applies), `template_path` = `{kit_path}/artifacts/{KIND}/template.md` (`null` when unavailable), `example_path` = `{kit_path}/artifacts/{KIND}/examples/example.md` (`null` when unavailable), `cross_ref_paths` = parent/sibling artifacts identified in `workflows/generate/phase-0.5-clarify.md`, `rules_mode = {STRICT|RELAXED}`, `traceability_mode` from `artifacts.toml`.
+- `cf-constructor-semantic-reviewer-code` — supply: `design_artifact_path` from `workflows/generate/phase-0.5-clarify.md`, `code_paths = code_targets`, `cross_ref_paths`, `rules_mode`, `traceability_mode` from `artifacts.toml`, `kit_rules_path` resolved from `rules.md`.
+- `cf-constructor-semantic-reviewer-prompt` — supply: `target_paths = prompt_targets`, `kit_rules_path` resolved from `rules.md` (when loaded), `rules_mode`, `cross_ref_paths`.
+- `cf-constructor-semantic-reviewer-consistency` — supply: `target_paths = artifact_targets` for artifact-only consistency checks, otherwise the full review surface when the consistency rule explicitly spans prompt/workflow targets; `baseline_path` (always supplied; value is the resolved baseline path from `rules.md` or the user-specified baseline, or `null` when no baseline applies), `kit_rules_path` (when loaded), `rules_mode`, `namespace_prefix = "Rcons"`.
+- `cf-constructor-code-bug-finder` — supply: `design_artifact_path` from `workflows/generate/phase-0.5-clarify.md`, `code_paths = code_targets`, `cross_ref_paths`, `rules_mode`, `kit_rules_path` resolved from `rules.md`. Only dispatched when `CODE_BUG_REVIEW=true`.
+- `cf-constructor-prompt-bug-finder` — supply: `target_paths = prompt_targets`, `kit_rules_path` resolved from `rules.md` (when loaded), `rules_mode`, `cross_ref_paths`. Only dispatched when `PROMPT_BUG_REVIEW=true`.
 
 `traceability_mode` resolution: read `[systems.<system>] traceability` from `{cf-constructor-path}/config/artifacts.toml`; default to `FULL` when unset. Thread it into every reviewer dispatch whose agent contract declares it.
 
@@ -71,15 +111,16 @@ Reviewer return handling:
 For reviewers without that contract, return handling is limited to
 `VALIDATION_REPORT` or dispatch failure; do not synthesize a checkpoint shape.
 
-When any reviewer returns `PARTIAL_CHECKPOINT`, the iteration is incomplete
-coverage. Append the checkpoint to the iteration trace, skip author auto-fix for
-that checkpoint itself, and hand control to
-`workflows/generate/phase-5/phase-5.3-findings.md` with
-`all_findings = supported findings + semantic_partial_checkpoints`. Phase 5.3
-MUST set `remaining_findings` non-empty and `loop_exit = "manual-handoff"`
-unless the caller immediately resumes the checkpoint with the provided
-`resume_inputs`. The final output MUST surface `PARTIAL` instead of claiming a
-clean semantic review.
+When any reviewer returns `PARTIAL_CHECKPOINT`, the iteration has incomplete
+coverage. Append the checkpoint to the iteration trace, keep
+`semantic_partial_checkpoints` as a distinct state collection, skip author
+auto-fix for the checkpoint itself, and hand control to
+`workflows/generate/phase-5/phase-5.3-findings.md` with `all_findings`
+containing only validator/reviewer findings backed by already covered evidence.
+Phase 5.3 / Phase 6 MUST preserve the separate partial-checkpoint state, keep
+the run non-clean, and set `remaining_findings` non-empty or otherwise surface
+the partial semantic coverage before exit unless the caller immediately resumes
+the checkpoint with the provided `resume_inputs`.
 
 Merge findings, namespacing each source: validator findings keep `V-NNN`, artifact-reviewer findings become `Ra-NNN`, code-reviewer `Rc-NNN`, code-bug-finder `Rcb-NNN`, prompt-reviewer `Rp-NNN`, prompt-bug-finder `Rpb-NNN`, consistency-reviewer `Rcons-NNN`. Re-number within each namespace starting from `001` and rewrite the `id` field on every finding before partitioning. After namespacing: `all_findings = det_findings + sum(reviewer findings)`. The `workflows/generate/phase-5/phase-5.4-approval.md` user dialog references these namespaced IDs.
 

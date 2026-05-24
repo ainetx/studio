@@ -398,6 +398,143 @@ includes = ["sub/manifest.toml"]
 
 
 # ---------------------------------------------------------------------------
+# Test: _MAX_INCLUDE_DEPTH = 4 permits exactly 3 effective nesting levels
+# ---------------------------------------------------------------------------
+
+def test_include_depth_allows_three_levels_and_rejects_four():
+    """_MAX_INCLUDE_DEPTH = 4 counts the root manifest itself, so the effective
+    allowed nesting depth is 3 (root -> A -> B -> C succeeds; adding a fourth
+    level D causes the depth check to fire and raises ValueError).
+    """
+    # --- three levels deep: root -> A -> B -> C (must succeed) ---
+    with TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        level_a = root / "a"
+        level_b = root / "a" / "b"
+        level_c = root / "a" / "b" / "c"
+        for d in (level_a, level_b, level_c):
+            d.mkdir(parents=True, exist_ok=True)
+
+        # Leaf C — no further includes
+        _write_manifest(level_c, """\
+[manifest]
+version = "2.0"
+
+[[rules]]
+id = "c-rule"
+description = "Rule at depth 3"
+""")
+
+        # B includes C
+        _write_manifest(level_b, """\
+[manifest]
+version = "2.0"
+includes = ["c/manifest.toml"]
+
+[[rules]]
+id = "b-rule"
+description = "Rule at depth 2"
+""")
+
+        # A includes B
+        _write_manifest(level_a, """\
+[manifest]
+version = "2.0"
+includes = ["b/manifest.toml"]
+
+[[rules]]
+id = "a-rule"
+description = "Rule at depth 1"
+""")
+
+        # Root includes A
+        mpath = _write_manifest(root, """\
+[manifest]
+version = "2.0"
+includes = ["a/manifest.toml"]
+
+[[agents]]
+id = "root-agent"
+description = "Root agent"
+""")
+
+        manifest = parse_manifest_v2(mpath)
+        # Must not raise — three effective nesting levels are within the limit.
+        result = resolve_includes(manifest, root)
+        rule_ids = {r.id for r in result.rules}
+        assert "a-rule" in rule_ids
+        assert "b-rule" in rule_ids
+        assert "c-rule" in rule_ids
+
+    # --- four levels deep: root -> A -> B -> C -> D (must raise) ---
+    with TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        level_a = root / "a"
+        level_b = root / "a" / "b"
+        level_c = root / "a" / "b" / "c"
+        level_d = root / "a" / "b" / "c" / "d"
+        for d in (level_a, level_b, level_c, level_d):
+            d.mkdir(parents=True, exist_ok=True)
+
+        # Leaf D
+        _write_manifest(level_d, """\
+[manifest]
+version = "2.0"
+
+[[rules]]
+id = "d-rule"
+description = "Rule at depth 4 — should never be reached"
+""")
+
+        # C includes D
+        _write_manifest(level_c, """\
+[manifest]
+version = "2.0"
+includes = ["d/manifest.toml"]
+
+[[rules]]
+id = "c-rule"
+description = "Rule at depth 3"
+""")
+
+        # B includes C
+        _write_manifest(level_b, """\
+[manifest]
+version = "2.0"
+includes = ["c/manifest.toml"]
+
+[[rules]]
+id = "b-rule"
+description = "Rule at depth 2"
+""")
+
+        # A includes B
+        _write_manifest(level_a, """\
+[manifest]
+version = "2.0"
+includes = ["b/manifest.toml"]
+
+[[rules]]
+id = "a-rule"
+description = "Rule at depth 1"
+""")
+
+        # Root includes A
+        mpath = _write_manifest(root, """\
+[manifest]
+version = "2.0"
+includes = ["a/manifest.toml"]
+
+[[agents]]
+id = "root-agent"
+description = "Root agent"
+""")
+
+        manifest = parse_manifest_v2(mpath)
+        with pytest.raises(ValueError, match="[Mm]ax.*depth|depth.*exceeded"):
+            resolve_includes(manifest, root)
+
+# ---------------------------------------------------------------------------
 # Test: already-absolute paths not double-resolved
 # ---------------------------------------------------------------------------
 

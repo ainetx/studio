@@ -17,7 +17,6 @@ purpose: Universal workflow for analysing any Cyber Constructor artifact or code
 - [Overview](#overview)
 - [Context Budget & Overflow Prevention (CRITICAL)](#context-budget--overflow-prevention-critical)
 - [Phase 0: Ensure Dependencies](#phase-0-ensure-dependencies)
-- [Phase 0.1: Plan Escalation Gate](#phase-01-plan-escalation-gate) _(loaded by phase-0-dependencies.md)_
 - [Phase 0.5: Clarify Analysis Scope](#phase-05-clarify-analysis-scope)
 - [Phase 1: File Existence Check](#phase-1-file-existence-check)
 - [Phase 2: Deterministic Gate](#phase-2-deterministic-gate)
@@ -26,6 +25,7 @@ purpose: Universal workflow for analysing any Cyber Constructor artifact or code
 - [Phase 3 → Phase 4 Checkpoint](#phase-3--phase-4-checkpoint)
 - [Phase 4: Output](#phase-4-output)
 - [Phase 5: Offer Next Steps](#phase-5-offer-next-steps)
+- [Terminal Block Invariant](#terminal-block-invariant)
 - [State Summary](#state-summary)
 - [Key Principles](#key-principles)
 - [Agent Self-Test (STRICT mode — AFTER completing work)](#agent-self-test-strict-mode--after-completing-work)
@@ -75,6 +75,9 @@ Open, load, and follow `workflows/analyze/phase-4-output/index.md` WHEN semantic
 
 ## Phase 5: Offer Next Steps
 Open, load, and follow `workflows/analyze/phase-5-next-steps.md` WHEN overall result is PASS and EXPLAIN_MODE=false.
+
+## Terminal Block Invariant
+The analyze response MUST NOT end without one of: the `Remediation Handoff` menu (when actionable findings exist or deterministic gate FAIL) or the Phase 5 `next-steps` menu (PASS path, `EXPLAIN_MODE=false`). If neither `workflows/analyze/phase-4-output/index.md` nor `workflows/analyze/phase-5-next-steps.md` is loadable, STOP and surface the missing file before emitting any final response.
 
 ## State Summary
 Open, load, and follow `workflows/analyze/state-summary.md` for the target-type × template / checklist / design matrix.

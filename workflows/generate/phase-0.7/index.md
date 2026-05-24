@@ -21,3 +21,5 @@ they cannot assume sibling sub-files are already in context.
 | `save-and-rules.md` | `mode=save` requested OR rules-respect / standalone-use check fires |
 
 After `wrap-handoff.md` completes (or after `save-and-rules.md` when that fires last), proceed to `workflows/generate/phase-1-collect.md`.
+
+On `wrap-handoff.md` failure or error return: STOP, surface the error to the user, and do NOT proceed to phase-1-collect.md.

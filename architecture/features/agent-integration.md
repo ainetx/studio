@@ -47,7 +47,7 @@ Without this feature, users would need to manually create and maintain agent-spe
 
 | Actor | Role in Feature |
 |-------|-----------------|
-| `cpt-cypilot-actor-user` | Runs `cpt generate-agents` to generate/regenerate entry points and `cpt agents` to inspect generated outputs |
+| `cpt-cypilot-actor-user` | Runs `cfc generate-agents` to generate/regenerate entry points and `cfc agents` to inspect generated outputs |
 | `cpt-cypilot-actor-ai-agent` | Consumes generated entry points, follows workflows |
 | `cpt-cypilot-actor-cypilot-cli` | Executes agent generation command |
 
@@ -66,16 +66,16 @@ Without this feature, users would need to manually create and maintain agent-spe
 **Actor**: `cpt-cypilot-actor-user`
 
 **Success Scenarios**:
-- User runs `cpt generate-agents` → entry points generated for all supported agents (Windsurf, Cursor, Claude, Copilot, OpenAI)
-- User runs `cpt generate-agents --agent windsurf` → entry points generated for single agent only
-- User runs `cpt generate-agents --dry-run` → shows what would be generated without writing files
+- User runs `cfc generate-agents` → entry points generated for all supported agents (Windsurf, Cursor, Claude, Copilot, OpenAI)
+- User runs `cfc generate-agents --agent windsurf` → entry points generated for single agent only
+- User runs `cfc generate-agents --dry-run` → shows what would be generated without writing files
 
 **Error Scenarios**:
-- Cypilot not initialized → error with hint to run `cpt init`
+- Cypilot not initialized → error with hint to run `cfc init`
 - Kit has no `@cpt:workflow` markers → generates entry points without kit-specific workflows
 
 **Steps**:
-1. [x] - `p1` - User invokes `cpt generate-agents [--agent A] [--dry-run]` - `inst-user-agents`
+1. [x] - `p1` - User invokes `cfc generate-agents [--agent A] [--dry-run]` - `inst-user-agents`
 2. [x] - `p1` - Resolve project root and cypilot directory - `inst-resolve-project`
 3. [x] - `p1` - Ensure cypilot files are local to project (copy if external) - `inst-ensure-local`
 4. - `p1` - Discover all workflow files from `.core/workflows/` and `.gen/kits/*/workflows/` - `inst-discover-workflows`
@@ -206,9 +206,9 @@ Without this feature, users would need to manually create and maintain agent-spe
 
 - [x] `p1` - **ID**: `cpt-cypilot-dod-agent-integration-entry-points`
 
-- [x] - `p1` - `cpt generate-agents` generates entry points for all 5 supported agents
-- [x] - `p1` - `cpt generate-agents --agent windsurf` generates only Windsurf entry points
-- [x] - `p1` - `cpt agents` lists generated files without writing or updating anything
+- [x] - `p1` - `cfc generate-agents` generates entry points for all 5 supported agents
+- [x] - `p1` - `cfc generate-agents --agent windsurf` generates only Windsurf entry points
+- [x] - `p1` - `cfc agents` lists generated files without writing or updating anything
 - [x] - `p1` - Generated files use `@/` project-root-relative paths
 - [x] - `p1` - Full overwrite on each invocation (no merge)
 - [x] - `p1` - `--dry-run` flag shows what would be generated without writing
@@ -237,9 +237,9 @@ Without this feature, users would need to manually create and maintain agent-spe
 
 ## 7. Acceptance Criteria
 
-- [x] `cpt generate-agents` produces valid entry points for Windsurf, Cursor, Claude, Copilot, and OpenAI
-- [x] `cpt agents` reports generated integration files in read-only mode
+- [x] `cfc generate-agents` produces valid entry points for Windsurf, Cursor, Claude, Copilot, and OpenAI
+- [x] `cfc agents` reports generated integration files in read-only mode
 - [x] Agent entry points correctly reference SKILL.md and workflow files
 - [x] SKILL.md composition includes all installed kit skill sections
 - [x] `--dry-run` mode shows planned output without writing files
-- [x] Re-running `cpt generate-agents` after kit install produces updated entry points
+- [x] Re-running `cfc generate-agents` after kit install produces updated entry points

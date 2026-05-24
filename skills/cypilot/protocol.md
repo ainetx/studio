@@ -14,7 +14,7 @@ Cyber Constructor prompt sections and completing checklist tasks.
 Protocol Guard:
 1. Run `{cfc_cmd} --json info`.
 2. Store the returned `variables` map.
-3. Open and follow `{cf-constructor-path}/.gen/AGENTS.md`.
+3. Open and follow `{cf-constructor-path}/.gen/AGENTS.md` when present.
 4. Open and follow `{cf-constructor-path}/config/AGENTS.md` when present.
 5. Open and follow `{cf-constructor-path}/.gen/SKILL.md` when present.
 6. Open and follow `{cf-constructor-path}/config/SKILL.md` when present.

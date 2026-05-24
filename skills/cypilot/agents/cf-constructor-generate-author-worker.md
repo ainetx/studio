@@ -6,6 +6,7 @@ description: "Invoke when a Cyber Constructor author worker sub-agent (junior/mi
 
 - [Tier Guard](#tier-guard)
 - [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
+- [Git Constraint (read from dispatch context — MUST obey)](#git-constraint-read-from-dispatch-context--must-obey)
 - [Methodology — `mode=create`](#methodology--modecreate)
 - [Methodology — `mode=fix`](#methodology--modefix)
 - [Output (return-value contract)](#output-return-value-contract)
@@ -117,21 +118,7 @@ present in the dispatch payload; they govern all git operations for this invocat
 
 ## Git Constraint (read from dispatch context — MUST obey)
 
-Read `git_commit_mode` from the dispatch payload. The `git_constraint` field
-contains the exact constraint string to follow. Do NOT default to any git
-behavior; use only what the constraint explicitly permits:
-
-- `commit` → MAY run `git add` on files you wrote, then create ONE commit at
-  the end of your work. Commit message MUST follow `contributing_guide.directives`
-  when `contributing_guide` is non-null. MUST NOT `git push`, `git reset`,
-  `git rebase`, `git stash`, `git checkout --`.
-- `stage`  → MAY run `git add` on files you wrote. MUST NOT `git commit`,
-  `git push`, `git reset`, `git rebase`, `git stash`, `git checkout --`.
-- `none`   → MUST NOT run `git commit`, `git push`, `git reset`, `git rebase`,
-  `git stash`, `git checkout --`, or `git add`. Leave all changes as
-  uncommitted, unstaged working-tree edits only.
-
-This constraint is orthogonal to the Phase-Skip Gate; both apply simultaneously.
+Follow the `git_constraint` string from the dispatch payload verbatim. The string is the exact mode-matched block from `workflows/generate/phase-4-write.md` § Git constraint blocks for your `git_commit_mode`. Do NOT default to any git behavior not explicitly permitted by that string. Do NOT run `git commit`, `git add`, or `git stage` unless your `git_commit_mode` and `git_constraint` both permit it. On `git_commit_mode = "none"`: do not invoke any git tool at all.
 
 ## Methodology — `mode=create`
 

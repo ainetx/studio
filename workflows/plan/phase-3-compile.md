@@ -9,6 +9,16 @@ version: 1.0
 
 # Phase 3: Compile Phase Files
 
+<!-- toc -->
+
+- [3.1 Write Plan Manifest](#31-write-plan-manifest)
+- [3.2 Generate Compilation Briefs (from Template)](#32-generate-compilation-briefs-from-template)
+- [3.2A Stop After Briefs & Ask For Next Step](#32a-stop-after-briefs--ask-for-next-step)
+- [3.3 Produce Phase Files Or Phase-Generation Prompts](#33-produce-phase-files-or-phase-generation-prompts)
+- [3.4 Validate Phase Files](#34-validate-phase-files)
+
+<!-- /toc -->
+
 Open and follow `{cf-constructor-path}/.core/requirements/plan-template.md`.
 
 Phase 3 is split to minimize context: write the manifest, write briefs, then stop for an explicit user choice about how phase files should be produced.
@@ -38,8 +48,8 @@ target_key = "{canonical target identity}" # deterministic naming/reuse key for 
 kit_path = "{absolute path to kit}" # e.g. "/abs/path/config/kits/sdlc"
 created = "{ISO 8601 timestamp}"
 lifecycle = "{gitignore|cleanup|archive|manual}"
-execution_status = "not_started"     # not_started|briefs_only|in_progress|done|failed
-lifecycle_status = "pending"         # pending|ready|in_progress|manual_action_required|done|failed; use "done" immediately for `gitignore` once `.plans/` is gitignored
+execution_status = "not_started"     # not_started|briefs_only|prompts_emitted|in_progress|done|failed
+lifecycle_status = "pending"         # pending|ready|partial|in_progress|manual_action_required|done|failed; use "done" immediately for `gitignore` once `.plans/` is gitignored
 plan_dir = "{cf-constructor-path}/.plans/{task-slug}"
 active_plan_dir = "{cf-constructor-path}/.plans/{task-slug}" # update if archived
 input_dir = "{cf-constructor-path}/.plans/{task-slug}/input" # omit or set "" when no raw-input package was created
@@ -68,6 +78,12 @@ checklist_sections = []             # H2 numbers from checklist.md (analyze task
 
 Reset CF_PHASE_GATE=armed immediately after the write completes or fails.
 
+Any later mutation of `plan.toml` in this phase (for example setting
+`execution_status` to `briefs_only` or `prompts_emitted`) MUST reopen
+`CF_PHASE_GATE=released_for_orchestrator_write` with scope =
+`{cf-constructor-path}/.plans/{task-slug}/plan.toml` for that update and reset
+the gate to `armed` immediately after the update completes or fails.
+
 ## 3.2 Generate Compilation Briefs (from Template)
 
 Set CF_PHASE_GATE=released_for_orchestrator_write with scope = {cf-constructor-path}/.plans/{task-slug}/brief-*.md before writing the brief-*.md file(s).
@@ -89,6 +105,8 @@ Brief package prepared: {cf-constructor-path}/.plans/{task-slug}/
 
 What would you like to do next?
 
+The manifest and briefs are ready on disk. Choose how to produce the phase files:
+
   [1] Generate phase files here — compile phases in the current chat from the briefs
   [2] Generate phase-compilation prompts — emit one self-contained prompt per brief for downstream chats
   [3] Run phase-compiler subagents — invoke `cf-constructor-phase-compiler` for each brief
@@ -101,7 +119,12 @@ Reply with `1`, `2`, `3`, or `4`.
 ```
 Wait for user choice before entering Phase 3.3. Do not emit `Plan created` at this checkpoint.
 
-If the user chooses option `[4]`, set `plan.execution_status = "briefs_only"` in `plan.toml` before stopping. A plan with `execution_status = "briefs_only"` and existing `brief-*` files on disk is valid and does NOT require re-planning. Recovery instruction: in a new chat, read `plan.toml`, confirm `execution_status = "briefs_only"`, and present the same `[1]–[4]` menu to continue from the saved brief package.
+If the user chooses option `[4]`, reopen the plan-manifest write gate, set
+`plan.execution_status = "briefs_only"` in `plan.toml`, reset the gate, then
+stop. A plan with `execution_status = "briefs_only"` and existing `brief-*`
+files on disk is valid and does NOT require re-planning. Recovery instruction:
+in a new chat, read `plan.toml`, confirm `execution_status = "briefs_only"`,
+and present the same `[1]–[4]` menu to continue from the saved brief package.
 
 ## 3.3 Produce Phase Files Or Phase-Generation Prompts
 
@@ -117,8 +140,8 @@ Read ONLY the files listed in the brief. Follow its instructions exactly.
 Then:
 1. Read the brief **FROM DISK** at `{cf-constructor-path}/.plans/{task-slug}/{brief_file}`. If it is not on disk, go back to 3.2. Using a brief that was not read from disk is INVALID.
 2. If the user chose option `[1]`, set CF_PHASE_GATE=released_for_orchestrator_write with scope = {cf-constructor-path}/.plans/{task-slug}/phase-*.md before writing the phase-*.md file(s). Compile exactly one `phase-*` file in the current chat from that brief, validate it against the brief, report `Phase {N} compiled inline → {filename} ({lines} lines)`, and continue. Reset CF_PHASE_GATE=armed immediately after the write completes or fails.
-3. If the user chose option `[2]`, emit exactly one self-contained downstream prompt for that brief. The prompt MUST instruct the downstream worker to read the brief from disk, apply the context boundary, and compile exactly one phase file. Report `Phase {N} prompt prepared → {brief_file}` and continue. Do not write `phase-*` files in this mode. After all downstream prompts have been emitted (one per brief), set `plan.execution_status = 'prompts_emitted'` (NOT `not_started`; the prompts are the deliverable for option [2]).
-4. If the user chose option `[3]`, the following preconditions MUST be met before setting the gate: the Session Sub-Agent Approval Gate (SKILL.md) MUST be resolved before this option runs. Open, load, and follow `workflows/shared/inline-fallback-probe.md` first. If `INLINE_FALLBACK=true` is the result, option [3] is unavailable for this run — route the user to option [1] (orchestrator-side compile) or option [2] (downstream prompts). If the user explicitly asks for option [3] while `INLINE_FALLBACK=true`, treat it as choosing option [1] (orchestrator-side inline compile) under `released_for_orchestrator_write` with scope = {cf-constructor-path}/.plans/{task-slug}/phase-*.md (same gate state as option [1] because the physical write — plan-*.md files under .plans/ — is the same; INLINE_FALLBACK only changes who performs the write (orchestrator inlining the compiler contract vs orchestrator-as-orchestrator), not the scope or trust boundary). Once the gate is confirmed resolved and `INLINE_FALLBACK=false`, set CF_PHASE_GATE=released_for_dispatch immediately before routing compilation to `{cf-constructor-path}/.core/skills/cypilot/agents/cf-constructor-phase-compiler.md`. The dispatch payload MUST include `git_commit_mode=GIT_COMMIT_MODE`, `contributing_guide=CONTRIBUTING_GUIDE`, and the matching `git_constraint` block from `workflows/generate/phase-4-write.md` § Git constraint blocks. Accept the result only if it reports a successful compile summary with phase identity, output file path, and compile-time validation outcome. Report `Phase {N} compiled via subagent → {filename} ({lines} lines)` and continue. Reset CF_PHASE_GATE=armed immediately after the subagent returns — success, error, or no-response.
+3. If the user chose option `[2]`, emit exactly one self-contained downstream prompt for that brief. The prompt MUST instruct the downstream worker to read the brief from disk, apply the context boundary, and compile exactly one phase file. Report `Phase {N} prompt prepared → {brief_file}` and continue. Do not write `phase-*` files in this mode. After all downstream prompts have been emitted (one per brief), reopen the plan-manifest write gate, set `plan.execution_status = 'prompts_emitted'`, then reset the gate. The prompts are the deliverable for option `[2]`.
+4. If the user chose option `[3]`, the following preconditions MUST be met before setting the gate: the Session Sub-Agent Approval Gate (SKILL.md) MUST be resolved before this option runs. Open, load, and follow `workflows/shared/inline-fallback-probe.md` first. If `INLINE_FALLBACK=true` is the result, option `[3]` is unavailable for this run — route the user to option `[1]` (orchestrator-side compile) or option `[2]` (downstream prompts). If the user explicitly insists on option `[3]` while `INLINE_FALLBACK=true`, do not pretend native sub-agent execution is happening; either re-run option `[1]` under `released_for_orchestrator_write` or stop and ask for `[1]`/`[2]`. Once the gate is confirmed resolved and `INLINE_FALLBACK=false`, set `CF_PHASE_GATE=released_for_dispatch` immediately before routing compilation to `{cf-constructor-path}/.core/skills/cypilot/agents/cf-constructor-phase-compiler.md`. The dispatch payload MUST include `git_commit_mode=GIT_COMMIT_MODE`, `contributing_guide=CONTRIBUTING_GUIDE`, and the matching `git_constraint` block from `workflows/generate/phase-4-write.md` § Git constraint blocks. Accept the result only if it reports a successful compile summary with phase identity, output file path, and compile-time validation outcome. Report `Phase {N} compiled via subagent → {filename} ({lines} lines)` and continue. Reset `CF_PHASE_GATE=armed` immediately after the subagent returns — success, error, or no-response.
 
 The planner remains responsible for decomposition, manifest creation, and brief generation. Phase-file production may happen inline, via downstream prompts, or through the dedicated phase compiler subagent depending on the user's post-brief choice.
 

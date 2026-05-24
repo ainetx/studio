@@ -22,6 +22,7 @@ Pipeline:
 @cpt-state:cpt-cypilot-state-version-config-installation:p1
 @cpt-dod:cpt-cypilot-dod-version-config-update:p1
 """
+# pylint: disable=protected-access  # _with_core_toml_lock is the canonical lock API for this package
 
 # @cpt-begin:cpt-cypilot-flow-version-config-update:p1:inst-update-imports
 import argparse
@@ -118,7 +119,7 @@ def cmd_update(argv: List[str]) -> int:
         if legacy_rel:
             migrate = should_migrate_from_cypilot(
                 args.migrate_from_cypilot,
-                interactive=not args.dry_run and not args.no_interactive and not args.yes,
+                interactive=not args.no_interactive and not args.yes,
                 project_root=project_root,
                 legacy_rel=legacy_rel,
                 decline_hint="Press N to abort update.",
@@ -176,7 +177,7 @@ def cmd_update(argv: List[str]) -> int:
     if legacy_rel:
         migrate = should_migrate_from_cypilot(
             args.migrate_from_cypilot,
-            interactive=not args.dry_run and not args.no_interactive and not args.yes,
+            interactive=not args.no_interactive and not args.yes,
             project_root=project_root,
             legacy_rel=legacy_rel,
             heading="Cyber Pilot detected alongside Cyber Constructor.",
@@ -353,6 +354,16 @@ def cmd_update(argv: List[str]) -> int:
         tmp_to_clean: Optional[Path] = None
 
         if source_str.startswith("github:"):
+            if args.dry_run:
+                # In dry-run mode, skip the network download; record the kit
+                # as a planned update and move on without touching any files.
+                kit_results[kit_slug] = {
+                    "kit": kit_slug,
+                    "version": {"status": "dry_run"},
+                    "gen": {"files_written": 0},
+                    "gen_rejected": [],
+                }
+                continue
             owner_repo = source_str.removeprefix("github:")
             try:
                 owner, repo, version = _parse_github_source(owner_repo)
@@ -408,24 +419,36 @@ def cmd_update(argv: List[str]) -> int:
             # migration always happens when source has manifest.toml but
             # core.toml lacks [kits.{slug}.resources].
             if not args.dry_run and kit_src is not None:
-                _mig = _maybe_migrate_legacy_to_manifest(
-                    kit_slug, kit_src, cypilot_dir, config_dir, interactive,
-                )
-                if _mig is not None:
-                    kit_r["manifest_migration"] = _mig
-                    _mig_status = _mig.get("status", "")
-                    if _mig_status == "PASS":
-                        _m_count = _mig.get("migrated_count", 0)
-                        _n_count = _mig.get("new_count", 0)
-                        ui.substep(
-                            f"{kit_slug}: manifest migration — "
-                            f"{_m_count} existing + {_n_count} new resource(s)"
-                        )
-                    elif _mig_status == "FAIL":
-                        ui.warn(
-                            f"{kit_slug}: manifest migration failed: "
-                            f"{_mig.get('errors', [])}"
-                        )
+                try:
+                    _mig = _maybe_migrate_legacy_to_manifest(
+                        kit_slug, kit_src, cypilot_dir, config_dir, interactive,
+                    )
+                    if _mig is not None:
+                        kit_r["manifest_migration"] = _mig
+                        _mig_status = _mig.get("status", "")
+                        if _mig_status == "PASS":
+                            _m_count = _mig.get("migrated_count", 0)
+                            _n_count = _mig.get("new_count", 0)
+                            ui.substep(
+                                f"{kit_slug}: manifest migration — "
+                                f"{_m_count} existing + {_n_count} new resource(s)"
+                            )
+                        elif _mig_status == "FAIL":
+                            ui.warn(
+                                f"{kit_slug}: manifest migration failed: "
+                                f"{_mig.get('errors', [])}"
+                            )
+                # Intentionally broad: migration helpers may raise any exception type, and a
+                # migration failure must not abort the surrounding kit-update loop.
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    mig_error = (
+                        "manifest migration raised unexpected exception "
+                        f"(kit update was not aborted): {e}"
+                    )
+                    errors.append({"path": kit_slug, "error": mig_error})
+                    sys.stderr.write(
+                        f"update: warning: {kit_slug}: {mig_error}\n"
+                    )
             # @cpt-end:cpt-cypilot-algo-version-config-update-pipeline:p1:inst-manifest-legacy-migration-algo
 
         except (OSError, ValueError, KeyError, RuntimeError) as exc:
@@ -847,33 +870,35 @@ def _deduplicate_legacy_kits(config_dir: Path) -> Dict[str, str]:
 
             if renamed:
                 toml_utils.dump(data, core_toml, header_comment="Cyber Constructor project configuration")
+
+            # Update artifacts.toml inside the lock so both TOML files are
+            # mutated atomically with respect to other processes holding the
+            # same core.toml advisory lock.  Even if core.toml dedup didn't fire
+            # (e.g. legacy slug already removed from core.toml), artifacts.toml
+            # may still reference the old slug.
+            artifacts_toml = config_dir / "artifacts.toml"
+            if artifacts_toml.is_file():
+                try:
+                    with open(artifacts_toml, "rb") as f:
+                        reg = tomllib.load(f)
+
+                    changed = False
+                    for sys_entry in reg.get("systems", []):
+                        if isinstance(sys_entry, dict):
+                            kit_ref = sys_entry.get("kit", "")
+                            canonical = _LEGACY_SLUG_RENAMES.get(kit_ref)
+                            if canonical:
+                                sys_entry["kit"] = canonical
+                                renamed.setdefault(kit_ref, canonical)
+                                changed = True
+
+                    if changed:
+                        toml_utils.dump(reg, artifacts_toml, header_comment="Cyber Constructor artifacts registry")
+                except (OSError, ValueError, TypeError) as exc:
+                    sys.stderr.write(f"warning: legacy kit dedup {artifacts_toml} write failed: {exc}\n")
+
     except (OSError, ValueError, TypeError) as exc:
         sys.stderr.write(f"warning: legacy kit dedup core.toml write failed: {exc}\n")
-
-    # Update artifacts.toml — fix system.kit references unconditionally.
-    # Even if core.toml dedup didn't fire (e.g. legacy slug already removed
-    # from core.toml), artifacts.toml may still reference the old slug.
-    artifacts_toml = config_dir / "artifacts.toml"
-    if artifacts_toml.is_file():
-        try:
-            with open(artifacts_toml, "rb") as f:
-                reg = tomllib.load(f)
-
-            changed = False
-            for sys_entry in reg.get("systems", []):
-                if isinstance(sys_entry, dict):
-                    kit_ref = sys_entry.get("kit", "")
-                    canonical = _LEGACY_SLUG_RENAMES.get(kit_ref)
-                    if canonical:
-                        sys_entry["kit"] = canonical
-                        renamed.setdefault(kit_ref, canonical)
-                        changed = True
-
-            if changed:
-                from ..utils import toml_utils
-                toml_utils.dump(reg, artifacts_toml, header_comment="Cyber Constructor artifacts registry")
-        except (OSError, ValueError, TypeError) as exc:
-            sys.stderr.write(f"warning: legacy kit dedup {artifacts_toml} write failed: {exc}\n")
 
     return renamed
 

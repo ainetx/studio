@@ -18,8 +18,7 @@ Open and follow `{cf-constructor-path}/.core/skills/cypilot/SKILL.md` to load Cy
 
 If a critical Cyber Constructor dependency is missing, inform the user and suggest running `/cf-constructor` to reinitialize.
 
-Then open and follow `{cf-constructor-path}/.core/workflows/generate.md` for CODE targets. Skip Phase 1 input collection
-(requirements are already provided in the task). Proceed directly to implementation.
+Then open and follow `{cf-constructor-path}/.core/workflows/generate.md` for CODE targets. Skip Phase 0.5 clarification, Phase 0.7 brainstorm offer, and Phase 1 input-collection — requirements are fully provided in the input task. Phase 0.x gates (GIT_COMMIT_MODE probe, inline-fallback probe, plan-escalation gate) are NOT skipped and MUST be honored. Begin at Phase 1.5 author-plan dispatch.
 
 Write clean, tested code following project conventions. Return a summary of
 files created/modified when done.
@@ -42,10 +41,11 @@ This agent dispatches nested `cf-constructor-*` sub-agents (generate planner, de
 ## Response Completion Gate
 
 This agent's response is complete only when ALL of the following are true:
-- The generate workflow Phase 4 (write files) has been executed and all target files are written
+- The generate workflow Phase 4 (write files) has been executed and all paths listed in `target_paths` have been written
 - Phase 5.1 deterministic validation has been executed (each applicable validator command run, with command, exit code, and JSON status/error_count/warning_count recorded, and the overall deterministic gate result recorded as PASS, FAIL, or SKIPPED with proof)
 - Phase 5 has assembled the complete `Validation Results` body from the canonical template with actual values filled in (deterministic gate result plus validator command/results), and Phase 6 MUST NOT emit handoff menus until that body is complete
 - If files were written: the response ends with the `Post-Write Review Handoff` menu, and when `remaining_findings` is non-empty the `Remediation Handoff` menu appears immediately before it
 - The SKILL.md invariant has been satisfied (Cyber Constructor mode was loaded)
 
 Do NOT end the response with only a summary of changes. The validation results and handoff menu(s) are mandatory when files are written. Prompt blocks are emitted only on the next turn when the user chooses the matching handoff option.
+- OR: if `INLINE_FALLBACK` was unset at any nested sub-agent dispatch site and `workflows/shared/inline-fallback-probe.md` was loaded as a hard interaction boundary, this is a valid stopping state pending the user's `1` / `2` reply.

@@ -20,21 +20,31 @@ purpose: Universal workflow for generating execution plans with phased delivery
 - [Phase 4: Finalize Plan](#phase-4-finalize-plan)
 - [Plan Lifecycle](#plan-lifecycle)
 - [Plan Reference](#plan-reference)
+- [Completion Invariants](#completion-invariants)
 
 <!-- /toc -->
 
-> **⛔ CRITICAL CONSTRAINT**: This workflow ONLY generates execution plans and related handoff artifacts. It NEVER executes the underlying task (generate, analyze, implement) directly. Even if the task seems small, this workflow's job is to produce phase files — not to do the work itself. If the task is small enough for direct execution, tell the user to use `/cf-constructor-generate` or `/cf-constructor-analyze` instead. The reference appendices below define the runtime contract that generated plans MUST support; they are not steps performed by this workflow.
-> **⛔ CRITICAL CONSTRAINT — COMPLETE COVERAGE, COMPACT LOADING**: Before generating ANY plan, you MUST discover and process ALL navigation rules (`ALWAYS open`, `OPEN and follow`, `ALWAYS open and follow`) from the **target workflow** (generate.md, analyze.md, or the relevant workflow). Every applicable file referenced by those directives MUST be opened at least once, but you MUST retain only the specific sections/ranges needed for decomposition, interaction extraction, and compilation. Completeness is proven by a loaded-file manifest with paths and sections/ranges, not by keeping every dependency fully resident in context. Skipping ANY navigation rule still produces incomplete context and broken plans. This is the #1 source of plan quality failures.
-> **⛔ CRITICAL CONSTRAINT — KIT RULES ARE LAW** *(highest priority)*: Every rule in the kit's `rules.md` for the target artifact kind MUST be enforced in the generated plan — **completely, without omission or summarization**. Rules are inlined verbatim into phase files. If the full rules don't fit in a single phase, split the phase so each sub-phase gets ALL rules relevant to its scope — but NEVER trim, summarize, or selectively skip rules to fit a budget. The `checklist.md` items are equally mandatory for analyze tasks. A plan that drops kit rules produces artifacts that fail validation.
-> **⛔ CRITICAL CONSTRAINT — DETERMINISTIC FIRST**: Every phase step that CAN be done by a deterministic tool (`{cfc_cmd}` subcommand, script, shell command) MUST use that tool instead of LLM reasoning. Discover available tools dynamically in Phase 0 — do NOT assume a fixed set of commands. Tool capabilities change between versions. The CLISPEC file is the source of truth for what commands exist and what they can do.
-> **⛔ CRITICAL CONSTRAINT — INTERACTIVE QUESTIONS COMPLETENESS** *(mandatory)*: You MUST find ALL interactive questions, user input requests, confirmation gates, review requests, and decision points from: (1) the target workflow, (2) `rules.md` for the target artifact kind, (3) `checklist.md`, (4) `template.md`, AND (5) **every file referenced by navigation rules** (`ALWAYS open`, `OPEN and follow`) in those files — recursively. Every interaction point found MUST appear in the compiled plan: pre-resolvable questions asked BEFORE plan generation, phase-bound questions embedded in phase files. Inspect every applicable dependency, record the source path plus section/range for each interaction point, and carry forward only the extracted interaction data needed by later phases. **Missing even ONE interaction point = plan is INVALID.** Open, load, and follow `{cf-constructor-path}/.core/requirements/plan-checklist.md` Section 2 for the complete extraction procedure.
-> **⛔ CRITICAL CONSTRAINT — BRIEF BEFORE COMPILE**: Phase files MUST NOT be written directly. Every phase file MUST be compiled from a corresponding compilation brief (`brief-{NN}-{slug}.md`) that was written to disk in Phase 3.2. The brief is the contract between decomposition (what to include) and compilation (how to assemble). Skipping briefs produces phase files that silently omit kit content, miss load instructions, or inline wrong sections. **If you find yourself writing a phase file without first reading its brief from disk — STOP, you are violating the workflow.** Write the brief first, write it to disk, THEN compile from it. A phase file without a corresponding brief file on disk = INVALID plan.
+> **⛔ CRITICAL CONSTRAINTS** — enforced in the phase sub-files below; do NOT duplicate the full constraint text here.
+>
+> | Constraint | Authoritative file |
+> |---|---|
+> | This workflow ONLY generates execution plans (does not implement) | workflows/plan/phase-2-decompose.md |
+> | Complete coverage, compact loading | workflows/plan/phase-1-assess.md |
+> | Kit rules are law | workflows/plan/phase-1-assess.md |
+> | Deterministic first | workflows/plan/phase-3-compile.md |
+> | Interactive questions completeness | workflows/plan/phase-1-assess.md |
+> | Brief before compile | workflows/plan/phase-3-compile.md |
 
-ALWAYS open and follow `{cf-constructor-path}/.core/skills/cypilot/SKILL.md` FIRST WHEN {cfc_mode} is `off`
+Bootstrap order:
+
+1. Open and follow `{cf-constructor-path}/.core/skills/cypilot/SKILL.md`
+   first when `{cfc_mode}` is `off`.
+2. Then open and follow `{cf-constructor-path}/.core/skills/cypilot/protocol.md`
+   before any workflow-local phase work.
+3. Then open and follow `workflows/shared/stop-token-policy.md` before any
+   prompt that relies on stop-token behavior.
 
 **Type**: Operation
-
-ALWAYS open and follow `{cf-constructor-path}/.core/skills/cypilot/protocol.md` FIRST
 
 ALWAYS open and follow `{cf-constructor-path}/.core/requirements/plan-template.md` WHEN compiling phase files
 
@@ -44,7 +54,8 @@ OPEN and follow `{cf-constructor-path}/.core/requirements/prompt-engineering.md`
 
 OPEN and follow `{cf-constructor-path}/.core/requirements/plan-checklist.md` WHEN validating plans (Phase 4.1 self-validation or /cf-constructor-analyze on plan)
 
-For context compaction recovery during multi-phase workflows, follow `{cf-constructor-path}/.core/skills/cypilot/protocol.md` Section "Compaction Recovery".
+For context compaction recovery during multi-phase workflows, follow
+`{cf-constructor-path}/.core/skills/cypilot/protocol.md` Section "Compaction Recovery".
 
 ## Overview
 
@@ -79,7 +90,7 @@ Open, load, and follow `workflows/plan/phase-3-compile.md` to write the plan man
 
 ## Phase 4: Finalize Plan
 
-Open, load, and follow `workflows/plan/phase-4-finalize.md` WHEN the user selected option `[1]` or `[3]` in Phase 3.2A and all `phase-*` files were produced. Contains Phase 4.1 self-validation, Phase 4.2 next-steps menu (`[1]`–`[5]`), and the New-Chat Startup Prompt.
+Open, load, and follow `workflows/plan/phase-4-finalize.md` WHEN the user selected option `[1]` or `[3]` in Phase 3.2A and all `phase-*` files were produced. Contains Phase 4.1 self-validation, the gated Phase 4.2 next-steps menu (native-execution branch `[1]`–`[5]`, fallback branch `[1]`–`[4]`), and the New-Chat Startup Prompt.
 
 ## Plan Lifecycle
 
@@ -92,3 +103,4 @@ Open and follow `workflows/plan/plan-reference.md` WHEN the user asks about plan
 ## Completion Invariants
 
 Open and follow `{cf-constructor-path}/.core/skills/cypilot/SKILL.md` § Completion Invariants before ending any response.
+(A /cf-constructor-plan run that compiled phase files MUST end with the Phase 4 next-steps menu or the Phase 3 brief-checkpoint menu.)

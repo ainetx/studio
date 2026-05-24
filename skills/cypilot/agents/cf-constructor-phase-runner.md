@@ -5,6 +5,7 @@ description: Invoke when executing the next or a specific phase from a generated
 <!-- toc -->
 
 - [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
+- [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
 
@@ -24,11 +25,18 @@ ralphex. If the user wants external autonomous execution, route to the
 ```json
 {
   "plan_dir": "<path to .plans/<slug>/>",
-  "target_phase": "<phase number or null for next-ready>"
+  "target_phase": "<phase number or null for next-ready>",
+  "git_commit_mode": "commit|stage|none",
+  "contributing_guide": { "path": "<absolute path>", "directives": "<key directives>" } | null,
+  "git_constraint": "<mode-matched constraint string>"
 }
 ```
 
 SKILL.md is intentionally not loaded by this agent — the execution brief (the selected phase file plus `plan.toml`) is the sole contract; `cfc_mode` remains off. Generated phase files are self-contained by design; use `plan.toml` only to select the target phase, validate manifest state, and perform required status/lifecycle updates. Phase-Skip Gate: not applicable — write access is bounded by host isolation per SKILL.md § Sub-agent propagation.
+The orchestrator owns the Session Sub-Agent Approval Gate / `INLINE_FALLBACK`
+probe and the `CF_PHASE_GATE` release-reset window before dispatching this
+agent. The phase runner itself only consumes the structured payload above and
+must obey the supplied git constraint exactly.
 
 Execution rules:
 - Treat `plan.toml` on disk as the sole source of truth.
@@ -62,3 +70,15 @@ Return a concise execution summary to the main conversation, including:
 - manifest status changes
 - key files created or modified
 - next phase or recovery action
+
+## Response Completion Gate
+
+The response is complete only when:
+- the target phase has been executed per its phase file's checklist (each step completed or its failure recorded);
+- `plan.toml` has been updated with the phase's resulting status using the
+  canonical phase-status set (`pending` / `in_progress` / `done` / `failed`),
+  and this execution leaves the selected phase in `done` or `failed` only;
+  any file additions/deletions are reflected in the manifest;
+- on success: the phase completion summary plus the next-phase handoff prompt OR a final completion report has been returned;
+- on failure: the specific failed criteria, manifest updates, and exact blocker (with file path / line number where possible) have been returned;
+- `git_commit_mode` from the dispatch payload has been honored (no git tool invocations beyond what the matching `git_constraint` permits).

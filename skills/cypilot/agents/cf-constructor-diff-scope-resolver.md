@@ -99,5 +99,5 @@ The response is complete only when:
 - the compact summary is present
 - the `diff_scope` JSON is present
 - every changed file is classified into `changed_files` + `review_targets` or `omissions`
-- no file contents were read and no risk scoring was performed
+- no changed-file or user-artifact contents were read, and no risk scoring was performed (SKILL.md / protocol.md / Protocol Guard loads are exempt from this clause).
 - the SKILL.md invariant has been satisfied

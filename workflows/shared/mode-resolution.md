@@ -1,3 +1,11 @@
+
+<!-- toc -->
+
+- [Rules Mode Behavior](#rules-mode-behavior)
+- [Warnings](#warnings)
+
+<!-- /toc -->
+
 ---
 name: mode-resolution
 description: "Invoke when loading the canonical STRICT vs RELAXED rules-mode behavior definitions for a generate workflow phase."
@@ -10,7 +18,7 @@ Plan workflow note: `workflows/plan.md` does not resolve a rules mode itself; mo
 
 ## Rules Mode Behavior
 
-STRICT: generation must load the required generation-phase dependencies (typically template + example for artifacts, design/spec context for code), checklist-driven review must run in Phase 5, and Phase 6 requires validation `PASS`. RELAXED: use user-provided or best-effort phase-appropriate dependencies, still attempt post-write validation automatically when practical, and if validation cannot reach `PASS` after recovery, stop with an explicitly unvalidated result instead of treating it as success.
+STRICT: generation must load the required generation-phase dependencies (typically template + example for artifacts, design/spec context for code), checklist-driven review must run in Phase 5, and Phase 6 requires validation `PASS`. RELAXED: use user-provided or best-effort phase-appropriate dependencies, still attempt post-write validation automatically when the validator command is available and at least one target file was written, and if validation cannot reach `PASS` after recovery, stop with an explicitly unvalidated result instead of treating it as success.
 
 ## Warnings
 

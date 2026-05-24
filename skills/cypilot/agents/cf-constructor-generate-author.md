@@ -150,9 +150,7 @@ Return only:
 Selected author: <agent-name> (<author-level-or-specialty>)
 Reason: <one concise sentence>
 ```
-
 Followed by a JSON block tagged `author_selection`:
-
 ```json
 {
   "selected_author": "<exact selected agent name>",
@@ -173,13 +171,14 @@ Followed by a JSON block tagged `author_selection`:
     "target_paths": ["<path>", "..."],
     "inputs": {},
     "findings": [],
-    "system": "<system name>"
+    "system": "<system name>",
+    "git_commit_mode": "commit|stage|none",
+    "contributing_guide": "<object {path, directives}> | null",
+    "git_constraint": "<string — the mode-matched constraint block from workflows/generate/phase-4-write.md § Git constraint blocks>"
   }
 }
 ```
-
-`dispatch_payload` MUST be the original author payload unchanged except for
-normalizing missing optional fields to `null`, `{}`, or `[]` as appropriate.
+`dispatch_payload` MUST be the original author payload unchanged except for normalizing missing optional fields to `null`, `{}`, or `[]` as appropriate.
 Planner metadata fields (`author_plan_task_id`, `planner_task_title`,
 `planner_recommended_author`, `planner_parallel_group`, `planner_dependencies`,
 `planner_acceptance_criteria`) MUST be preserved unchanged in
@@ -188,7 +187,6 @@ Planner metadata fields (`author_plan_task_id`, `planner_task_title`,
 ## Response Completion Gate
 
 The response is complete only when:
-
 - the selected author is exactly one of the registered author worker agents
 - the selection is the cheapest sufficient agent under the rules above
 - planner recommendations are either honored or explicitly overridden in
@@ -197,3 +195,6 @@ The response is complete only when:
 - no files were written
 - when input contained planner metadata fields, every planner metadata field appears unchanged in dispatch_payload (no fields silently dropped)
 - `dispatch_payload` contains non-null values for required worker-contract fields: `mode`, `kind` (when applicable), `rules_mode`, `target_paths` (non-empty array)
+- `dispatch_payload` contains non-null `system` (always carried from earlier phases)
+- `dispatch_payload` contains non-null `git_commit_mode` (`commit`/`stage`/`none`), `contributing_guide` (object or null), and non-empty `git_constraint`
+- when input contains a `findings` array (fix mode), every finding ID is propagated unchanged into `dispatch_payload.findings` (no silent drops)

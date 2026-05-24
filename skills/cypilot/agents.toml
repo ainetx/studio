@@ -52,6 +52,11 @@
 # All marker IDs use the qualified prefix
 # `cpt-cypilot-algo-agent-integration-generate-shims:p1:`.
 
+# Shared contracts intentionally excluded from agent registration:
+#   - cf-constructor-generate-author-worker.md (loaded by all author-tier stubs)
+#   - author-production-rules.md (loaded by author worker agents)
+# These files are not dispatchable agents and have no agents.toml entry by design.
+
 # codegen runs in isolation but dispatches nested cf-constructor-*
 # sub-agents; the host supports nested dispatch from isolated
 # contexts via the same approval session.

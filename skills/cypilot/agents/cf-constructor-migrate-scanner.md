@@ -6,6 +6,7 @@ description: Invoke when scanning a project for residual cypilot/cpt/Cypilot/Cyb
 
 - [Purpose](#purpose)
 - [Task Inputs (provided by the orchestrator after this role definition)](#task-inputs-provided-by-the-orchestrator-after-this-role-definition)
+- [Context Budget & Fail-Safe](#context-budget--fail-safe)
 - [Procedure](#procedure)
   - [Step 1 — Project-wide grep](#step-1--project-wide-grep)
   - [Step 2 — Targeted hotspot scan](#step-2--targeted-hotspot-scan)
@@ -27,19 +28,30 @@ Open and follow `{cf-constructor-path}/.core/skills/cypilot/SKILL.md` to load Cy
 
 ## Purpose
 
-The deterministic migration (`cfc init --migrate-from-cypilot=yes`) handles:
-- Install directory copy
-- Root `AGENTS.md` / `CLAUDE.md` managed-block swap (`@cpt:root-agents` → `@cf:root-agents`)
-- TOML rewrites inside `{cf-constructor-path}/config/` (kit slug, path/source URLs, `[system]` table removal)
-- Markdown rewrites in a FIXED list: `AGENTS.md` / `SKILL.md` / `README.md` under `{cf-constructor-path}/config/`
-
-Everything else is your scan surface.
+The deterministic migration (`cfc init --migrate-from-cypilot=yes`) handles install-dir copy, root `AGENTS.md`/`CLAUDE.md` managed-block swap, TOML rewrites in `{cf-constructor-path}/config/`, and Markdown rewrites for the fixed list (`AGENTS.md`/`SKILL.md`/`README.md`). Everything else is your scan surface.
 
 ## Task Inputs (provided by the orchestrator after this role definition)
 
 - `project_root`: absolute path to the project root
 - `cf_constructor_path`: absolute path to the Cyber Constructor install dir (default `.cf-constructor`)
 - `exclude_dirs`: list of paths to skip (typically `.git`, `{cf-constructor-path}`, build caches like `__pycache__`, `node_modules`, `.venv`, `dist`, `build`)
+
+## Context Budget & Fail-Safe
+
+If the operation cannot complete within the remaining context budget, STOP at the next safe boundary (end of the current step or item) and emit a `PARTIAL_CHECKPOINT` JSON block in the standard reviewer schema:
+```json
+{
+  "type": "PARTIAL_CHECKPOINT",
+  "agent": "cf-constructor-migrate-scanner",
+  "phase_completed": "<step or category just completed>",
+  "remaining": ["<list of un-processed items / paths>"],
+  "evidence_collected": ["<completed scan buckets or hotspot checks>", "..."],
+  "resume_inputs": {"<dispatch fields needed to resume>": "<value>"}
+}
+```
+Do NOT emit a final PASS / FAIL verdict on a partial run. This scanner is
+read-only: partial checkpoints report only what has been scanned so far and
+what remains to be scanned.
 
 ## Procedure
 
@@ -95,16 +107,7 @@ In addition to the project-wide pass, look specifically at these locations:
 
 1. **`{cf_constructor_path}/config/`** — the deterministic migration should have rewritten all TOML keys and the fixed-list Markdown. Re-scan for any leftover `cypilot-sdlc` / `cypilot_path` / `Cypilot` references. Flag as `hotspot_config_residue` if found (HIGH PRIORITY).
 
-2. **Agent integration dirs** — list directory presence under project root:
-   - `.agents/`
-   - `.claude/`
-   - `.cursor/`
-   - `.codex/`
-   - `.windsurf/`
-   - `.copilot/`
-   - `.openai/`
-   
-   For each dir present, count files. Do NOT modify them. Mark a Phase-C recommendation: _"run `cfc generate-agents` after Migrator finishes to regenerate from the freshly-migrated config"_.
+2. **Agent integration dirs** — list presence of `.agents/`, `.claude/`, `.cursor/`, `.codex/`, `.windsurf/`, `.copilot/`, `.openai/` under project root. For each present, count files. Do NOT modify. Mark Phase-C: _"run `cfc generate-agents` after Migrator finishes"_.
 
 3. **Root system prompts** — read `{project_root}/AGENTS.md` and `{project_root}/CLAUDE.md`. If either still contains `<!-- @cpt:root-agents -->` markers (legacy), flag as `hotspot_root_legacy_marker` (CRITICAL — deterministic migration failed silently OR didn't run).
 

@@ -30,16 +30,25 @@ version: 1.0
 
 This appendix is the downstream runtime contract for generated plans. It is not a plan-creation phase.
 
-When the user requests phase execution, route native execution to `{cf-constructor-path}/.core/skills/cypilot/agents/cf-constructor-phase-runner.md`.
+When the user requests same-chat native phase execution, re-run
+`workflows/shared/inline-fallback-probe.md`, set `CF_PHASE_GATE=released_for_dispatch`
+immediately before dispatch, and route to
+`{cf-constructor-path}/.core/skills/cypilot/agents/cf-constructor-phase-runner.md`
+only when the re-probe resolves to `SUB_AGENT_SESSION_APPROVED=true` and
+`INLINE_FALLBACK=false`. The dispatch payload MUST carry `plan_dir`,
+`target_phase`, `git_commit_mode`, `contributing_guide`, and the mode-matched
+`git_constraint` block. Reset `CF_PHASE_GATE=armed` immediately after the
+dispatch returns — success, error, or no-response.
 
 ### 5.1 Load Phase
 
 1. Read `plan.toml` and use manifest state, not chat memory, as the source of truth.
 2. If `plan.execution_status = "briefs_only"`, do not read a phase file yet; instead return to the Phase 3.2 post-brief choice set so the user can compile phases via inline generation, downstream prompts, or `cf-constructor-phase-compiler`.
-3. Select the earliest executable phase whose dependencies are all `done`.
-4. Audit upstream `output_files`, declared `outputs`, and downstream `inputs`; when `lifecycle = "cleanup"` and `plan.lifecycle_status = "done"`, the intentional cleanup removal of `brief-*`, `phase-*`, and `out/` is exempt.
-5. If the audit reopens work, repair lifecycle state before proceeding.
-6. Mark the chosen phase `in_progress`, then read only that phase file and follow it exactly.
+3. If `plan.execution_status = "prompts_emitted"`, do not attempt native phase execution yet because no `phase-*` files are guaranteed to exist. Return to the same Phase 3.2 post-brief choice set, or instruct the operator to use the emitted downstream compilation prompts first.
+4. Select the earliest executable phase whose dependencies are all `done`.
+5. Audit upstream `output_files`, declared `outputs`, and downstream `inputs`; when `lifecycle = "cleanup"` and `plan.lifecycle_status = "done"`, the intentional cleanup removal of `brief-*`, `phase-*`, and `out/` is exempt.
+6. If the audit reopens work, repair lifecycle state before proceeding.
+7. Mark the chosen phase `in_progress`, then read only that phase file and follow it exactly.
 
 ### 5.2 Execute
 

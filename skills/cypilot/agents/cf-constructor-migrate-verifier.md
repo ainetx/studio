@@ -6,6 +6,7 @@ description: Invoke when re-running scanning after a migrator pass to close the 
 
 - [Purpose](#purpose)
 - [Task Inputs (provided by the orchestrator after this role definition)](#task-inputs-provided-by-the-orchestrator-after-this-role-definition)
+- [Context Budget & Fail-Safe](#context-budget--fail-safe)
 - [Procedure](#procedure)
   - [Step 1 — Verify A-items per the manifest](#step-1--verify-a-items-per-the-manifest)
   - [Step 2 — Verify B-items per the manifest](#step-2--verify-b-items-per-the-manifest)
@@ -46,6 +47,23 @@ After the Migrator applies changes, verify the migration is complete:
 - `migration_manifest`: Migrator's full Markdown output
 - `project_root`: absolute path
 - `cf_constructor_path`: absolute path
+
+## Context Budget & Fail-Safe
+
+If the operation cannot complete within the remaining context budget, STOP at the next safe boundary (end of the current step or item) and emit a `PARTIAL_CHECKPOINT` JSON block in the standard reviewer schema:
+```json
+{
+  "type": "PARTIAL_CHECKPOINT",
+  "agent": "cf-constructor-migrate-verifier",
+  "phase_completed": "<step or category just completed>",
+  "remaining": ["<list of un-processed items / paths>"],
+  "evidence_collected": ["<verified manifest sections or re-scan buckets>", "..."],
+  "resume_inputs": {"<dispatch fields needed to resume>": "<value>"}
+}
+```
+Do NOT emit a final PASS / FAIL verdict on a partial run. This verifier is
+read-only: partial checkpoints report verification coverage and remaining work
+only; they do not describe applied changes or write guarantees.
 
 ## Procedure
 

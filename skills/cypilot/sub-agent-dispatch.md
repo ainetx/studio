@@ -12,14 +12,14 @@ agent and consume its declared output. Pass approval state in the dispatch
 context; sub-agents loading `SKILL.md` do not ask the session approval prompt
 unless they will dispatch another `cf-constructor-*` sub-agent.
 
-Mode B: when the user explicitly declined native dispatch for this workflow or
+Mode B: when the user explicitly declined native dispatch for this session or
 the host has no native sub-agent support, inline the named agent contract:
 open and follow the agent file, substitute dispatch inputs, satisfy its
 Response Completion Gate, and return the declared output shape. If the named agent file has no explicit Response Completion Gate section, apply the default completion criterion: return the full declared output shape with no required field empty or null.
 
 Pre-dispatch discipline:
 - First apply the Session Sub-Agent Approval Gate in `SKILL.md`.
-- Probe once per workflow run.
+- Probe once per workflow run for INLINE_FALLBACK; SUB_AGENT_SESSION_APPROVED carries across runs in the same chat session (see SKILL.md § Session Sub-Agent Approval Gate for the canonical probe semantics). INLINE_FALLBACK does NOT carry across workflow runs — it is re-derived from SUB_AGENT_SESSION_APPROVED at the start of each workflow run and MUST NOT be inherited from a prior run's resolved value.
 - Never switch modes silently mid-workflow. If a mid-workflow re-probe (triggered by an external-entry handoff or unset INLINE_FALLBACK at a dispatch site) yields a different result from the prior probe (Mode A → Mode B or vice versa), the orchestrator MUST surface the change to the user before continuing.
 - If a dispatch site finds `INLINE_FALLBACK` unset, stop and run
   `workflows/shared/inline-fallback-probe.md`.
@@ -31,6 +31,6 @@ MUST state which guarantees are reduced: parallelism, context isolation,
 subprocess separation. Workflows specify the exact warning text inline at the
 dispatch site; if no inline text is provided, use this canonical wording:
 "Inline-fallback mode active — isolation, parallelism, and subprocess separation
-guarantees are reduced for this dispatch. Continue? [y/n]"
+guarantees are reduced for this dispatch. Continue? [y/n]" Affirmative replies (matched case-insensitively after whitespace trim): "y" or "yes". Any other reply is non-affirmative.
 
 If the user replies "n" (or any non-affirmative), abort the dispatch and offer the user the choice of (a) retry with inline-fallback acknowledged, (b) switch back to the parent workflow's plan-escalation menu, or (c) stop. Do not silently continue.

@@ -32,13 +32,15 @@ Set `REVIEWER_PLAN_RESOLVED` to exactly one of:
 
 - `memory`
 - `disk`
+- `cancelled_partial_cache`
 - `auto_skipped_inline_fallback`
 - `auto_skipped_no_methodology`
 - `auto_skipped_explain_mode`
 
 Set `REVIEWER_EXECUTION_PLAN` to the parsed `reviewer_plan` JSON when
 `REVIEWER_PLAN_RESOLVED` is `memory` or `disk`; otherwise set it to `null`.
-Set `REVIEWER_PLAN_CACHE_DIR` only in disk mode.
+Set `REVIEWER_PLAN_CACHE_DIR` only when disk-mode cache rendering completes
+successfully.
 
 ## Applicability
 
@@ -52,11 +54,13 @@ Auto-skip this phase (set `REVIEWER_PLAN_RESOLVED=auto_skipped_*`,
 - No semantic methodology flag is active (gate is `PASS` and no flag set).
 
 Otherwise this phase is mandatory and `REVIEWER_PLAN_RESOLVED` MUST end up
-`memory` or `disk`.
+`memory`, `disk`, or the terminal recovery state `cancelled_partial_cache`.
 
 ## Storage Choice
 
 Ask the user:
+
+Why this input is needed: the storage mode determines whether the reviewer plan persists through context compaction; a memory plan is lost if compaction occurs before Phase 3 completes.
 
 ```text
 Reviewer plan (mandatory — sub-agents approved): pick storage.
@@ -68,14 +72,14 @@ Reply `enter` or `memory` for in-memory plan (default), or `disk` to also
 save a Markdown plan pack under
 `{cf-constructor-path}/.cache/analyze-plans/`.
 
-Choose disk to inspect the plan as Markdown files and resume the analysis in a new chat using the saved plan; memory keeps it in-context only.
+Choose disk to inspect the plan as Markdown files and resume the analysis in a new chat using the saved plan; memory keeps it in-context only (NOT resumable after context compaction).
 ```
 
 Reply parsing:
 
 | User input | Meaning |
 |---|---|
-| empty / `enter` / `memory` / `1` | Set `REVIEWER_PLAN_RESOLVED=memory`; run Planner Dispatch |
+| empty / `enter` / `memory` / `1` | Set `REVIEWER_PLAN_RESOLVED=memory`; run Planner Dispatch. Note: a memory plan is NOT recoverable if the context is compacted before Phase 3 completes — choose disk if the session may be long or context-heavy. |
 | `disk` / `save` / `2` | Set `REVIEWER_PLAN_RESOLVED=disk`; run Planner Dispatch + Disk Mode Rendering |
 | stop token | Open and follow `workflows/shared/stop-token-policy.md`; cancel without proceeding |
 | `no` / `skip` / `3` | Reject with `Decomposition is mandatory while sub-agents are approved. Reply enter/memory or disk.` and ask again |
@@ -102,8 +106,11 @@ Orchestrator-supplied values:
 - `kit_rules_path`, `checklist_path`, `template_path`, `example_path`,
   `design_artifact_path`
 - `target_paths` = the resolved analyze target set
-- `code_paths` = `diff_scope.review_targets` when `CHANGE_REVIEW=true`,
-  else `target_paths` filtered to code paths
+- `code_targets` = Phase 0 typed code targets from `diff_scope.changed_files`
+  when `CHANGE_REVIEW=true`, else `target_paths` filtered to code paths
+- `prompt_targets` = Phase 0 typed prompt targets from
+  `diff_scope.changed_files` when `CHANGE_REVIEW=true`, else `target_paths`
+  filtered to prompt/workflow/instruction paths
 - `cross_refs` = related cross-reference paths
 - `diff_scope` = Phase 0 diff scope or `null`
 - `methodology_flags` = current values of `PROMPT_REVIEW`,
@@ -114,6 +121,9 @@ Orchestrator-supplied values:
 - `size_estimate_lines` = the Phase 0.1 estimate
 
 Parse the marker `<!-- reviewer_plan -->` and the following JSON block.
+
+Field names per {cf-constructor-path}/.core/skills/cypilot/agents/cf-constructor-analyze-planner.md § Output schema.
+
 Validate:
 
 - every active methodology has at least one task
@@ -178,6 +188,42 @@ Reviewer plan saved: {REVIEWER_PLAN_CACHE_DIR}
 
 Reset CF_PHASE_GATE=armed immediately after the named writes complete or fail.
 
+If any cache file write fails: emit a structured error block listing files that
+were written and files that failed. Do not silently proceed with a partial
+cache. Offer:
+
+```text
+Partial cache write failure. Some reviewer-plan cache files could not be written.
+
+Written: {list of successfully written files, one per line, or "none"}
+Failed:  {list of files that failed with error reason, one per line}
+
+How do you want to proceed?
+
+| Option | Action |
+|---|---|
+| 1 | Retry disk mode — re-attempt the failed writes |
+| 2 | Continue in memory mode — discard the partial cache files and proceed with `REVIEWER_EXECUTION_PLAN` in-context |
+| 3 | Cancel reviewer-plan caching and stop before Phase 3 (`REVIEWER_PLAN_RESOLVED=cancelled_partial_cache`) |
+
+Suggested: 1
+
+Reply `1`, `2`, or `3`.
+```
+
+On `1`: re-attempt only the failed writes; do not re-write already successful
+files. If the retry still fails, re-emit the menu.
+
+On `2`: set `REVIEWER_PLAN_RESOLVED=memory`, discard any partially written
+cache files, clear `REVIEWER_PLAN_CACHE_DIR`, and proceed to Phase 3 with
+`REVIEWER_EXECUTION_PLAN` in-context.
+
+On `3`: set `REVIEWER_PLAN_RESOLVED=cancelled_partial_cache`, set
+`REVIEWER_PLAN_CACHE_DIR=null`, reset `CF_PHASE_GATE=armed`, and stop the
+current analyze sub-flow without entering Phase 3.
+
+A stop token at this recovery prompt is equivalent to option `3`.
+
 ## Handoff
 
 After `REVIEWER_PLAN_RESOLVED` is set, proceed to
@@ -185,3 +231,5 @@ After `REVIEWER_PLAN_RESOLVED` is set, proceed to
 
 Phase 3 MUST NOT run while `REVIEWER_PLAN_RESOLVED` is unset. If a later
 phase sees it unset, fail-stop and route back to this file's Storage Choice.
+If `REVIEWER_PLAN_RESOLVED=cancelled_partial_cache`, stop the current analyze
+sub-flow and do not dispatch any semantic reviewers.

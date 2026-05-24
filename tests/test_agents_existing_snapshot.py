@@ -613,6 +613,135 @@ class TestExistingAgentsSnapshot(unittest.TestCase):
             ]
             self.assertEqual(len(deleted), 1)
 
+    def test_subagent_stale_toml_cleanup_deletes_owned_file_with_model_field(self):
+        """Stale Codex TOML with permitted extra fields (model) is still deleted when owned."""
+        from cypilot.commands.agents import _process_subagents, _render_toml_agent
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            output_dir = project_root / ".codex" / "agents"
+            output_dir.mkdir(parents=True)
+
+            prompt = project_root / "agents" / "worker.md"
+            prompt.parent.mkdir(parents=True)
+            prompt.write_text(
+                "---\n"
+                'description: "Worker"\n'
+                "---\n"
+                "# worker\n",
+                encoding="utf-8",
+            )
+
+            stale_prompt = project_root / "agents" / "cf-constructor-stale.md"
+            stale_prompt.write_text(
+                "---\n"
+                'description: "Stale"\n'
+                "---\n"
+                "# stale\n",
+                encoding="utf-8",
+            )
+
+            # Build TOML with model field appended
+            base_toml = _render_toml_agent(
+                {"name": "cf-constructor-stale", "description": "Stale"},
+                "{cf-constructor-path}/agents/cf-constructor-stale.md",
+            )
+            stale_toml_content = base_toml.rstrip("\n") + "\n" + 'model = "gpt-5.4"\n'
+
+            stale = output_dir / "cf-constructor-stale.toml"
+            stale.write_text(stale_toml_content, encoding="utf-8")
+
+            with patch(
+                "cypilot.commands.agents._discover_kit_agents",
+                return_value=[
+                    {
+                        "name": "worker",
+                        "description": "Worker",
+                        "prompt_file_abs": prompt,
+                    }
+                ],
+            ):
+                result = _process_subagents(
+                    "openai",
+                    project_root,
+                    project_root,
+                    {},
+                    None,
+                    dry_run=False,
+                )
+
+            self.assertFalse(stale.exists())
+            deleted_paths = {Path(path).resolve().as_posix() for path in result["deleted"]}
+            self.assertIn(stale.resolve().as_posix(), deleted_paths)
+            deleted = [
+                o
+                for o in result["outputs"]
+                if o.get("action") == "deleted"
+                and o.get("reason") == "stale_subagent_toml_cleanup"
+            ]
+            self.assertEqual(len(deleted), 1)
+
+    def test_subagent_stale_toml_cleanup_preserves_unsupported_model_field_type(self):
+        """Unsupported optional TOML field values are treated as local drift."""
+        from cypilot.commands.agents import _process_subagents, _render_toml_agent
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            output_dir = project_root / ".codex" / "agents"
+            output_dir.mkdir(parents=True)
+
+            prompt = project_root / "agents" / "worker.md"
+            prompt.parent.mkdir(parents=True)
+            prompt.write_text(
+                "---\n"
+                'description: "Worker"\n'
+                "---\n"
+                "# worker\n",
+                encoding="utf-8",
+            )
+
+            stale_prompt = project_root / "agents" / "cf-constructor-stale.md"
+            stale_prompt.write_text(
+                "---\n"
+                'description: "Stale"\n'
+                "---\n"
+                "# stale\n",
+                encoding="utf-8",
+            )
+
+            base_toml = _render_toml_agent(
+                {"name": "cf-constructor-stale", "description": "Stale"},
+                "{cf-constructor-path}/agents/cf-constructor-stale.md",
+            )
+            stale = output_dir / "cf-constructor-stale.toml"
+            stale.write_text(
+                base_toml.rstrip("\n") + "\nmodel_context_window = 1.5\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "cypilot.commands.agents._discover_kit_agents",
+                return_value=[
+                    {
+                        "name": "worker",
+                        "description": "Worker",
+                        "prompt_file_abs": prompt,
+                    }
+                ],
+            ):
+                result = _process_subagents(
+                    "openai",
+                    project_root,
+                    project_root,
+                    {},
+                    None,
+                    dry_run=False,
+                )
+
+            self.assertTrue(stale.exists())
+            deleted_paths = {Path(path).resolve().as_posix() for path in result["deleted"]}
+            self.assertNotIn(stale.resolve().as_posix(), deleted_paths)
+
     def test_subagent_stale_toml_cleanup_preserves_marker_file_with_local_drift(self):
         """Marker-bearing stale Codex TOML with local drift must be preserved."""
         from cypilot.commands.agents import _process_subagents
@@ -804,6 +933,75 @@ class TestExistingAgentsSnapshot(unittest.TestCase):
                 Path(prompt_abs).is_file(),
                 f"{name}: prompt_file {prompt_abs!r} does not resolve to a file on disk",
             )
+
+    def test_subagent_stale_toml_with_dotdot_in_follow_target_preserves_file(self):
+        """A stale TOML whose follow_target contains `..` must not be auto-cleaned (defense-in-depth)."""
+        from cypilot.commands.agents import _process_subagents, _render_toml_agent
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            output_dir = project_root / ".codex" / "agents"
+            output_dir.mkdir(parents=True)
+
+            prompt = project_root / ".cf-constructor" / "agents" / "worker.md"
+            prompt.parent.mkdir(parents=True)
+            prompt.write_text(
+                "---\n"
+                'description: "Worker"\n'
+                "---\n"
+                "# worker\n",
+                encoding="utf-8",
+            )
+
+            # Stale TOML whose developer_instructions reference a path with `..`
+            # This must be preserved because the path-traversal check should reject it
+            stale_prompt = project_root / ".cf-constructor" / "agents" / "cf-constructor-victim.md"
+            stale_prompt.write_text(
+                "---\n"
+                'description: "Victim"\n'
+                "---\n"
+                "# cf-constructor-victim\n",
+                encoding="utf-8",
+            )
+
+            # Build TOML with canonical marker but malicious follow_target
+            base_toml = _render_toml_agent(
+                {"name": "cf-constructor-victim", "description": "Victim"},
+                "{cf-constructor-path}/../agents/cf-constructor-victim.md",
+            )
+            stale = output_dir / "cf-constructor-victim.toml"
+            stale.write_text(base_toml, encoding="utf-8")
+
+            with patch(
+                "cypilot.commands.agents._discover_kit_agents",
+                return_value=[
+                    {
+                        "name": "worker",
+                        "description": "Worker",
+                        "prompt_file_abs": prompt,
+                    }
+                ],
+            ):
+                result = _process_subagents(
+                    "openai",
+                    project_root,
+                    project_root,
+                    {},
+                    None,
+                    dry_run=False,
+                )
+
+            # File must be preserved because the `..` in follow_target triggers path-traversal defense
+            self.assertTrue(stale.exists())
+            deleted_paths = {Path(path).resolve().as_posix() for path in result["deleted"]}
+            self.assertNotIn(stale.resolve().as_posix(), deleted_paths)
+            preserved = [
+                o
+                for o in result["outputs"]
+                if o.get("action") == "preserved"
+                and o.get("reason") == "stale_subagent_toml_not_owned"
+            ]
+            self.assertEqual(len(preserved), 1)
 
 
 if __name__ == "__main__":

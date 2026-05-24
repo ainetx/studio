@@ -5,6 +5,12 @@ parent: workflows/workspace.md
 description: "Invoke when the workspace workflow enters Phase 2 to confirm selected source settings and workspace location before writing config."
 ---
 
+<!-- toc -->
+
+- [Phase 2: Configure](#phase-2-configure)
+
+<!-- /toc -->
+
 ## Phase 2: Configure
 
 **Goal**: confirm workspace structure.
@@ -21,6 +27,10 @@ and `adapter` (auto-discovered or explicit). Also confirm:
 Primary source is always determined by the current working directory; no
 `primary` field exists.
 
+Track confirmation per source. Do not enter Phase 3 until **every** selected
+source is confirmed and the workspace location choice is final. Set
+`WORKSPACE_ALL_SOURCES_CONFIRMED=true` only after that gate passes.
+
 Use one batched confirmation prompt per source:
 
 ```text
@@ -33,4 +43,11 @@ Suggested defaults: keep the detected `adapter`, keep `cross_repo = yes`, and ke
 
 (per `workflows/shared/stop-token-policy.md`)
 
-After approval, continue to `workflows/workspace/phase-3-generate.md`.
+If the reply edits workspace location (`standalone` vs `inline`), update the
+global location choice before re-showing the current source proposal. If any
+source uses a URL, reject `inline` and ask for a standalone location instead.
+
+After each source approval, continue to the next unconfirmed source. Only after
+all selected sources are confirmed and the workspace location is still valid
+for the whole set may the workflow continue to
+`workflows/workspace/phase-3-generate.md`.

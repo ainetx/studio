@@ -52,7 +52,7 @@
 
 ### 1.1 Overview
 
-Extends `cpt generate-agents` with a four-layer manifest hierarchy (Core, Kit, Master Repo, Repo), enabling projects and orchestrator repos to declare skills, agents, workflows, and rules via `manifest.toml`. Adds an `includes` directive for subdirectory manifests (enabling component packages within a repo), `[[skills]]` generation, and an extended agent schema with fields for tool allowlists, model passthrough, color, and memory. Extends the existing `manifest.toml` schema to v2.0 with component sections (`[[agents]]`, `[[skills]]`, `[[workflows]]`, `[[rules]]`). Hook support (`[[hooks]]`) and permissions (`[[permissions]]`) are reserved in the schema but deferred to follow-up features.
+Extends `cfc generate-agents` with a four-layer manifest hierarchy (Core, Kit, Master Repo, Repo), enabling projects and orchestrator repos to declare skills, agents, workflows, and rules via `manifest.toml`. Adds an `includes` directive for subdirectory manifests (enabling component packages within a repo), `[[skills]]` generation, and an extended agent schema with fields for tool allowlists, model passthrough, color, and memory. Extends the existing `manifest.toml` schema to v2.0 with component sections (`[[agents]]`, `[[skills]]`, `[[workflows]]`, `[[rules]]`). Hook support (`[[hooks]]`) and permissions (`[[permissions]]`) are reserved in the schema but deferred to follow-up features.
 
 The template composition model for MVP is section appending — inner layers can append content to generated templates. Full block-based template composition (replace, prepend, delete, insert operations) is deferred to a follow-up feature.
 
@@ -60,7 +60,7 @@ The entire pipeline is deterministic — same filesystem inputs always produce b
 
 ### 1.2 Purpose
 
-Enable project-level and multi-repo extensibility for `cpt generate-agents` without breaking existing behavior. Currently only Core and Kit layers contribute components; this adds Master Repo and Repo layers. Projects under an orchestrator repo (the "master repo" pattern) gain monorepo-like discoverability of shared skills, agents, and rules while retaining multi-repo isolation.
+Enable project-level and multi-repo extensibility for `cfc generate-agents` without breaking existing behavior. Currently only Core and Kit layers contribute components; this adds Master Repo and Repo layers. Projects under an orchestrator repo (the "master repo" pattern) gain monorepo-like discoverability of shared skills, agents, and rules while retaining multi-repo isolation.
 
 The first concrete consumer is the standctl integration into cyber-repo, which distributes 3 agents, 1 skill, and 17 MCP tool permissions through an orchestrator repo pattern. This integration exposed five gaps in the original design (see improvement proposal), of which G1 (includes), G2 (skills generation), and G3 (extended agent schema) are addressed in this feature.
 
@@ -102,7 +102,7 @@ The first concrete consumer is the standctl integration into cyber-repo, which d
 
 **Follow-up: Workspace-Aware Layer Discovery**:
 - Extend `discover_layers()` to optionally run within each workspace source
-- Would enable `cpt generate-agents` to merge components across workspace boundaries
+- Would enable `cfc generate-agents` to merge components across workspace boundaries
 - Requires precedence rules for cross-source component conflicts
 - See [workspace feature spec](./workspace.md) and [PROJECT-EXTENSIBILITY guide](../../guides/PROJECT-EXTENSIBILITY.md#relationship-with-workspace-federation) for the relationship between the two features
 
@@ -110,7 +110,7 @@ The first concrete consumer is the standctl integration into cyber-repo, which d
 
 | Actor | Role in Feature |
 |-------|-----------------|
-| Developer | Runs `cpt generate-agents` to generate agent-native entry points from multi-layer manifest hierarchy |
+| Developer | Runs `cfc generate-agents` to generate agent-native entry points from multi-layer manifest hierarchy |
 | AI Assistant | Consumes generated entry points (skills, agents, workflows, rules) |
 
 ### 1.5 References
@@ -130,8 +130,8 @@ The first concrete consumer is the standctl integration into cyber-repo, which d
 **Actor**: Developer
 
 **Success Scenarios**:
-- Developer runs `cpt generate-agents --agent claude` inside a repo under a master repo hierarchy and all layers are discovered, included manifests resolved, merged, and translated into agent-native entry points
-- Developer runs `cpt generate-agents --agent claude` in a standalone repo (no master repo) and only Core, Kit, and Repo layers apply — identical to current behavior
+- Developer runs `cfc generate-agents --agent claude` inside a repo under a master repo hierarchy and all layers are discovered, included manifests resolved, merged, and translated into agent-native entry points
+- Developer runs `cfc generate-agents --agent claude` in a standalone repo (no master repo) and only Core, Kit, and Repo layers apply — identical to current behavior
 
 **Error Scenarios**:
 - Manifest parse error at any layer — error reported with path and parse details, generation aborted
@@ -140,7 +140,7 @@ The first concrete consumer is the standctl integration into cyber-repo, which d
 - `tools` and `disallowed_tools` both specified on same agent — error reported, agent skipped
 
 **Steps**:
-1. [ ] - `p1` - Developer invokes `cpt generate-agents --agent <agent>` inside a repo - `inst-invoke-generate`
+1. [ ] - `p1` - Developer invokes `cfc generate-agents --agent <agent>` inside a repo - `inst-invoke-generate`
 2. [ ] - `p1` - Determine current repo root via existing `find_project_root()` - `inst-find-repo-root`
 3. [ ] - `p1` - Walk up filesystem to discover `manifest.toml` at each layer boundary (repo, master repo) - `inst-walk-up`
 4. [ ] - `p1` - Load kit `manifest.toml` files from `core.toml` kit registrations - `inst-load-kit-manifests`
@@ -162,13 +162,13 @@ The first concrete consumer is the standctl integration into cyber-repo, which d
 **Actor**: Developer
 
 **Success Scenarios**:
-- Developer runs `cpt generate-agents --agent claude --discover` and conventional directories are scanned, manifest populated, then generation proceeds
+- Developer runs `cfc generate-agents --agent claude --discover` and conventional directories are scanned, manifest populated, then generation proceeds
 
 **Error Scenarios**:
 - No components found in conventional directories — user informed, discovery skipped, generation proceeds without discovered components
 
 **Steps**:
-1. [ ] - `p2` - Developer invokes `cpt generate-agents --agent <agent> --discover` - `inst-invoke-discover`
+1. [ ] - `p2` - Developer invokes `cfc generate-agents --agent <agent> --discover` - `inst-invoke-discover`
 2. [ ] - `p2` - Scan conventional directories for components (`.claude/agents/*.md` for agents, `.claude/skills/*/SKILL.md` for skills, `.claude/commands/*.md` for workflows) — hook discovery deferred - `inst-scan-directories`
 3. [ ] - `p2` - **FOR EACH** discovered component: generate manifest entry - `inst-generate-entries`
 4. [ ] - `p2` - Write component sections into the appropriate `manifest.toml` for the current layer - `inst-write-manifest`
@@ -181,14 +181,14 @@ The first concrete consumer is the standctl integration into cyber-repo, which d
 **Actor**: Developer
 
 **Success Scenarios**:
-- Developer runs `cpt generate-agents --show-layers` and sees a provenance table showing all components and their layer origins
-- Developer runs `cpt generate-agents --show-layers --json` and receives machine-readable provenance
+- Developer runs `cfc generate-agents --show-layers` and sees a provenance table showing all components and their layer origins
+- Developer runs `cfc generate-agents --show-layers --json` and receives machine-readable provenance
 
 **Error Scenarios**:
 - No manifests found beyond core — report shows only Core and Kit layers
 
 **Steps**:
-1. [ ] - `p2` - Developer invokes `cpt generate-agents --show-layers [--json]` - `inst-invoke-show-layers`
+1. [ ] - `p2` - Developer invokes `cfc generate-agents --show-layers [--json]` - `inst-invoke-show-layers`
 2. [ ] - `p2` - Execute walk-up discovery (same as Generate flow steps 2-7) - `inst-execute-discovery`
 3. [ ] - `p2` - Build provenance table: component ID, winning layer (scope + path), overridden layers (scope + path each) - `inst-build-table`
 4. [ ] - `p2` - **RETURN** provenance report as JSON (`--json`) or human-readable table - `inst-return-provenance`
@@ -560,7 +560,7 @@ The system **MUST** produce a provenance report showing, for each generated comp
 
 - [ ] `p1` - **ID**: `cpt-cypilot-dod-project-extensibility-deterministic`
 
-The generation pipeline **MUST** be a pure function of filesystem inputs. Zero LLM calls. No network calls, no randomness, no timestamps in output. Running `cpt generate-agents` twice with identical inputs **MUST** produce byte-identical outputs.
+The generation pipeline **MUST** be a pure function of filesystem inputs. Zero LLM calls. No network calls, no randomness, no timestamps in output. Running `cfc generate-agents` twice with identical inputs **MUST** produce byte-identical outputs.
 
 **Implements**:
 - `cpt-cypilot-algo-project-extensibility-deterministic-assembly`
@@ -592,8 +592,8 @@ The system **MUST** produce identical output for standalone repos (no master rep
 
 ## 6. Acceptance Criteria
 
-- [ ] `cpt generate-agents --agent claude` in a standalone repo (no `manifest.toml`, no master repo) produces identical output to current behavior
-- [ ] `cpt generate-agents --agent claude` in a repo under a master repo hierarchy discovers and merges manifests from Core, Kit, Master Repo, and Repo layers
+- [ ] `cfc generate-agents --agent claude` in a standalone repo (no `manifest.toml`, no master repo) produces identical output to current behavior
+- [ ] `cfc generate-agents --agent claude` in a repo under a master repo hierarchy discovers and merges manifests from Core, Kit, Master Repo, and Repo layers
 - [ ] A repo manifest with `includes = ["standctl/manifest.toml"]` correctly loads and merges the included manifest's components at the repo layer
 - [ ] Circular includes are detected and produce a clear error with the include chain
 - [ ] Component ID collision between includer and includee produces an error (not silent override)
@@ -605,8 +605,8 @@ The system **MUST** produce identical output for standalone repos (no master rep
 - [ ] An agent with `model = "sonnet"` translates to `model: sonnet` for Claude and `sandbox_mode = "workspace-write"` + `model = "..."` for Codex
 - [ ] A skill ID defined at both master and repo layers results in the repo-layer definition winning
 - [ ] Section appends from master and repo layers both appear in the generated output, stacked in order
-- [ ] `cpt generate-agents --show-layers` displays a table showing each component's winning layer, including components from included manifests
-- [ ] Running `cpt generate-agents` twice with same inputs produces identical output (diff is empty)
+- [ ] `cfc generate-agents --show-layers` displays a table showing each component's winning layer, including components from included manifests
+- [ ] Running `cfc generate-agents` twice with same inputs produces identical output (diff is empty)
 - [ ] `--discover` flag populates `manifest.toml` with discovered components
 - [ ] Kit manifest v1.0 (resources-only) continues to parse without error
 - [ ] Kit manifest v2.0 with `[[agents]]` section is preferred over separate `agents.toml`

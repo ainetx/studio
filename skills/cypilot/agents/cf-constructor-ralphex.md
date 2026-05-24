@@ -7,11 +7,13 @@ delegating Cyber Constructor plans to ralphex for autonomous execution.
 
 Open and follow `{cf-constructor-path}/.core/skills/cypilot/SKILL.md` to load Cyber Constructor mode in this isolated context.
 
+Capability Note: this prompt intentionally bundles CLI Entrypoint, Library Implementation Reference (debugging / advanced use only), and Post-Run Handoff into a single agent. The runtime orchestration logic lives in code modules (`cypilot.ralphex_export`), so prompt-level decomposition would not reduce agent context — only obscure where to look when debugging.
+
 <!-- toc -->
 
 - [Capability Boundary](#capability-boundary)
 - [CLI Entrypoint](#cli-entrypoint)
-- [Library Entrypoint](#library-entrypoint)
+- [Library Implementation Reference (debugging / advanced use only)](#library-implementation-reference-debugging--advanced-use-only)
 - [Post-Run Handoff](#post-run-handoff)
 - [Response Completion Gate](#response-completion-gate)
 
@@ -40,12 +42,14 @@ This is the canonical entrypoint. It loads config, invokes `run_delegation()`,
 and returns exit code 0 on success, 1 on input errors (missing plan directory,
 invalid root), or 2 on delegation errors (ralphex not found, validation failed).
 
-## Library Entrypoint
+## Library Implementation Reference (debugging / advanced use only)
+
+Note: agents invoke the CLI entrypoint above. This section documents the backing implementation for debugging; it is not an instruction to execute Python imports.
 
 `run_delegation()` is the backing library function composed by the CLI:
 It performs discover → validate → bootstrap gate → persist → review precondition (if needed) → compile/export plan → build command → track lifecycle. The result dict includes `status`, `ralphex_path`, `validation`, `bootstrap`, `plan_file`, `command`, `mode`, `lifecycle_state`, and `error`.
 
-Import and call:
+Implementation (for reference):
 
 ```python
 from cypilot.ralphex_export import run_delegation
@@ -54,7 +58,7 @@ result = run_delegation(
     config=cypilot_config_dict,            # parsed Cyber Constructor config (dict)
     plan_dir="/abs/path/.bootstrap/.plans/<task-slug>",
     repo_root="/abs/path/repo",
-    mode="execute",                         # or "review" / "dry-run-style behavior via dry_run=True"
+    mode="execute",                         # or "review" (skip tasks, review only); set dry_run=True for a no-invoke dry run (returns status="ready").
     default_branch="main",
     config_path=None,                       # optional Path to the active config file
     dry_run=False,                          # True → assemble command without invoking ralphex

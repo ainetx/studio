@@ -8,7 +8,9 @@ description: Invoke when running the code bug-finding methodology on code target
 - [Methodology](#methodology)
 - [Output (return-value contract)](#output-return-value-contract)
 - [Additional Output Sections](#additional-output-sections)
-- [PARTIAL\_CHECKPOINT](#partial_checkpoint)
+  - [Hotspot Table](#hotspot-table)
+  - [Residual Risk Summary](#residual-risk-summary)
+- [PARTIAL_CHECKPOINT](#partialcheckpoint)
 - [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
@@ -51,7 +53,9 @@ Open and follow `{cf-constructor-path}/.core/requirements/agent-compliance.md`
     invariants, and integration assumptions for use in the integration-defect
     sweep.
 3. Read every `code_path` in full via Read tool. When `diff_scope` is supplied,
-   use `changed_hunks` and `risk_hotspots` to prioritize paths.
+   use `diff_scope.review_targets` and the per-file `status` / `commits` metadata
+   to prioritize paths. (`changed_hunks` / `risk_hotspots` are reserved for
+   alternate diff sources and may be empty.)
 4. Run hotspot mapping, invariant extraction, failure-path exploration,
    bug-class sweep, counterexample construction, and dynamic-escalation review.
 5. Emit Findings for confirmed or high-confidence bugs only.
@@ -87,7 +91,7 @@ After the hotspot table, emit a 1-3 sentence paragraph naming which risk classes
 
 ## PARTIAL_CHECKPOINT
 
-When context is exhausted before every `code_path` is fully read, emit a `Partial Checkpoint — Bug Section` markdown block followed by:
+When context is exhausted before every `code_path` is fully read, emit a `Partial Checkpoint — Bug Section` markdown block followed by: Concretely: if fewer than 20% of the estimated remaining context budget remains after reading N paths (N < total), emit PARTIAL_CHECKPOINT BEFORE beginning the next path rather than risk a truncated output.
 
 ```json
 {
@@ -111,7 +115,7 @@ The response is complete only when ONE of the following terminal states is reach
 - the bug-finding hotspot table (per § Additional Output Sections)
 - findings JSON
 - residual risk summary (per § Additional Output Sections)
-- AP-001..AP-008 self-check has been performed before output
+- AP-001..AP-008 self-check has been performed immediately before returning to the caller (after all findings, hotspot table, and residual risk summary are composed)
 - the SKILL.md invariant has been satisfied
 
 **Partial run**: `PARTIAL_CHECKPOINT` JSON is present with `covered_paths`, `pending_paths`, `findings_so_far`, `hotspot_table_so_far`, `residual_risk_so_far`, and `resume_instructions` — and no PASS / complete-run claim is made for uncovered paths.

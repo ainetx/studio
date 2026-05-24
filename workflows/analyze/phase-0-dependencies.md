@@ -61,8 +61,14 @@ loaded, dependencies are resolved. If artifact review dependencies are missing,
 ask for the missing checklist/template/example only when `ARTIFACT_REVIEW=true`.
 Code and prompt methodologies do not require artifact checklist/template/example
 to proceed; they use their own reviewer methodology files in Phase 3.
-Code mode sets `CODE_REVIEW=true`; defect-oriented or change-review code also
-sets `CODE_BUG_REVIEW=true`.
+Outside change review, code mode sets `CODE_REVIEW=true` when the resolved
+target is code. Outside change review, additionally set `CODE_BUG_REVIEW=true`
+when the user request contains any of the words: `bug`, `defect`,
+`regression`, `root cause`, `crash`, `broken`, `hunt`.
+
+When `CHANGE_REVIEW=true`, Phase 0 change-review scope owns typed target-set
+derivation from `diff_scope.changed_files`. Do NOT pre-enable `CODE_REVIEW` or
+`CODE_BUG_REVIEW` for a diff-scoped run before `code_targets` is derived.
 
 MUST NOT proceed to Phase 1 until all dependencies are available.
 
@@ -72,3 +78,5 @@ any further Phase-0 / Phase-1 work).
 
 After the plan-escalation gate resolves, open, load, and follow
 `workflows/analyze/phase-0.5-scope.md` WHEN target_paths contains more than one entry AND no explicit scope was named in the user request, OR when CONSISTENCY_REVIEW=true and fewer than two paths are captured, OR when ARTIFACT_REVIEW=true and the artifact is not registered in artifacts.toml.
+
+After scope resolves (or scope-load is skipped), proceed to Phase 1: open, load, and follow `workflows/analyze/phase-1-file-check.md`.

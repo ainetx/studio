@@ -212,6 +212,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "template_path": None,
         "example_path": None,
         "kit_rules_path": None,
+        "git_commit_mode": "none",
+        "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
+        "contributing_guide": None,
     },
     "cf-constructor-generate-author-junior": {
         "mode": "fix",
@@ -224,6 +227,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "template_path": None,
         "example_path": None,
         "kit_rules_path": None,
+        "git_commit_mode": "none",
+        "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
+        "contributing_guide": None,
     },
     "cf-constructor-generate-author-middle": {
         "mode": "fix",
@@ -236,6 +242,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "template_path": None,
         "example_path": None,
         "kit_rules_path": None,
+        "git_commit_mode": "none",
+        "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
+        "contributing_guide": None,
     },
     "cf-constructor-generate-author-senior": {
         "mode": "fix",
@@ -248,6 +257,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "template_path": None,
         "example_path": None,
         "kit_rules_path": None,
+        "git_commit_mode": "none",
+        "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
+        "contributing_guide": None,
     },
     "cf-constructor-generate-author-lead": {
         "mode": "fix",
@@ -260,6 +272,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "template_path": None,
         "example_path": None,
         "kit_rules_path": None,
+        "git_commit_mode": "none",
+        "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
+        "contributing_guide": None,
     },
     "cf-constructor-generate-coder-casual": {
         "mode": "fix",
@@ -270,6 +285,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "target_paths": ["fixture/mod.py"],
         "findings": [],
         "design_artifact_path": "fixture/design.md",
+        "git_commit_mode": "none",
+        "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
+        "contributing_guide": None,
     },
     "cf-constructor-generate-coder-smart": {
         "mode": "fix",
@@ -280,6 +298,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "target_paths": ["fixture/mod.py"],
         "findings": [],
         "design_artifact_path": "fixture/design.md",
+        "git_commit_mode": "none",
+        "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
+        "contributing_guide": None,
     },
     "cf-constructor-generate-prompt-engineer-casual": {
         "mode": "fix",
@@ -289,6 +310,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "system": "fixture-system",
         "target_paths": ["fixture/prompt.md"],
         "findings": [],
+        "git_commit_mode": "none",
+        "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
+        "contributing_guide": None,
     },
     "cf-constructor-generate-prompt-engineer-smart": {
         "mode": "fix",
@@ -298,6 +322,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "system": "fixture-system",
         "target_paths": ["fixture/prompt.md"],
         "findings": [],
+        "git_commit_mode": "none",
+        "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
+        "contributing_guide": None,
     },
 }
 
@@ -540,6 +567,10 @@ def test_dispatch_round_trip(agent_id: str) -> None:
         elif agent_id == "cf-constructor-analyze-planner":
             assert response["result"].get("reviewer_plan_marker") == "<!-- reviewer_plan -->"
             assert response["result"].get("reviewer_plan", {}).get("tasks")
+            assert response["result"]["reviewer_plan"]["parallel_groups"], \
+                "analyze-planner must emit non-empty parallel_groups"
+            assert response["result"]["reviewer_plan"]["parallel_groups"][0]["task_ids"], \
+                "parallel_groups[0] must reference at least one task_id"
         elif agent_id == "cf-constructor-generate-planner":
             assert response["result"].get("author_plan_marker") == "<!-- author_plan -->"
             assert response["result"].get("author_plan", {}).get("tasks")
@@ -550,9 +581,19 @@ def test_dispatch_round_trip(agent_id: str) -> None:
             assert set(response["result"]["author_selection"].keys()) >= {
                 "selected_author", "author_domain", "author_level"
             }, "author_selection must carry selected_author, author_domain, and author_level"
+            assert selection['selected_author'] in AUTHOR_WORKER_SUBAGENTS, \
+                f"selected_author {selection['selected_author']!r} must be a registered worker agent"
+            assert "git_commit_mode" in payload, f"{agent_id} dispatch missing git_commit_mode"
+            assert payload["git_commit_mode"] in ("commit", "stage", "none")
+            assert "git_constraint" in payload and isinstance(payload["git_constraint"], str) and payload["git_constraint"]
+            assert "contributing_guide" in payload  # may be None
         elif agent_id in AUTHOR_WORKER_SUBAGENTS:
             assert response["result"].get("manifest", {}).get("paths_written")
             assert "findings_not_fixable" in response["result"]
+            assert "git_commit_mode" in payload, f"{agent_id} dispatch missing git_commit_mode"
+            assert payload["git_commit_mode"] in ("commit", "stage", "none")
+            assert "git_constraint" in payload and isinstance(payload["git_constraint"], str) and payload["git_constraint"]
+            assert "contributing_guide" in payload  # may be None
 
 
 def test_brainstorm_expert_challenge_mode_result_shape() -> None:
@@ -613,6 +654,68 @@ def test_brainstorm_expert_challenge_mode_allows_critique_only() -> None:
     assert response["result"].get("questions") == []
     assert response["result"].get("critique", "").strip()
     assert response["result"].get("next_topic_proposal") is None
+
+
+class TestSubagentDispatch:
+    """Namespace for additional dispatch shape tests."""
+
+    def test_dispatch_partial_checkpoint_shape(self) -> None:
+        """A finding-emitting sub-agent may return a PARTIAL_CHECKPOINT response
+        instead of a VALIDATION_REPORT.  The discriminator invariant must hold:
+        exactly one of review_result / checkpoint present, and checkpoint carries
+        type=PARTIAL_CHECKPOINT.
+        """
+        # Build a fake checkpoint response by hand (simulates what a sub-agent
+        # would return when it has only partially reviewed the target files).
+        agent_id = "cf-constructor-semantic-reviewer-artifact"
+        assert agent_id in FINDING_EMITTING_SUBAGENTS
+
+        fake_response = {
+            "agent_id": agent_id,
+            "result": {
+                "shape_ok": True,
+                "checkpoint": {
+                    "type": "PARTIAL_CHECKPOINT",
+                    "unread_files": ["fixture/path.md"],
+                    "uncovered_categories": ["completeness"],
+                },
+                "findings": [{
+                    "id": "F-001",
+                    "severity": "low",
+                    "mechanical": False,
+                    "path": "fixture/path.md",
+                    "line": None,
+                    "category": "fixture",
+                    "evidence_quote": "fixture evidence",
+                    "root_cause": "fixture root cause",
+                    "suggested_fix": "fixture fix",
+                    "mechanical_rationale": "fixture rationale",
+                }],
+            },
+        }
+
+        has_review_result = "review_result" in fake_response["result"]
+        has_checkpoint = "checkpoint" in fake_response["result"]
+
+        # The discriminator invariant: exactly one of the two keys is present.
+        assert has_review_result != has_checkpoint, (
+            "finding-emitting workflow sub-agent responses must carry exactly "
+            "one review_result/checkpoint discriminator"
+        )
+        # This branch exercises the checkpoint path specifically.
+        assert not has_review_result
+        assert has_checkpoint
+        assert fake_response["result"]["checkpoint"]["type"] == "PARTIAL_CHECKPOINT"
+        assert fake_response["result"]["checkpoint"]["unread_files"]
+        assert fake_response["result"]["checkpoint"]["uncovered_categories"]
+
+        # Findings must still be present even in checkpoint responses.
+        findings = fake_response["result"].get("findings")
+        assert isinstance(findings, list) and findings
+        for finding in findings:
+            assert finding.get("mechanical_rationale"), (
+                "checkpoint-mode findings must still carry mechanical_rationale"
+            )
 
 
 def test_review_finding_workflow_contract_regressions() -> None:

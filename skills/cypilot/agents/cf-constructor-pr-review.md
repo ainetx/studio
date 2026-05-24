@@ -22,8 +22,7 @@ If a critical Cyber Constructor dependency is missing, inform the user and sugge
 
 Then open and follow `{cf-constructor-path}/.core/workflows/analyze.md` targeting PR review mode. Fetch fresh PR data, apply the review checklist, and produce a structured review report.
 
-Return a concise summary of findings to the main conversation. Keep detailed
-analysis within this agent context.
+Return a bullet-list summary of finding count by severity, plus any CRITICAL or HIGH findings by title and file path. Keep detailed analysis within this agent context.
 
 ## Inputs (dispatched-prompt contract)
 

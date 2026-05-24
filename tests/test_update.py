@@ -2623,6 +2623,50 @@ class TestCmdUpdateManifestMigration(unittest.TestCase):
             finally:
                 os.chdir(cwd)
 
+    def test_update_manifest_migration_exception_is_reported_as_error(self):
+        """Unexpected manifest-migration exceptions must fail update."""
+        from cypilot.commands.update import cmd_update
+
+        with TemporaryDirectory() as td:
+            root = Path(td) / "proj"
+            root.mkdir()
+            cache = Path(td) / "cache"
+            _make_cache(cache, kit_version=1)
+            _init_project(root, cache)
+
+            cwd = os.getcwd()
+            try:
+                os.chdir(str(root))
+                with (
+                    patch("cypilot.commands.update.CACHE_DIR", cache),
+                    patch(
+                        "cypilot.commands.kit._download_kit_from_github",
+                        return_value=(cache / "kits" / "sdlc", "1.0"),
+                    ),
+                    patch(
+                        "cypilot.commands.update._maybe_migrate_legacy_to_manifest",
+                        side_effect=RuntimeError("simulated migration crash"),
+                    ),
+                ):
+                    buf = io.StringIO()
+                    err = io.StringIO()
+                    with redirect_stdout(buf), redirect_stderr(err):
+                        rc = cmd_update(["-y"])
+
+                self.assertEqual(rc, 1)
+                out = json.loads(buf.getvalue())
+                self.assertNotEqual(out.get("status"), "PASS")
+                errors = out.get("errors", [])
+                self.assertTrue(
+                    any(
+                        "manifest migration raised unexpected exception" in e.get("error", "")
+                        for e in errors
+                    ),
+                    errors,
+                )
+            finally:
+                os.chdir(cwd)
+
     def test_update_skips_migration_when_resources_exist(self):
         """When kit already has resources in core.toml, migration is skipped."""
         from cypilot.commands.update import cmd_update

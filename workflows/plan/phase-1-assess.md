@@ -9,6 +9,16 @@ version: 1.0
 
 # Phase 1: Assess Scope
 
+<!-- toc -->
+
+- [1.1 Identify Task Type](#11-identify-task-type)
+- [1.1b Extract Target Workflow Navigation Rules (CRITICAL)](#11b-extract-target-workflow-navigation-rules-critical)
+- [1.2 Estimate Compiled Size](#12-estimate-compiled-size)
+- [1.3 Identify Target & Resolve Kit Inputs](#13-identify-target--resolve-kit-inputs)
+- [1.4 Scan for User Interaction Points (CRITICAL)](#14-scan-for-user-interaction-points-critical)
+
+<!-- /toc -->
+
 ## 1.1 Identify Task Type
 
 | Signal | Task Type | Target Workflow |
@@ -16,6 +26,12 @@ version: 1.0
 | `create` / `generate` / `write` / `update` / `draft` + artifact kind | `generate` | `generate.md` |
 | `validate` / `review` / `check` / `audit` / `analyze` + artifact kind | `analyze` | `analyze.md` |
 | `implement` / `code` / `build` / `develop` + feature name | `implement` | `generate.md` (code mode) |
+
+For `implement` requests, inspect the direct prompt plus any provided FEATURE,
+DESIGN, code, or task files before deciding the target. The planning workflow
+still maps small `implement` tasks to direct `/cf-constructor-generate`
+execution when the compiled estimate is `≤ 500` and no reusable authoritative
+raw-input package exists.
 
 ## 1.1b Extract Target Workflow Navigation Rules (CRITICAL)
 
@@ -37,10 +53,51 @@ Context loaded for plan generation:
 Estimate `template_lines + rules_lines + checklist_lines + existing_content_lines`.
 
 1. If oversized raw input already has an approved or reusable plan package, remain on the plan path even when the compiled estimate is `≤ 500`.
-2. Otherwise, if the estimate is `≤ 500`, continue to Phase 1.4 so `{task-slug}` can be resolved before checking for any existing authoritative raw-input package.
+2. Otherwise, if the estimate is `≤ 500`, continue to Phase 1.3 so `{task-slug}` can be resolved before checking for any existing authoritative raw-input package.
 3. If the estimate is `> 500`, continue planning.
 
-## 1.3 Scan for User Interaction Points (CRITICAL)
+## 1.3 Identify Target & Resolve Kit Inputs
+
+Resolve generate/analyze → artifact kind, file path, and kit; implement →
+FEATURE spec path and CDSL blocks. Do this **before** the full interaction scan
+so the workflow knows the concrete `rules.md`, `checklist.md`, `template.md`,
+and navigation-linked kit files that must be scanned.
+
+Also compute `plan.target_key`, the canonical target identity used for
+deterministic plan-directory naming and reuse:
+- generate artifact target: prefer the single resolved output artifact path as
+  `artifact-path:{absolute path}`; otherwise use
+  `artifact:{artifact kind}:{explicit artifact name}`
+- analyze path target: use `path:{absolute path}` for the primary file/directory
+  target; analyze artifact target follows the generate artifact-target rule
+- implement target: prefer `feature-path:{absolute FEATURE path}`; otherwise
+  `feature-id:{FEATURE ID}`; otherwise
+  `feature-title:{normalized FEATURE title}`
+
+Also compute `plan.input_signature`, the canonical raw-input identity derived
+from the current direct prompt text plus every provided file path/content pair.
+The signature is derived exclusively from each source's kind, path, and content
+hash. To obtain the signature without writing any files, run:
+  `{cfc_cmd} --json chunk-input ... --output-dir {cf-constructor-path}/.plans/{task-slug}/input --dry-run`
+  (add `--include-stdin` when direct prompt text must be included).
+
+This signature is authoritative for raw-input package reuse; `plan.target_key`
+is not sufficient when the raw task input changes.
+
+Then report:
+```text
+Plan scope:
+  Type: {generate|analyze|implement}
+  Target: {artifact kind or feature name}
+  Target key: {canonical target identity}
+  Input signature: {sha256 of direct prompt + provided file contents}
+  Estimated size: ~{N} lines
+```
+
+After target identification, compute `{task-slug}` immediately for
+deterministic plan-directory naming and reuse.
+
+## 1.4 Scan for User Interaction Points (CRITICAL)
 
 > **⛔ MANDATORY**: Missing interaction points is the #2 source of plan failures after missing rules.
 
@@ -52,7 +109,9 @@ Recursively scan the target workflow, `rules.md`, `checklist.md`, `template.md`,
 - `review`: `review`, `present for`, `show to user`, `user inspects`
 - `decision`: `choose`, `select`, `option A or B`, `decide`
 
-Collect findings, classify each as **Pre-resolvable**, **Phase-bound**, or **Cross-phase**, ask all pre-resolvable and cross-phase questions now, record answers in a `decisions` block, then verify:
+Collect findings, classify each as **Pre-resolvable**, **Phase-bound**, or
+**Cross-phase**, ask all pre-resolvable and cross-phase questions now, record
+answers in a `decisions` block, then verify:
 ```text
 Interaction points scan complete:
   Files scanned: {N}
@@ -64,29 +123,6 @@ Interaction points scan complete:
   All interaction points classified? [YES/NO]
 ```
 **Gate**: do NOT proceed if any source file was not scanned or any interaction point remains unclassified. If zero are found, report `No interaction points detected — task is fully autonomous` and omit User Decisions from phase files.
-
-## 1.4 Identify Target
-
-Resolve generate/analyze → artifact kind, file path, and kit; implement → FEATURE spec path and CDSL blocks. Also compute `plan.target_key`, the canonical target identity used for deterministic plan-directory naming and reuse:
-- generate artifact target: prefer the single resolved output artifact path as `artifact-path:{absolute path}`; otherwise use `artifact:{artifact kind}:{explicit artifact name}`
-- analyze path target: use `path:{absolute path}` for the primary file/directory target; analyze artifact target follows the generate artifact-target rule
-- implement target: prefer `feature-path:{absolute FEATURE path}`; otherwise `feature-id:{FEATURE ID}`; otherwise `feature-title:{normalized FEATURE title}`
-
-Also compute `plan.input_signature`, the canonical raw-input identity derived from the current direct prompt text plus every provided file path/content pair. The signature is derived exclusively from each source's kind, path, and content hash — presentation-only metadata such as stdin display labels are excluded so that relabeling does not break reuse. To obtain the signature without writing any files, run:
-  `{cfc_cmd} --json chunk-input ... --output-dir {cf-constructor-path}/.plans/{task-slug}/input --dry-run`
-  (add `--include-stdin` when direct prompt text must be included).
-This signature is authoritative for raw-input package reuse; `plan.target_key` is not sufficient when the raw task input changes.
-
-Then report:
-```text
-Plan scope:
-  Type: {generate|analyze|implement}
-  Target: {artifact kind or feature name}
-  Target key: {canonical target identity}
-  Input signature: {sha256 of direct prompt + provided file contents}
-  Estimated size: ~{N} lines
-```
-After target identification, compute `{task-slug}` immediately for deterministic plan-directory naming and reuse.
 
 If `{cf-constructor-path}/.plans/{task-slug}/input/manifest.json` already exists, read its `input_signature` and compare it to the `input_signature` returned by the `--dry-run` invocation above. If they match exactly, remain on the plan path and reuse that authoritative raw-input package even when the compiled estimate is `≤ 500`.
 

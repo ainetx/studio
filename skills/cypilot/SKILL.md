@@ -7,6 +7,7 @@ description: "Invoke when running Cyber Constructor planning, generation, analys
 
   - [Context Budget & Fail-Safe](#context-budget--fail-safe)
   - [Phase-Skip Gate (loaded with the skill)](#phase-skip-gate-loaded-with-the-skill)
+  - [Session GIT_COMMIT_MODE Gate](#session-gitcommitmode-gate)
   - [Session Sub-Agent Approval Gate](#session-sub-agent-approval-gate)
 - [Completion Invariants](#completion-invariants)
 
@@ -53,7 +54,7 @@ If an `Edit` / `Write` / `MultiEdit` / `NotebookEdit` call is observed under `re
 
 ### Session GIT_COMMIT_MODE Gate
 
-`GIT_COMMIT_MODE` is a session-scoped flag probed once per chat session by the generate workflow (Phase 0.x). It controls how write-capable sub-agents (`cf-constructor-generate-*-author-*`, `cf-constructor-generate-coder-*`, `cf-constructor-generate-prompt-engineer-*`, `cf-constructor-migrate-migrator`, `cf-constructor-phase-compiler`) interact with git. Three modes (`commit`, `stage`, `none`) — full definitions and permitted operations are defined in `workflows/generate/phase-0-git-commit-mode.md` § Mode Semantics; the same definitions are propagated verbatim to each write-capable sub-agent dispatch payload's `git_constraint` field via `workflows/generate/phase-4-write.md` § Git constraint blocks.
+`GIT_COMMIT_MODE` is a session-scoped flag probed once per chat session by the generate workflow (Phase 0.x) or, when entered first, by the plan workflow before any `cf-constructor-phase-compiler` or `cf-constructor-phase-runner` dispatch. It controls how write-capable sub-agents (`cf-constructor-generate-*-author-*`, `cf-constructor-generate-coder-*`, `cf-constructor-generate-prompt-engineer-*`, `cf-constructor-migrate-migrator`, `cf-constructor-phase-compiler`, `cf-constructor-phase-runner`) interact with git. Three modes (`commit`, `stage`, `none`) — full definitions and permitted operations are defined in `workflows/generate/phase-0-git-commit-mode.md` § Mode Semantics; the same definitions are propagated verbatim to each write-capable sub-agent dispatch payload's `git_constraint` field via `workflows/generate/phase-4-write.md` § Git constraint blocks.
 
 Probe semantics: once per chat session (parallel to `SUB_AGENT_SESSION_APPROVED`). External-entry handoffs (briefs_only stop + resume in a new chat) re-probe. Do NOT re-probe on every workflow run within the same chat. `GIT_COMMIT_MODE` carries across multiple `/cf-constructor-generate` runs within the same chat session, just like `SUB_AGENT_SESSION_APPROVED`.
 
@@ -92,10 +93,16 @@ A `/cf-constructor-generate` file-writing run with no remaining findings is
 not complete until the final response ends with the `Post-Write Review Handoff` menu. If remaining findings exist, it is not complete until the
 final response ends with the `Remediation Handoff` menu as the only actionable
 reply menu; `W1`/`W2`/`W3` choices remain locked until remediation clears and
-Phase 6 re-enters with `remaining_findings` empty.
+Phase 6 re-enters with `remaining_findings` empty. Exception: if the user stops
+at `workflows/generate/phase-5/phase-5.2-semantic.md`'s inline long-loop
+warning before any validator/reviewer/author dispatch and
+`manifest.paths_written` is non-empty, the run is complete only when the final
+response ends with that file's `Pre-Review Warning Handoff` block; this is the
+sanctioned terminal path for pre-review warning aborts because no valid
+`Validation Results` body exists yet.
 
 A `/cf-constructor-analyze` run with actionable issues is not complete until the final response ends with the `Remediation Handoff` menu.
 
-A `/cf-constructor-plan` run that compiled phase files is not complete until the final response ends with the Phase 4.2 next-steps menu OR the Phase 3.2A brief-checkpoint menu (for `briefs_only` stops). A run that stopped at the raw-input `n`-path or the decomposition `n`-path is a valid completion state and requires no terminal menu — the orchestrator must still emit the canonical stop message defined in `workflows/plan.md`.
+A `/cf-constructor-plan` run that compiled phase files is not complete until the final response ends with the Phase 4.2 next-steps menu OR the Phase 3.2A brief-checkpoint menu (for `briefs_only` stops). A run that stopped after emitting downstream phase-compilation prompts (`plan.execution_status = "prompts_emitted"`) is complete only when the final response ends with the emitted prompt set as the deliverable and no Phase 4.2 menu is shown. A run that stopped at the raw-input `n`-path or the decomposition `n`-path is a valid completion state and requires no terminal menu — the orchestrator must still emit the canonical stop message defined in `workflows/plan.md`.
 
 `Fix Prompt`, `Plan Prompt`, `Direct Review Prompt`, and `Plan Review Prompt` blocks are emitted only on the next turn when the user chooses the matching handoff option.

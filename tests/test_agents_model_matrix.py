@@ -218,9 +218,12 @@ class TestResolveModelId(unittest.TestCase):
             "gpt-5.4-mini",
         )
 
-    def test_cheap_planning_codebase_resolution(self):
+    def test_cheap_analyze_or_planning_codebase_resolution(self):
         from cypilot.commands.agents import _resolve_model_id
-        # Test that cheap planning on codebase target resolves to the bumped tier
+        # Both analyze+codebase and planning+codebase share the same override row in
+        # _MODEL_MATRIX: ("cf:tier:cheap", "analyze"/"planning", "codebase") → "sonnet".
+        # This test pins the planning branch; test_claude_cheap_codebase_analyze_bumps_to_sonnet
+        # covers the analyze branch separately.
         self.assertEqual(
             _resolve_model_id("claude", "anthropic", "cheap", "planning", "codebase"),
             "sonnet",

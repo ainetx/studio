@@ -26,7 +26,14 @@ Tool failure:
 
 STOP — do not continue with incomplete state.
 
-User abandonment: do not auto-proceed with assumptions; state is resumed by re-running the workflow command; no cleanup is required because no partial files are created before Phase 4.
+User abandonment: do not auto-proceed with assumptions; state is resumed by
+re-running the workflow command. Target artifact/code files are still untouched
+before Phase 4, but Generate Phase 1.5 disk mode may already have written
+author-plan cache files under `{cf-constructor-path}/.cache/generate-plans/`.
+If `AUTHOR_PLAN_CACHE_DIR` exists or a partial cache write was reported, surface
+that cache state on resume or abandonment handling instead of claiming that no
+pre-Phase-4 files exist. No automatic cleanup is required, but partial cache
+writes must be disclosed and either resumed from or removed explicitly.
 
 Validation failure loop (3+ times):
 

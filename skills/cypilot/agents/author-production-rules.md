@@ -2,6 +2,15 @@
 description: Invoke when loading the shared Content Production Rules for Cyber Constructor author workers — single source of truth for content-production constraints applied before any file is written.
 ---
 
+<!-- toc -->
+
+- [Content Production Rules](#content-production-rules)
+
+<!-- /toc -->
+
+
+This file is a shared content-production rules module loaded by author worker agents via `Open and follow {cf-constructor-path}/.core/skills/cypilot/agents/author-production-rules.md`. It is NOT a dispatchable agent (intentionally absent from agents.toml). Author worker agents (junior/middle/senior/lead, coder-casual/smart, prompt-engineer-casual/smart, and any future worker) MUST include this load directive in their dispatch flow.
+
 ## Content Production Rules
 
 The author MUST satisfy every rule below before returning. These rules are the

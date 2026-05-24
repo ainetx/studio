@@ -244,7 +244,7 @@ def _with_core_toml_lock(core_toml_path: Path) -> Generator[None, None, None]:
     try:
         import fcntl  # type: ignore[import]
         _use_fcntl = True
-    except ImportError:
+    except ImportError:  # pragma: no cover
         _use_fcntl = False
 
     if _use_fcntl:
@@ -259,13 +259,13 @@ def _with_core_toml_lock(core_toml_path: Path) -> Generator[None, None, None]:
             if fh is not None:
                 try:
                     fcntl.flock(fh, fcntl.LOCK_UN)
-                except OSError:
+                except OSError:  # pragma: no cover
                     pass
                 fh.close()
             # Intentionally leave the .lock sentinel on disk; advisory flock locking
             # is independent of the file's existence between runs and unlinking it
             # introduces a TOCTOU race with concurrent acquirers.
-    else:
+    else:  # pragma: no cover
         # Windows fallback: O_CREAT | O_EXCL sentinel with retry
         lock_path = core_toml_path.with_suffix(core_toml_path.suffix + ".lock")
         lock_path.parent.mkdir(parents=True, exist_ok=True)

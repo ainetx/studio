@@ -9,6 +9,16 @@ version: 1.0
 
 # Phase 2: Decompose
 
+
+<!-- toc -->
+
+- [2.1 Select Plan Lifecycle (before finalizing phases)](#21-select-plan-lifecycle-before-finalizing-phases)
+- [Intermediate Results Analysis](#intermediate-results-analysis)
+- [Review Phases](#review-phases)
+- [Execution Context Prediction](#execution-context-prediction)
+
+<!-- /toc -->
+
 Open and follow `{cf-constructor-path}/.core/requirements/plan-decomposition.md`.
 
 Compilation is split to minimize context: write the manifest, write briefs, then compile one phase at a time.
@@ -51,6 +61,7 @@ Decomposition ({strategy} strategy):
   Overflow phases: 0
   Budget: 2000 lines max per phase
   
+  Explicit confirmation is required before writing `plan.toml` and brief files to disk.
   Proceed with manifest + brief generation after any required raw-input materialization? [y/n]
 Reply with `y` or `n`.
 `y` → Suggested when the decomposition looks correct; write `plan.toml` and the compilation briefs.

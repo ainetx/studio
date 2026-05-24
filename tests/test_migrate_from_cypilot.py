@@ -1685,6 +1685,26 @@ def test_update_dry_run_on_legacy_project_reports_planned_migration(tmp_path, ca
     assert not (tmp_path / ".cf-constructor").exists()
 
 
+def test_update_dry_run_on_legacy_project_ask_uses_interactive_prompt(tmp_path, capsys, monkeypatch):
+    """--dry-run keeps ask-mode interactive on TTY legacy-only projects."""
+    from cypilot.cli import main
+
+    _make_legacy_project(tmp_path)
+    monkeypatch.setattr("sys.stdin", _TTYInput("n"))
+
+    rc = main(["--json", "update", "--project-root", str(tmp_path), "--dry-run"])
+
+    captured = capsys.readouterr()
+    out = json.loads(captured.out)
+    assert rc == 1
+    assert "Existing Cyber Pilot project detected" in captured.err
+    assert "Press N to abort update." in captured.err
+    assert out["status"] == "ABORTED"
+    assert out["actions"]["migration"] == "declined"
+    assert out["dry_run"] is True
+    assert not (tmp_path / ".cf-constructor").exists()
+
+
 def test_update_dry_run_unsupported_legacy_reports_planned_update_without_running_it(tmp_path, capsys, monkeypatch):
     from cypilot.cli import main
     import cypilot.commands.migrate_from_cypilot as migration

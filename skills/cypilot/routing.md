@@ -25,6 +25,6 @@ Workflow routing priority:
 Compound find+fix intent: when a request matches keywords from BOTH entry 5 (`fix`/`update`/`refactor`) and entry 6 (`find bugs`/`bug hunt`/`audit`/`review`), prefer entry 6 (`analyze`) — the analyze run produces findings, then offers a Remediation Handoff that routes into `generate` if the user accepts. Routing both to `generate` skips the find phase entirely.
 
 If routing is unclear, ask why the input is needed and request exactly one of
-`plan`, `generate`, or `analyze`.
+`plan`, `generate`, `analyze`, `workspace`, or `migrate`.
 
 Oversized raw inputs over `500` lines (line count of the user's pasted text or directly provided files) must surface the raw-input-overflow rule (`{cf-constructor-path}/.core/requirements/raw-input-overflow.md`) which offers `/cf-constructor-plan` before direct generate/analyze continues. This raw-input threshold is distinct from the workflow-level estimated-context gates (`analyze`: > 2000 lines, `generate`: > 2500 lines); do not collapse the three thresholds.

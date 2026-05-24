@@ -20,8 +20,6 @@ Requires: `workflows/shared/inline-fallback-probe.md` before any `cf-constructor
 
 ## Pre-Phase-Setup (MAX_ITER resolution)
 
-<!-- Finding I10: MAX_ITER prompt + parser canonicalised here (moved out of workflows/generate/phase-0.2-review-loop-cfg.md, which now scopes COLLECTOR_MAX_ITER only). -->
-
 **Constants**:
 - `INLINE_LOOP_WARNING_THRESHOLD = 2` — iteration count above which inline sequential review may exhaust context; used to gate long-loop context-exhaustion warnings in phase-5.2-semantic.
 
@@ -35,7 +33,7 @@ How many automatic review iterations should run before I check in with you?
 Each iteration: validate + review the written files → auto-fix mechanical
 issues → ask you to approve any non-mechanical findings → re-validate.
 
-Reply with a number (suggested: 5), `enter` for 5, or `0` to skip the loop.
+Reply with a number (suggested: 5 — balances fix coverage against context cost; use 2 or less in inline mode), `enter` for 5, or `0` to skip the loop.
 ```
 
 Parser: a bare number sets `MAX_ITER`. Default `5` on `enter`. `MAX_ITER=0`

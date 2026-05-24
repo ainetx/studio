@@ -26,7 +26,19 @@ directly from the orchestrator.
 
 Prerequisite: `AUTHOR_PLAN_OFFER_RESOLVED` MUST be set by
 `workflows/generate/phase-1.5-author-plan.md`. If unset, fail-stop and route
-back to `workflows/generate/phase-1.5-author-plan.md` § Offer.
+back to `workflows/generate/phase-1.5-author-plan.md` so its state contract and
+offer/dispatch modules can re-run.
+
+Only the continuation states from
+`workflows/generate/phase-1.5/state-contract.md` may enter Phase 4:
+`memory`, `disk`, `declined`, `auto_skipped_no_author_plan_flag`, and
+`auto_skipped_rules_disabled`.
+
+If `AUTHOR_PLAN_OFFER_RESOLVED` is a terminal cancellation state
+(`cancelled_by_stop_token`, `cancelled_planner_failure`,
+`cancelled_partial_write`), fail-stop immediately: do NOT dispatch a
+write-capable author, do NOT synthesize a single-author fallback payload, and
+leave target files untouched.
 
 ## Author Selection and Dispatch
 
@@ -108,7 +120,9 @@ If any planned task fails, stop the remaining groups, keep already-written
 files untouched, surface the failing task id and author, and route to
 `workflows/generate/error-handling.md`.
 
-If `AUTHOR_EXECUTION_PLAN` is null (`declined` or auto-skipped), build one
+If `AUTHOR_EXECUTION_PLAN` is null because `AUTHOR_PLAN_OFFER_RESOLVED` is one
+of the continuation no-plan states (`declined`,
+`auto_skipped_no_author_plan_flag`, `auto_skipped_rules_disabled`), build one
 Phase 4 Create Payload covering all target paths and execute § Author Selection
 and Dispatch once.
 

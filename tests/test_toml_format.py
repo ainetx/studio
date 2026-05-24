@@ -26,7 +26,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
 
-from cypilot.utils.toml_utils import _format_value, _with_core_toml_lock, dumps
+from cypilot.utils.toml_utils import (
+    _format_value,
+    _with_core_toml_lock,
+    dump,
+    dumps,
+    load,
+    loads,
+    parse_toml_from_markdown,
+    _deep_merge,
+    _validate_lists,
+)
 
 
 def _roundtrip(data: dict) -> dict:
@@ -314,6 +324,147 @@ class TestKeyOrdering(unittest.TestCase):
         result = _roundtrip(data)
         self.assertEqual(result["b_key"], 1)
         self.assertEqual(result["a_table"]["x"], 2)
+
+
+class TestLoadAndDumpFunctions(unittest.TestCase):
+    """load() and dump() cover file I/O paths (lines 47-48, 115-116)."""
+
+    def test_load_reads_toml_file(self):
+        """load() reads a TOML file from disk."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            p = Path(tmpdir) / "test.toml"
+            p.write_bytes(b'key = "hello"\n')
+            result = load(p)
+            self.assertEqual(result, {"key": "hello"})
+
+    def test_dump_writes_toml_file(self):
+        """dump() serializes and writes a TOML file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            p = Path(tmpdir) / "out.toml"
+            dump({"answer": 42}, p)
+            content = p.read_text(encoding="utf-8")
+            self.assertIn("answer = 42", content)
+
+    def test_dump_creates_parent_dirs(self):
+        """dump() creates missing parent directories."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            p = Path(tmpdir) / "sub" / "dir" / "out.toml"
+            dump({"x": 1}, p)
+            self.assertTrue(p.exists())
+
+
+class TestLoadsFunction(unittest.TestCase):
+    """loads() wraps tomllib.loads — covers line 42."""
+
+    def test_loads_returns_dict(self):
+        result = loads('key = "value"\n')
+        self.assertEqual(result, {"key": "value"})
+
+    def test_loads_integer(self):
+        result = loads("count = 42\n")
+        self.assertEqual(result["count"], 42)
+
+
+class TestParseTomlFromMarkdownInvalidFence(unittest.TestCase):
+    """parse_toml_from_markdown skips invalid TOML blocks — covers lines 71-72."""
+
+    def test_invalid_toml_block_skipped(self):
+        """An invalid TOML fence is silently skipped; valid ones are merged."""
+        md = "```toml\nBAD TOML @@@ = =\n```\n```toml\nkey = 1\n```\n"
+        result = parse_toml_from_markdown(md)
+        self.assertEqual(result.get("key"), 1)
+
+    def test_only_invalid_fence_returns_empty(self):
+        md = "```toml\n[[invalid[\n```\n"
+        result = parse_toml_from_markdown(md)
+        self.assertEqual(result, {})
+
+
+class TestDeepMergeNestedDict(unittest.TestCase):
+    """_deep_merge merges nested dicts recursively — covers line 82."""
+
+    def test_nested_dicts_merged(self):
+        base = {"a": {"x": 1, "y": 2}}
+        override = {"a": {"y": 99, "z": 3}}
+        _deep_merge(base, override)
+        self.assertEqual(base["a"]["x"], 1)
+        self.assertEqual(base["a"]["y"], 99)
+        self.assertEqual(base["a"]["z"], 3)
+
+    def test_nested_dict_override_scalar_replaces(self):
+        base = {"a": 1}
+        override = {"a": {"nested": True}}
+        _deep_merge(base, override)
+        self.assertEqual(base["a"], {"nested": True})
+
+
+class TestValidateListsMixed(unittest.TestCase):
+    """_validate_lists raises TypeError for mixed lists — covers line 128."""
+
+    def test_mixed_list_raises_type_error(self):
+        with self.assertRaises(TypeError) as ctx:
+            _validate_lists([{"key": "val"}, "scalar"])
+        self.assertIn("cannot mix", str(ctx.exception))
+
+    def test_nested_mixed_list_raises(self):
+        with self.assertRaises(TypeError):
+            _validate_lists({"items": [{"k": 1}, 42]})
+
+    def test_pure_dict_list_ok(self):
+        _validate_lists([{"a": 1}, {"b": 2}])  # must not raise
+
+    def test_pure_scalar_list_ok(self):
+        _validate_lists([1, 2, 3])  # must not raise
+
+
+class TestFormatValueNonFiniteFloat(unittest.TestCase):
+    """_format_value raises TypeError for non-finite floats — covers line 191."""
+
+    def test_nan_raises(self):
+        import math
+        with self.assertRaises(TypeError) as ctx:
+            _format_value(float("nan"))
+        self.assertIn("non-finite", str(ctx.exception))
+
+    def test_inf_raises(self):
+        with self.assertRaises(TypeError) as ctx:
+            _format_value(float("inf"))
+        self.assertIn("non-finite", str(ctx.exception))
+
+    def test_neg_inf_raises(self):
+        with self.assertRaises(TypeError) as ctx:
+            _format_value(float("-inf"))
+        self.assertIn("non-finite", str(ctx.exception))
+
+
+class TestFormatValueStringEscapeQuote(unittest.TestCase):
+    """_format_value escapes double-quote characters — covers line 202."""
+
+    def test_double_quote_in_string_roundtrips(self):
+        """A string with a literal double-quote must round-trip correctly."""
+        raw = 'say "hello"'
+        result = _roundtrip({"msg": raw})
+        self.assertEqual(result["msg"], raw)
+
+    def test_double_quote_escaped_in_output(self):
+        formatted = _format_value('he said "hi"')
+        self.assertIn('\\"', formatted)
+
+
+class TestFormatValueList(unittest.TestCase):
+    """_format_value handles plain (non-table) lists — covers lines 219-220."""
+
+    def test_scalar_list_roundtrip(self):
+        result = _roundtrip({"tags": ["a", "b", "c"]})
+        self.assertEqual(result["tags"], ["a", "b", "c"])
+
+    def test_integer_list_roundtrip(self):
+        result = _roundtrip({"nums": [1, 2, 3]})
+        self.assertEqual(result["nums"], [1, 2, 3])
+
+    def test_empty_list_roundtrip(self):
+        result = _roundtrip({"empty": []})
+        self.assertEqual(result["empty"], [])
 
 
 if __name__ == "__main__":

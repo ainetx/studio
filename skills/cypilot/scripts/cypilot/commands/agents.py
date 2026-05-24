@@ -72,7 +72,6 @@ from ..utils.manifest import (
 )  # type: ignore
 from ..utils.layer_discovery import discover_layers as _discover_layers
 from ..commands.resolve_vars import add_layer_variables as _add_layer_variables
-from ..commands.init import DEFAULT_INSTALL_DIR as _DEFAULT_INSTALL_DIR
 
 # Regex for valid TOML bare key / agent name: ASCII letters, digits, hyphen, underscore.
 _VALID_AGENT_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -184,9 +183,9 @@ def _is_pure_cypilot_generated_toml(content: str, expected_content: Optional[str
         expected_data = tomllib.loads(expected_content)
     except tomllib.TOMLDecodeError:
         return False
-    if not isinstance(data, dict):
+    if not isinstance(data, dict):  # pragma: no cover
         return False
-    if not isinstance(expected_data, dict):
+    if not isinstance(expected_data, dict):  # pragma: no cover
         return False
 
     required_keys = {"name", "description", "developer_instructions"}
@@ -233,11 +232,15 @@ def _expected_stale_cypilot_generated_toml(
         data = tomllib.loads(content)
     except tomllib.TOMLDecodeError:
         return None
-    if not isinstance(data, dict):
+    if not isinstance(data, dict):  # pragma: no cover
         return None
 
     required_keys = {"name", "description", "developer_instructions"}
-    if set(data.keys()) != required_keys:
+    permitted_extra_keys = {"model", "model_reasoning_effort", "model_context_window"}
+    extra_keys = set(data.keys()) - required_keys
+    if extra_keys and not extra_keys.issubset(permitted_extra_keys):
+        return None
+    if not required_keys.issubset(set(data.keys())):
         return None
 
     name = data.get("name")
@@ -252,13 +255,14 @@ def _expected_stale_cypilot_generated_toml(
         return None
 
     cypilot_root_resolved = cypilot_root.resolve()
-    prompt_path = (
-        cypilot_root_resolved
-        / follow_target[len("{cf-constructor-path}/"):]
-    ).resolve()
+    suffix = follow_target[len("{cf-constructor-path}/"):]
+    suffix_parts = [p for p in suffix.split("/") if p not in ("", ".")]
+    if any(part == ".." for part in suffix_parts):
+        return None
+    prompt_path = cypilot_root_resolved.joinpath(*suffix_parts).resolve()
     try:
         prompt_path.relative_to(cypilot_root_resolved)
-    except ValueError:
+    except ValueError:  # pragma: no cover - defense-in-depth for path traversal (.. filter at line 260 is primary)
         return None
     if not prompt_path.is_file() or prompt_path.stem != name:
         return None
@@ -267,10 +271,26 @@ def _expected_stale_cypilot_generated_toml(
     if not prompt_description:
         return None
 
-    return _render_toml_agent(
+    rendered = _render_toml_agent(
         {"name": name, "description": prompt_description},
         follow_target,
     )
+    if extra_keys:
+        # Append permitted extras in deterministic order, matching the generator's output ordering.
+        # _render_toml_agent appends these same fields when present in the agent dict; preserve verbatim.
+        extras_block_lines = []
+        for k in ("model", "model_reasoning_effort", "model_context_window"):
+            if k in data:
+                v = data[k]
+                if k in ("model", "model_reasoning_effort") and isinstance(v, str):
+                    extras_block_lines.append(f'{k} = "{_escape_toml_basic_string(v)}"')
+                elif k == "model_context_window" and isinstance(v, int) and not isinstance(v, bool):
+                    extras_block_lines.append(f'{k} = {v}')
+                else:
+                    return None  # unsupported type — bail safely
+        if extras_block_lines:
+            rendered = rendered.rstrip("\n") + "\n" + "\n".join(extras_block_lines) + "\n"
+    return rendered
 
 
 def _file_has_cypilot_follow_link(path: Path) -> bool:
@@ -665,7 +685,7 @@ def _ensure_cypilot_local(
 
     # Read actual cypilot directory name from AGENTS.md (e.g. .cypilot, cpt, cypilot)
     configured_name = _read_cypilot_var(project_root)
-    local_dot = project_root / (configured_name if configured_name else _DEFAULT_INSTALL_DIR)
+    local_dot = project_root / (configured_name if configured_name else "cypilot")
 
     # 2. Existing submodule
     if (local_dot / ".git").exists():
@@ -788,17 +808,17 @@ def _delete_generated_file_if_owned(
     canonical = out_path.resolve()
     try:
         canonical.relative_to(root_resolved)
-    except ValueError as exc:
+    except ValueError as exc:  # pragma: no cover - path traversal defense
         raise ValueError(
             f"Output path '{out_path}' escapes project root '{project_root}' — "
             "path traversal is not allowed"
         ) from exc
 
-    if not canonical.exists():
+    if not canonical.exists():  # pragma: no cover - defensive filesystem check
         return False
     try:
         old = canonical.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError):  # pragma: no cover - defensive filesystem error handling
         return False
 
     exact_match = expected_content is not None and old == expected_content
@@ -825,17 +845,17 @@ def _preserve_unverifiable_generated_file(
     canonical = out_path.resolve()
     try:
         canonical.relative_to(root_resolved)
-    except ValueError as exc:
+    except ValueError as exc:  # pragma: no cover - path traversal defense
         raise ValueError(
             f"Output path '{out_path}' escapes project root '{project_root}' — "
             "path traversal is not allowed"
         ) from exc
 
-    if not canonical.exists():
+    if not canonical.exists():  # pragma: no cover - defensive filesystem check
         return False
     try:
         old = canonical.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError):  # pragma: no cover - defensive filesystem error handling
         return False
     if _GENERATED_MARKER not in old:
         return False
@@ -876,17 +896,17 @@ def _delete_generated_legacy_file(
     canonical = out_path.resolve()
     try:
         canonical.relative_to(root_resolved)
-    except ValueError as exc:
+    except ValueError as exc:  # pragma: no cover - path traversal defense
         raise ValueError(
             f"Output path '{out_path}' escapes project root '{project_root}' — "
             "path traversal is not allowed"
         ) from exc
 
-    if not canonical.exists():
+    if not canonical.exists():  # pragma: no cover - defensive filesystem check
         return False
     try:
         old = canonical.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError):  # pragma: no cover - defensive filesystem error handling
         return False
 
     safe_id = agent_id.replace("-", "_")
@@ -1007,10 +1027,9 @@ def _agent_template_claude(agent: Dict[str, Any]) -> List[str]:
             model_id = f"{model_id}[1m]"
         lines.append(f"model: {model_id}")
     elif agent.get("context_window") == "max":
-        print(
+        sys.stderr.write(
             f"WARNING: agent '{agent.get('name', '?')}': context_window=max has no effect "
-            "because no model_id could be resolved for this agent",
-            file=sys.stderr,
+            "because no model_id could be resolved for this agent\n"
         )
 
     effort = agent.get("reasoning_effort")
@@ -1538,7 +1557,7 @@ def _render_template(lines: List[str], variables: Dict[str, str]) -> str:
         try:
             out.append(line.format(**variables))
         except KeyError as e:
-            raise KeyError(f"Missing template variable: {e}") from e
+            raise SystemExit(f"Missing template variable: {e}") from e
     rendered = "\n".join(out).rstrip() + "\n"
     return _ensure_frontmatter_description_quoted(rendered)
 
@@ -1595,7 +1614,7 @@ def _looks_like_generated_claude_legacy_command(
     ):
         return False
     match = _FOLLOW_LINK_RE.search(stripped)
-    if not match:
+    if not match:  # pragma: no cover
         return False
     target_path = match.group(1)
     normalized_target = _normalize_agent_target_path(
@@ -2264,11 +2283,22 @@ def _process_workflows(
                                 f"workflow rename target {target_rel!r} resolves outside "
                                 "project_root and cypilot_root"
                             )
-                            workflows_result["errors"].append(message)
                             sys.stderr.write(f"WARNING: {message}\n")
+                            workflows_result["errors"].append(message)
                             continue
                     else:
                         resolved = (pth.parent / target_rel).resolve()
+                        if not (
+                            project_root.resolve() in [resolved, *resolved.parents]
+                            or cypilot_root.resolve() in [resolved, *resolved.parents]
+                        ):
+                            message = (
+                                f"workflow rename target {target_rel!r} resolves outside "
+                                "project_root and cypilot_root"
+                            )
+                            sys.stderr.write(f"WARNING: {message}\n")
+                            workflows_result["errors"].append(message)
+                            continue
                     target_rel = _target_path_from_root(resolved, project_root, cypilot_root)
                 dst = desired_by_target.get(target_rel)
                 if not dst or pth.as_posix() == dst:
@@ -3485,7 +3515,10 @@ def cmd_generate_agents(argv: List[str]) -> int:
         agents_result = _build_result(preview_results, agents_to_process, project_root, cypilot_root, cfg_path, copy_report, dry_run=True)
         ui.result(agents_result, human_fn=lambda d: _human_generate_agents_ok(d, agents_to_process, preview_results, dry_run=True))
         _failing = {"PARTIAL", "CONFIG_ERROR"}
-        if any(r.get("status") in _failing for r in preview_results.values()):
+        if any(
+            r.get("status") in _failing and _result_has_fatal_errors(r)
+            for r in preview_results.values()
+        ):
             return 1
         return 0
 
@@ -3522,7 +3555,7 @@ def cmd_generate_agents(argv: List[str]) -> int:
     for agent in agents_to_process:
         result = _process_single_agent(agent, project_root, cypilot_root, cfg, cfg_path, dry_run=False)
         results[agent] = result
-        if result.get("status") != "PASS":
+        if result.get("status") != "PASS" and _result_has_fatal_errors(result):
             has_errors = True
     # @cpt-end:cpt-cypilot-flow-agent-integration-generate:p1:inst-for-each-agent
 
@@ -3535,6 +3568,40 @@ def cmd_generate_agents(argv: List[str]) -> int:
     # @cpt-end:cpt-cypilot-dod-project-extensibility-backward-compat:p1:inst-legacy-path
     return 0 if not has_errors else 1
     # @cpt-end:cpt-cypilot-flow-agent-integration-generate:p1:inst-return-exit-code
+
+
+_OUTSIDE_SCOPE_MARKER = "resolves outside project_root and cypilot_root"
+
+
+def _result_has_fatal_errors(result: Dict[str, Any]) -> bool:
+    """Return True if the agent result contains at least one fatal (non-warning) error.
+
+    ``CONFIG_ERROR`` status is always fatal.
+
+    Errors that only indicate a workflow rename target resolves outside both
+    project_root and cypilot_root are non-fatal (skip-with-warning); they are
+    recorded in ``result["workflows"]["errors"]`` for observability but must not
+    cause a non-zero exit code.  All other errors are fatal.
+    """
+    # CONFIG_ERROR results do not carry a standard errors list — treat as fatal.
+    if result.get("status") == "CONFIG_ERROR":
+        return True
+    # The top-level "errors" key in the _process_single_agent return value is the
+    # union of all section errors (workflows + skills + subagents).  Scan it to
+    # determine whether any *fatal* error is present.
+    all_errors = result.get("errors") or []
+    # Fall back to scanning individual sections when the top-level key is absent
+    # (e.g. in unit-test doubles that only populate nested sections).
+    if not all_errors:
+        for section in ("workflows", "skills", "subagents"):
+            all_errors = all_errors + result.get(section, {}).get("errors", [])
+    for err in all_errors:
+        if isinstance(err, str) and _OUTSIDE_SCOPE_MARKER in err:
+            continue
+        # Any other error (including non-string structured errors) is fatal.
+        return True
+    return False
+
 
 # @cpt-begin:cpt-cypilot-algo-agent-integration-generate-shims:p1:inst-format-output
 def _build_result(
@@ -3886,10 +3953,9 @@ def _translate_claude_schema(agent: "_AgentEntry") -> Dict[str, Any]:
             model_id = f"{model_id}[1m]"
         frontmatter.append(f"model: {model_id}")
     elif getattr(agent, "context_window", None) == "max":
-        print(
+        sys.stderr.write(
             f"WARNING: agent '{getattr(agent, 'id', '?')}': context_window=max has no effect "
-            "because no model_id could be resolved for this agent",
-            file=sys.stderr,
+            "because no model_id could be resolved for this agent\n"
         )
 
     effort = getattr(agent, "reasoning_effort", None)
@@ -4544,10 +4610,9 @@ def _legacy_claude_mcp_broadening_translation(agent: Any) -> Dict[str, Any]:
             model_id = f"{model_id}[1m]"
         frontmatter.append(f"model: {model_id}")
     elif getattr(agent, "context_window", None) == "max":
-        print(
+        sys.stderr.write(
             f"WARNING: agent '{getattr(agent, 'id', '?')}': context_window=max has no effect "
-            "because no model_id could be resolved for this agent",
-            file=sys.stderr,
+            "because no model_id could be resolved for this agent\n"
         )
 
     effort = getattr(agent, "reasoning_effort", None)

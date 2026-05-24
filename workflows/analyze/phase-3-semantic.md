@@ -32,6 +32,10 @@ Prerequisite: `REVIEWER_PLAN_RESOLVED` MUST be set by
 `workflows/analyze/phase-2.5-reviewer-plan.md`. If unset, fail-stop and route
 back to that file's Storage Choice section.
 
+If `REVIEWER_PLAN_RESOLVED=cancelled_partial_cache`, do NOT enter Phase 3.
+Stop the current analyze sub-flow and leave the saved-or-partial reviewer-plan
+cache state exactly as disclosed by Phase 2.5.
+
 ### Planned Multi-Reviewer Dispatch
 
 If `REVIEWER_EXECUTION_PLAN` is non-null (Phase 2.5 produced a plan), execute
@@ -121,15 +125,22 @@ dispatch multiple sub-agents and merge findings.
 Dispatch inputs:
 - artifact reviewer: `target_paths={PATHS}`, kit rules, checklist, template,
   `examples/example.md`, cross refs, `rules_mode`, `traceability_mode`.
-- code reviewer: `design_artifact_path`, `code_paths = diff_scope.review_targets
-  when CHANGE_REVIEW=true, otherwise {PATHS}`, `diff_scope` from Phase 0,
-  cross refs, `rules_mode`, `traceability_mode`, `kit_rules_path`.
+- code reviewer: `design_artifact_path`, `code_paths = code_targets`, where
+  `code_targets` is the Phase 0 typed code target set derived from
+  `diff_scope.changed_files` for change review, otherwise `{PATHS}` filtered to
+  code files; when dispatching the code reviewer for change-review, set
+  `code_paths = diff_scope.review_targets` filtered to code-only targets;
+  `diff_scope` from Phase 0, cross refs, `rules_mode`,
+  `traceability_mode`, `kit_rules_path`.
 - code bug finder: `design_artifact_path`, `code_paths`, `diff_scope`, cross
   refs, `rules_mode`, `kit_rules_path`.
 - prompt reviewer: `target_paths = prompt_targets`, where `prompt_targets`
-  filters `diff_scope.review_targets` (when `CHANGE_REVIEW=true`) or `{PATHS}`
-  to instruction/workflow/prompt files (`workflows/**`, `skills/cypilot/**/*.md`, `requirements/**/*.md`,
-  `AGENTS.md`, `SKILL.md`, agent prompt files, and prompt config files);
+  filters `diff_scope.review_targets` (when `CHANGE_REVIEW=true`) or
+  `{PATHS}` to instruction/workflow/prompt files; for change-review prompt
+  dispatch, the orchestrator filters `diff_scope.review_targets` to
+  prompt-typed targets and uses them as `paths`; prompt-typed targets are paths
+  matching `workflows/**`, `skills/cypilot/**/*.md`, `requirements/**/*.md`,
+  `AGENTS.md`, `SKILL.md`, agent prompt files, and prompt config files;
   `kit_rules_path`, `rules_mode`, cross refs.
 - prompt bug finder: same `prompt_targets`, `kit_rules_path`, `rules_mode`,
   cross refs.

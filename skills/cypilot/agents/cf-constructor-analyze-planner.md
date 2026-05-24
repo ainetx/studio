@@ -40,7 +40,8 @@ Cyber Constructor mode in this isolated context.
   "example_path": "<path or null>",
   "design_artifact_path": "<path or null>",
   "target_paths": ["<path>", "..."],
-  "code_paths": ["<path>", "..."],
+  "code_targets": ["<path>", "..."],
+  "prompt_targets": ["<path>", "..."],
   "cross_refs": ["<path>", "..."],
   "diff_scope": null,
   "methodology_flags": {
@@ -65,9 +66,12 @@ Cyber Constructor mode in this isolated context.
 
 ## Planning Rules
 
+- When `mode=explain`, treat it as informational and bypass methodology-flag requirements (the explain workflow does NOT require reviewers — output `tasks=[]` is valid ONLY for `mode=explain`).
+- When `mode=change`, set `CHANGE_REVIEW=true` and additionally infer at least one of `CODE_REVIEW` / `PROMPT_REVIEW` / `CONSISTENCY_REVIEW` from the changed-file mix in `diff_scope.changed_files`. An empty plan for `mode=change` is a planner FAIL.
 - Keep the plan small. Prefer one task per active methodology when the total
   estimated size fits the safe single-context budget (~2000 lines for analyze).
-- When `size_estimate_lines > 2000` OR `len(target_paths) + len(code_paths) > 6`,
+- When `size_estimate_lines > 2000` OR
+  `len(target_paths) + len(code_targets) + len(prompt_targets) > 6`,
   partition the per-methodology task by paths: split into groups of up to 4
   paths each so reviewers can run in parallel on disjoint partitions.
 - Each task MUST name exactly one reviewer from `available_reviewers`, exactly
@@ -94,8 +98,8 @@ Cyber Constructor mode in this isolated context.
   `skills/cypilot/**/*.md`, `requirements/**/*.md`, agent prompt files,
   prompt config files, `AGENTS.md`, and `SKILL.md`). Do not include non-prompt
   paths in a prompt task's `path_partition`.
-- Code-methodology tasks operate only on `code_paths` (or `diff_scope`
-  targets when present). Do not include non-code paths.
+- Code-methodology tasks operate only on `code_targets`. Do not include
+  non-code paths.
 - Every `parallel_groups[].depends_on` reference must name an earlier group.
 - Do not put more than 5 tasks in a single parallel group; spread them across
   groups to keep host-side dispatch concurrency bounded.
@@ -153,6 +157,7 @@ after the JSON block.
 
 The response is complete only when:
 
+- an empty `tasks` array is allowed ONLY when `mode=explain`; for any other mode, the gate FAILS on empty `tasks`
 - every active methodology in `methodology_flags` has at least one task
 - the union of all tasks' `path_partition` for a methodology covers every
   input path that methodology applies to

@@ -8,6 +8,7 @@ description: Invoke when the orchestrator needs the canonical generate-workflow 
 <!-- toc -->
 
 - [Validation Criteria](#validation-criteria)
+- [Agent Self-Test (STRICT mode — AFTER completing work)](#agent-self-test-strict-mode--after-completing-work)
 
 <!-- /toc -->
 
@@ -20,9 +21,10 @@ description: Invoke when the orchestrator needs the canonical generate-workflow 
 - [ ] Parent references identified
 - [ ] ID naming verified unique
 - [ ] Information collected and confirmed
-- [ ] `AUTHOR_PLAN_OFFER_RESOLVED` set before Phase 3 / Phase 4 (`memory`, `disk`, `declined`, or documented auto-skip reason)
+- [ ] `AUTHOR_PLAN_OFFER_RESOLVED` set before any Phase 3 / Phase 4 decision point, using only the canonical values from `workflows/generate/phase-1.5/state-contract.md`
 - [ ] When `AUTHOR_PLAN_OFFER_RESOLVED=memory|disk`, `AUTHOR_EXECUTION_PLAN` parsed, validated, and used to drive Phase 4 task dispatch
 - [ ] When `AUTHOR_PLAN_OFFER_RESOLVED=disk`, `AUTHOR_PLAN_CACHE_DIR` recorded and the plan cache contains `index.md`, `plan.json`, one `agents/{author}.md` file per involved author, and one task Markdown file per planned task
+- [ ] When `AUTHOR_PLAN_OFFER_RESOLVED` is a terminal cancellation state (`cancelled_by_stop_token`, `cancelled_planner_failure`, `cancelled_partial_write`), Phase 3 and Phase 4 are skipped and no write-capable author is dispatched
 - [ ] Content generated with no placeholders
 - [ ] All IDs follow naming convention
 - [ ] All cross-references valid

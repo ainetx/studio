@@ -16,7 +16,13 @@ version: 1.0
 
 Prerequisite: `AUTHOR_PLAN_OFFER_RESOLVED` MUST be set by
 `workflows/generate/phase-1.5-author-plan.md`. If unset, fail-stop and route
-back to `workflows/generate/phase-1.5-author-plan.md` § Offer.
+back to `workflows/generate/phase-1.5-author-plan.md` so its state contract and
+offer/dispatch modules can re-run.
+
+If `AUTHOR_PLAN_OFFER_RESOLVED` is a terminal cancellation state
+(`cancelled_by_stop_token`, `cancelled_planner_failure`,
+`cancelled_partial_write`), do NOT emit the Summary block. Stop the current
+generate sub-flow and leave target files untouched.
 
 ```markdown
 ## Summary
@@ -37,4 +43,4 @@ Reply with `yes`, `no`, or `modify`.
 `modify` → Revisit the inputs or proposal before any files are written.
 ```
 
-Responses: `yes` = create files and validate; `no` = cancel; `modify` = revisit a question and iterate (max 3 iterations, then require explicit `continue iterating` or restart workflow).
+Responses: `yes` = create files and validate; `no` = cancel; `modify` = revisit a question and iterate (max 3 iterations, then require explicit `continue iterating` or stop the generate workflow (reply with a stop token — open and follow {cf-constructor-path}/.core/workflows/shared/stop-token-policy.md)).

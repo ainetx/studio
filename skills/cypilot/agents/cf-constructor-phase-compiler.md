@@ -5,6 +5,7 @@ description: Invoke when compiling exactly one generated plan phase from its com
 <!-- toc -->
 
 - [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
+- [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
 
@@ -58,3 +59,12 @@ Return a concise summary to the main conversation, including:
 - output phase filename
 - line count / budget status
 - any validation issue that prevented successful compilation
+
+## Response Completion Gate
+
+The response is complete only when:
+- exactly one `phase-XX-{slug}.md` file has been written to `output_path` (verified by a separate Read tool call after writing);
+- the compiled phase passes the validation rule from § Compilation Rules (no unresolved variables, budget compliant, kit rules covered);
+- if compilation failed, the exact blocker has been reported AND no partial output file remains under `output_path`;
+- a concise summary including phase number, output filename, line count, and budget status has been returned to the orchestrator;
+- `git_commit_mode` from the dispatch payload has been honored (no git tool invocations beyond what the matching `git_constraint` permits).
