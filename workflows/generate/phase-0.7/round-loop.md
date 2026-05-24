@@ -3,7 +3,7 @@ description: "Invoke when the brainstorm round loop runs — manages question di
 name: phase-0.7-round-loop
 purpose: Brainstorm round loop — parallel_dispatch of experts or single-agent panel dispatch, INLINE_FALLBACK degradation, render contract, user reply parsing, and retry flow
 loaded_by: workflows/generate/phase-0.7/index.md
-version: 1.1
+version: 1.3
 ---
 
 ### Round loop
@@ -16,6 +16,32 @@ Precondition: INLINE_FALLBACK must be set before the first round (already probed
 - **Single-agent (default):** `PANEL_MODE_TOPIC` and `PANEL_MODE_CHALLENGE` both default to `"single-agent"`. When set to `"single-agent"`, the orchestrator dispatches the `cf-constructor-brainstorm-panel` agent once per round (not per expert). That agent runs the full round logic with one expert as primary; subsequent experts provide optional critique via the `protocol` field. This is the default because it yields one cohesive deliberation per round, works identically on all hosts, and makes INLINE_FALLBACK a no-op.
 - **Fan-out:** When `PANEL_MODE_TOPIC` or `PANEL_MODE_CHALLENGE` is set to `"fan-out"`, the orchestrator dispatches all relevant panel members in parallel using the `cf-constructor-brainstorm-expert` contract. Each expert independently produces questions/contributions; the orchestrator collects all responses before aggregation. Fan-out is opt-in and requires a host with native sub-agent parallelism (otherwise it degrades to sequential via INLINE_FALLBACK).
 
+### Anti-pattern: SILENT_MODE_DOWNGRADE
+
+When `panel_mode=="single-agent"` AND `len(state.panel) > 1`, the orchestrator MUST NOT dispatch one `cf-constructor-brainstorm-expert` per panel member in parallel (or sequentially) in lieu of a single `cf-constructor-brainstorm-panel` dispatch. Doing so is a `SILENT_MODE_DOWNGRADE` failure. The recovery is NOT the agent-availability menu — the agent is registered, the orchestrator simply attempted the wrong agent for the resolved mode. Instead: STOP, reset the Phase-Skip Gate to `armed`, surface `"silent mode downgrade prevented — single-agent mode requires cf-constructor-brainstorm-panel"` (or the symmetric fan-out string when the downgrade direction is reversed), then emit the dedicated downgrade-recovery menu defined below.
+
+The same prohibition applies in reverse for `panel_mode=="fan-out"`: do NOT dispatch one `cf-constructor-brainstorm-panel` when the user requested fan-out.
+
+### SILENT_MODE_DOWNGRADE recovery menu
+
+```text
+A SILENT_MODE_DOWNGRADE was caught: the orchestrator attempted to dispatch the wrong agent for the resolved `panel_mode`.
+
+| Option | Action |
+|---|---|
+| 1 | Retry this round with the correct agent for the resolved `panel_mode` (no mode change) |
+| 2 | Abort the brainstorm session (route to `wrap-handoff.md` with `reason="silent-mode-downgrade"`) |
+
+Reply with `1` or `2`.
+```
+
+Reply parsing:
+- `1` → re-resolve `panel_mode` from the precedence chain, dispatch the correct agent for that mode, continue the round normally.
+- `2` → route to `wrap-handoff.md` with `reason="silent-mode-downgrade"`.
+- anything else → re-emit the menu prefixed with the clarifier "Please reply with 1 or 2."
+
+This recovery menu is independent of `INLINE_FALLBACK` and does NOT touch the § Agent availability check menu.
+
 **Inline-fallback note:** When `INLINE_FALLBACK=true`, parallel_dispatch degrades to sequential; experts-are-independent guarantee is best-effort in that mode (per `skills/cypilot/sub-agent-dispatch.md` Mode B). In single-agent mode, INLINE_FALLBACK is a no-op: single-agent orchestration is inherently sequential.
 
 The loop drives two kinds of rounds, chosen by the user after every round finishes:
@@ -26,6 +52,7 @@ The loop drives two kinds of rounds, chosen by the user after every round finish
 ```text
 pending_round_kind = "topic"        # first iteration is always a topic-round
 while state.topic_current is not None:
+  INLINE_FALLBACK_THIS_ROUND = false  # per-round scope; see sub-agent-dispatch.md § Registered native sub-agent set & INLINE_FALLBACK_THIS_ROUND
   # Read orchestration mode flags independently for each round kind.
   # Precedence: state.run_config (set from the user's offer reply, e.g.
   # `yes mode=fan-out`) → env var → workflow default "single-agent".
@@ -48,6 +75,7 @@ while state.topic_current is not None:
   # Select protocol (used only when panel_mode="single-agent")
   protocol = env("BRAINSTORM_PANEL_PROTOCOL", "independent-then-critique")
   
+  # MANDATORY: emit pre-dispatch checkpoint line (see § Pre-dispatch checkpoint)
   # Dispatch phase — conditional on panel_mode
   challenged_decisions = None
   if pending_round_kind == "topic":
@@ -127,13 +155,11 @@ while state.topic_current is not None:
           # Flatten envelope into contributions[]
           contributions = flatten_envelope(envelope)
       else:
-        # New single-agent panel dispatch
-        envelope = cf-constructor-brainstorm-panel(
-            panel = state.panel, topic = state.topic_current, state,
-            mode = "challenge", challenged_decisions = challenged_decisions,
-            protocol = protocol)
-        # Flatten envelope into contributions[]
-        contributions = flatten_envelope(envelope)
+        # UNREACHABLE: precondition at line 92-94 guarantees state.rounds is
+        # non-empty on the challenge branch; the if-branch above is always
+        # taken. Kept as a comment to document the structural symmetry with
+        # the topic-round branch; do not add a dispatch here without first
+        # relaxing the precondition.
   
   # ---- Invariant validation (applies to both orchestration modes) ----
   # Validate contributions structure and detect invariant violations.
@@ -415,6 +441,49 @@ while state.topic_current is not None:
            state.topic_history.append(state.topic_current.id)
            state.topic_current = chosen-or-custom topic
 ```
+
+### Pre-dispatch checkpoint (MANDATORY)
+
+Before any per-round dispatch, the orchestrator MUST emit exactly one chat line of the form:
+
+```
+- [BRAINSTORM-DISPATCH]: round={N} kind={topic|challenge} panel_mode={resolved} mode_source={offer-reply|env|default} agent={cf-constructor-brainstorm-panel|cf-constructor-brainstorm-expert} panel_size={len(state.panel)}
+```
+
+Omitting this checkpoint is a `MISSING_DISPATCH_CHECKPOINT` failure: STOP, re-emit the checkpoint line, then continue.
+
+The checkpoint MUST be emitted AFTER the agent availability check resolves the agent identifier AND BEFORE the actual sub-agent dispatch tool call. If the availability check routes to its 3-option menu, NO checkpoint is emitted on that path — the checkpoint is only valid when a real dispatch will follow.
+
+### Agent availability check (pre-dispatch)
+
+Membership semantics and the `INLINE_FALLBACK_THIS_ROUND` lifecycle are defined in `skills/cypilot/sub-agent-dispatch.md § Registered native sub-agent set & INLINE_FALLBACK_THIS_ROUND`.
+
+Before any sub-agent dispatch, the orchestrator MUST verify the resolved `agent` identifier is present in the host's registered native sub-agent set.
+
+If the agent is unavailable AND `INLINE_FALLBACK=false`, the orchestrator MUST NOT silently switch modes. Emit the following menu and end the assistant turn:
+
+```text
+The resolved brainstorm agent `{agent}` is not registered as a native sub-agent in this host.
+
+| Option | Action |
+|---|---|
+| 1 | Run this round in inline-panel mode (orchestrator inlines the contract; reduced isolation) |
+| 2 | Switch panel_mode to `{other_mode}` for this session (dispatches `{other_agent}` instead) |
+| 3 | Abort the brainstorm session |
+
+Reply with 1, 2, or 3.
+```
+
+Reply parsing:
+- `1` → set `INLINE_FALLBACK_THIS_ROUND=true` and inline the matching agent contract for this round only.
+- `2` → flip ONLY the mode key corresponding to `pending_round_kind`:
+        on topic-rounds, write `state.run_config.PANEL_MODE_TOPIC = other_value(current_mode)`;
+        on challenge-rounds, write `state.run_config.PANEL_MODE_CHALLENGE = other_value(current_mode)`.
+        `other_value(current_mode)` is `"fan-out"` when `current_mode == "single-agent"`, else `"single-agent"`. The other mode key (the one NOT matching `pending_round_kind`) is left unchanged.
+        After the write, re-resolve `panel_mode` for the current round (the precedence chain at the top of the loop) and continue with the availability check for the newly resolved agent.
+- `3` → route to `wrap-handoff.md` with `reason="agent-unavailable"`.
+
+If `INLINE_FALLBACK=true` already, the inline-panel option is the recommended default — surface that as the suggested choice in the menu.
 
 ### Envelope flattening (single-agent mode)
 

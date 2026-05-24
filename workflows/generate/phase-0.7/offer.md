@@ -3,7 +3,7 @@ description: "Invoke when Phase 0.7 starts and the brainstorm offer must be pres
 name: phase-0.7-offer
 purpose: Phase 0.7 preamble (section intro + core invariants) and the brainstorm offer block with INLINE_FALLBACK warning prepend rule
 loaded_by: workflows/generate/phase-0.7/index.md
-version: 1.0
+version: 1.1
 ---
 
 <!-- toc -->
@@ -117,4 +117,4 @@ Recognized modifiers:
 
 Unknown modifiers MUST cause rejection with a one-line error naming the unknown token and re-emitting the offer. Duplicate `mode=` modifiers in one reply MUST cause rejection. To set `PANEL_MODE_TOPIC` and `PANEL_MODE_CHALLENGE` to different values, use the env-var override mechanism (`workflows/generate/phase-0-dependencies.md` § Panel Mode Flags) instead of the offer reply.
 
-When no `mode=` modifier is supplied, the round loop falls back to env vars (`PANEL_MODE_TOPIC` / `PANEL_MODE_CHALLENGE`), then to the workflow default `"single-agent"`. Open, load, and follow `workflows/generate/phase-0.7/round-loop.md` § Round loop for the full precedence chain.
+The full precedence chain is, from highest to lowest: (1) `state.run_config.PANEL_MODE_TOPIC` / `PANEL_MODE_CHALLENGE` — set by a `mode=` modifier in the user's offer reply earlier in this session; (2) env vars `PANEL_MODE_TOPIC` / `PANEL_MODE_CHALLENGE`; (3) workflow default `"single-agent"`. When no `mode=` modifier is supplied AND no prior reply has populated `state.run_config`, the round loop falls back to tiers (2) then (3). Open, load, and follow `workflows/generate/phase-0.7/round-loop.md` § Round loop for the implementation.

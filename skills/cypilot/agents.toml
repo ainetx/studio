@@ -394,6 +394,24 @@ target = "any"
 reasoning_effort = "medium"
 context_window = "medium"
 
+[agents.cf-constructor-brainstorm-panel]
+description = """\
+Invoke when running the single-agent panel-mode brainstorm round — \
+dispatched once per round instead of per-expert fan-out. Owns serialized \
+persona iteration (§4), per-iteration mirror writes (§6), anti-collapse \
+guards G3-G5 (§8), envelope-emit contract with 12 parse-time invariants \
+(§9-§10), protocol branching (independent-then-critique, single-pass), \
+and deterministic envelope rendering. Returns the `envelope` object the \
+orchestrator flattens into `contributions[]`."""
+prompt_file = "agents/cf-constructor-brainstorm-panel.md"
+mode = "readonly"
+isolation = true
+model = "cf:tier:balanced"
+role = "planning"
+target = "any"
+reasoning_effort = "medium"
+context_window = "high"
+
 [agents.cf-constructor-generate-collector]
 description = """\
 Invoke when parsing a template into per-section questions and proposing \
