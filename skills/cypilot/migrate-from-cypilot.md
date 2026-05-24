@@ -189,6 +189,9 @@ Dispatch contract:
   - `plan`: full Planner output
   - `selection`: which categories/items the user approved (`A` / `AB` / `ABC` / explicit list)
   - `project_root`, `cf_constructor_path`
+  - `git_commit_mode`: `GIT_COMMIT_MODE` (MUST be included; set from the session-scoped flag)
+  - `contributing_guide`: `CONTRIBUTING_GUIDE` (MUST be included; `null` when not found)
+  - `git_constraint`: the mode-matched constraint block from `workflows/generate/phase-4-write.md` § Git constraint blocks
 
 Store the agent's `migration_manifest` (the list of changes actually applied).
 

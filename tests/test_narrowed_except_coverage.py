@@ -63,8 +63,12 @@ class TestDeduplicateLegacyKitsErrors(unittest.TestCase):
         with TemporaryDirectory() as td:
             config = Path(td)
             (config / "core.toml").write_bytes(b"\x80\x81")
-            result = _deduplicate_legacy_kits(config)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                result = _deduplicate_legacy_kits(config)
             self.assertEqual(result, {})
+            self.assertIn("cannot parse", err.getvalue())
+            self.assertIn("skipping migration", err.getvalue())
 
     def test_write_failure_still_returns_renamed(self):
         """toml_utils.dump raises → except swallows, still returns renamed."""
@@ -120,8 +124,12 @@ class TestMigrateKitSourcesErrors(unittest.TestCase):
         with TemporaryDirectory() as td:
             config = Path(td)
             (config / "core.toml").write_bytes(b"\xff\xfe")
-            result = _migrate_kit_sources(config)
+            err = io.StringIO()
+            with redirect_stderr(err):
+                result = _migrate_kit_sources(config)
             self.assertEqual(result, {})
+            self.assertIn("cannot parse", err.getvalue())
+            self.assertIn("skipping migration", err.getvalue())
 
     def test_write_failure_still_returns_migrated(self):
         from cypilot.commands.update import _migrate_kit_sources
@@ -130,9 +138,12 @@ class TestMigrateKitSourcesErrors(unittest.TestCase):
             _write_toml(config / "core.toml", {
                 "kits": {"sdlc": {"path": "config/kits/sdlc"}},
             })
-            with patch("cypilot.utils.toml_utils.dump", side_effect=OSError("no space")):
+            err = io.StringIO()
+            with redirect_stderr(err), \
+                 patch("cypilot.utils.toml_utils.dump", side_effect=OSError("no space")):
                 result = _migrate_kit_sources(config)
             self.assertIn("sdlc", result)
+            self.assertIn("kit source migration write failed", err.getvalue())
 
 
 # =========================================================================
@@ -481,7 +492,9 @@ class TestAgentsIterdirOSError(unittest.TestCase):
 class TestUpdateValidateKitsFailure(unittest.TestCase):
     """Cover update.py:448 — except when validate_kits fails to run."""
 
-    def test_validate_kits_raises_appends_warning(self):
+    def test_validate_kits_raises_appends_error(self):
+        # CR-T6-008: run_validate_kits exception now appends to errors (was warnings).
+        # CR-T6-007: cmd_update returns 1 when errors is non-empty.
         from cypilot.commands.update import cmd_update
         from cypilot.utils.ui import set_json_mode
         import json
@@ -515,14 +528,14 @@ class TestUpdateValidateKitsFailure(unittest.TestCase):
                         err = io.StringIO()
                         with redirect_stdout(buf), redirect_stderr(err):
                             rc = cmd_update([])
-                    # update should succeed (rc 0) with a warning, not crash
-                    self.assertEqual(rc, 0)
+                    # CR-T6-007/008: validator throw → error appended → rc == 1
+                    self.assertEqual(rc, 1)
                     output = buf.getvalue()
                     report = json.loads(output)
-                    warnings = report.get("warnings", [])
+                    errors = report.get("errors", [])
                     self.assertTrue(
-                        any("validate broke" in w for w in warnings),
-                        f"Expected 'validate broke' in warnings, got {warnings}",
+                        any("validate broke" in str(e) for e in errors),
+                        f"Expected 'validate broke' in errors, got {errors}",
                     )
                 finally:
                     os.chdir(cwd)

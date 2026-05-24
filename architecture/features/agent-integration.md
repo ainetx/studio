@@ -121,6 +121,10 @@ Without this feature, users would need to manually create and maintain agent-spe
 
 **Supporting**:
 - [x] - `p1` - Module-level constant for all recognized agent names - `inst-define-registry-const`
+- [x] - `p1` - Per-tool Cyber Constructor-specific install marker file paths (primary + pre-rebrand legacy paths) and derived non-OpenAI marker list for disambiguation - `inst-agent-install-markers`
+- [x] - `p1` - Helper to detect any non-OpenAI Cyber Constructor install signal (primary markers, legacy follow-link skill files, Copilot instructions header, prompts file) - `inst-non-openai-install-signal`
+- [x] - `p1` - Helper to check whether a specific agent has a Cyber Constructor install under the project root (primary markers first, then per-agent legacy fallbacks) - `inst-is-agent-installed`
+- [x] - `p1` - Load or build the agents config from a JSON file or defaults; returns `(cfg_path, cfg)` or None on error - `inst-load-agents-cfg`
 - [x] - `p1` - Helper to resolve cypilot root from `__file__` ancestry - `inst-resolve-context-helper`
 
 ### Generate Agent Shims
@@ -137,6 +141,16 @@ Without this feature, users would need to manually create and maintain agent-spe
 8. [x] - `p1` - Build result dict and human-friendly formatters for generate-agents and agents commands - `inst-format-output`
 
 **Supporting**:
+- [x] - `p1` - Legacy tool-specific skill paths and pre-rebrand `cypilot-*` sub-agent glob patterns per agent, used for cleanup during regeneration - `inst-legacy-skill-paths`
+- [x] - `p1` - Delete pre-rebrand `cypilot-*.<ext>` sub-agent files for an agent, skipping any file with user-added content - `inst-cleanup-legacy-subagents`
+- [x] - `p1` - Per-tool legacy `.cypilot-installed` marker file paths (copilot and openai only) - `inst-legacy-marker-paths`
+- [x] - `p1` - Delete pre-rebrand `.cypilot-installed` integration markers for an agent when file starts with `# Cypilot` - `inst-cleanup-legacy-markers`
+- [x] - `p1` - Installation marker paths and stub content for agents that share generic directories (openai and copilot) - `inst-install-markers-table`
+- [x] - `p1` - Extract per-agent config, skill output paths set, and initialize workflow/skills result dicts from the agent config - `inst-agent-cfg-extract`
+- [x] - `p1` - Invoke `_generate_kit_workflow_skills` for the current agent to emit `.agents/skills/` entries for all discovered kit workflows - `inst-kit-workflow-skills`
+- [x] - `p1` - Write the Cyber Constructor-specific install marker file for agents that share generic directories (openai, copilot) - `inst-write-install-marker`
+- [x] - `p1` - Generate sub-agent proxy files for all discovered kit agents: TOML per-agent for OpenAI/Codex, Markdown+YAML frontmatter for Claude/Cursor/Copilot; clean up stale legacy files - `inst-subagent-generation`
+- [x] - `p1` - Assemble and return the per-agent result dict with workflow, skills, and subagents counts and error status - `inst-agent-result`
 - [x] - `p1` - Imports, constants, and `_validate_agent_entry` for agent datamodel - `inst-agents-datamodel`
 - [x] - `p1` - Per-tool template functions (Claude, Cursor, Copilot) and `_TOOL_AGENT_CONFIG` registry - `inst-create-proxy-templates`
 - [x] - `p1` - File I/O helpers: `_load_json_file` and `_write_or_skip` for agent output management - `inst-write-helpers`
@@ -170,6 +184,10 @@ Without this feature, users would need to manually create and maintain agent-spe
 1. [x] - `p1` - Scan `.core/workflows/` for core workflows (analyze.md, generate.md) - `inst-scan-core-workflows`
 2. - `p1` - Scan `.gen/kits/*/workflows/` for kit-generated workflows - `inst-scan-kit-workflows`
 3. - `p1` - **RETURN** merged list with deduplication - `inst-return-workflows`
+
+**Supporting**:
+- [x] - `p1` - Per-tool output path patterns for kit workflow skill files (claude → `.claude/skills/`, all others → `.agents/skills/`) - `inst-kit-workflow-skill-paths`
+- [x] - `p1` - Generate skill-file entries for discovered kit workflows on skill-native tools (no workflows config), writing one skill file per kit workflow per agent - `inst-generate-kit-workflow-skills`
 
 ## 4. States (CDSL)
 

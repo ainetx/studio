@@ -15,6 +15,7 @@ installation and update: only declared resources are installed.
 # @cpt-begin:cpt-cypilot-algo-kit-manifest-install:p1:inst-manifest-datamodel
 from __future__ import annotations
 
+import dataclasses
 import re
 import string
 from dataclasses import dataclass, field, replace
@@ -164,7 +165,36 @@ class ManifestLayer:
 
 # @cpt-begin:cpt-cypilot-dod-project-extensibility-manifest-v2-schema:p1:inst-parse-component-helpers
 _COMPONENT_ID_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+_VALID_AGENT_MODES = {"readwrite", "readonly"}
+_VALID_AGENT_ROLES = {"generate", "analyze", "planning", "any"}
+_VALID_AGENT_TARGETS = {"codebase", "artifacts", "any"}
+_VALID_AGENT_PROVIDERS = {"anthropic", "openai"}
+_VALID_AGENT_MODEL_TIERS = {
+    "cf:tier:cheap", "cf:tier:balanced", "cf:tier:expensive",
+    "cf:inherit", "cf:auto",
+}
+_VALID_AGENT_EFFORTS = {"low", "medium", "high", "max"}
+_VALID_AGENT_CONTEXTS = {"low", "medium", "high", "max"}
 # @cpt-end:cpt-cypilot-dod-project-extensibility-manifest-v2-schema:p1:inst-parse-component-helpers
+
+
+def _validate_agent_choice(
+    path: Path,
+    idx: int,
+    agent_id: str,
+    field_name: str,
+    value: Optional[str],
+    valid: set[str],
+) -> Optional[str]:
+    """Validate an optional generated-agent enum field."""
+    if value is None:
+        return None
+    if value not in valid:
+        raise ValueError(
+            f"{path}: [[agents]][{idx}] ('{agent_id}'): invalid {field_name} {value!r}; "
+            f"expected one of {sorted(valid)}"
+        )
+    return value
 
 
 # @cpt-begin:cpt-cypilot-dod-project-extensibility-manifest-v2-schema:p1:inst-parse-v2
@@ -285,11 +315,15 @@ def _parse_base_fields(raw: Dict[str, Any], manifest_path: Optional[Path] = None
         append_path = Path(raw_append_file)
         if append_path.is_absolute():
             raise ValueError(f"Component '{comp_id}': 'append_file' must be a relative path, got '{raw_append_file}'")
-        # Resolve relative to the project root (nearest .git ancestor)
+        # Resolve relative to the active checkout root (nearest .git ancestor).
+        # In a git worktree, .git is a file pointing at shared metadata; do not
+        # follow that pointer for content lookup or worktree-local files would
+        # be read from the wrong checkout.
         repo_root = manifest_path.parent
         found_root = False
         while repo_root != repo_root.parent:
-            if (repo_root / ".git").exists():
+            git_entry = repo_root / ".git"
+            if git_entry.exists():
                 found_root = True
                 break
             repo_root = repo_root.parent
@@ -337,16 +371,73 @@ def _parse_agents(path: Path, raw_agents: List[Any]) -> List[AgentEntry]:
                 "tools and disallowed_tools are mutually exclusive"
             )
 
+        # Reject TOML null explicitly for enum-validated fields so the error
+        # message names the offending field rather than failing with 'None'.
+        for _null_field in ("mode", "role", "target", "provider"):
+            if _null_field in raw and raw[_null_field] is None:
+                raise ValueError(
+                    f"{path}: [[agents]][{idx}] ('{base['id']}'): "
+                    f"null is not a valid {_null_field}"
+                )
+
+        mode = _validate_agent_choice(
+            path, idx, base["id"], "mode",
+            str(raw.get("mode", "readwrite")).strip(),
+            _VALID_AGENT_MODES,
+        )
+        role = _validate_agent_choice(
+            path, idx, base["id"], "role",
+            str(raw.get("role", "any")).strip(),
+            _VALID_AGENT_ROLES,
+        )
+        target = _validate_agent_choice(
+            path, idx, base["id"], "target",
+            str(raw.get("target", "any")).strip(),
+            _VALID_AGENT_TARGETS,
+        )
+        provider = _validate_agent_choice(
+            path, idx, base["id"], "provider",
+            str(raw.get("provider", "anthropic")).strip(),
+            _VALID_AGENT_PROVIDERS,
+        )
+        raw_model = str(raw.get("model", "")).strip()
+        if raw_model.startswith("cf:") and raw_model not in _VALID_AGENT_MODEL_TIERS:
+            raise ValueError(
+                f"{path}: [[agents]][{idx}] ('{base['id']}'): invalid model {raw_model!r}; "
+                f"expected one of {sorted(_VALID_AGENT_MODEL_TIERS)} or a raw provider model id"
+            )
+        reasoning_effort = _validate_agent_choice(
+            path, idx, base["id"], "reasoning_effort",
+            str(raw["reasoning_effort"]).strip()
+            if raw.get("reasoning_effort") is not None else None,
+            _VALID_AGENT_EFFORTS,
+        )
+        context_window = _validate_agent_choice(
+            path, idx, base["id"], "context_window",
+            str(raw["context_window"]).strip()
+            if raw.get("context_window") is not None else None,
+            _VALID_AGENT_CONTEXTS,
+        )
+
+        # `_validate_agent_choice` either returns the validated value or raises;
+        # `mode` / `role` / `target` / `provider` are guaranteed non-None here
+        # because the get(...) calls supply non-None defaults, so the previous
+        # `or "<default>"` fallbacks were unreachable.
         agents.append(AgentEntry(
             **base,
-            mode=str(raw.get("mode", "readwrite")).strip(),
+            mode=mode,
             isolation=bool(raw.get("isolation", False)),
-            model=str(raw.get("model", "")).strip(),
+            model=raw_model,
             tools=tools,
             disallowed_tools=disallowed_tools,
             skills=list(raw.get("skills", [])),
             color=str(raw.get("color", "")).strip(),
             memory_dir=str(raw.get("memory_dir", "")).strip(),
+            role=role,
+            target=target,
+            provider=provider,
+            reasoning_effort=reasoning_effort,
+            context_window=context_window,
         ))
     return agents
 # @cpt-end:cpt-cypilot-dod-project-extensibility-manifest-v2-schema:p1:inst-parse-agents
@@ -412,7 +503,10 @@ def _parse_resources(raw_resources: List[Any]) -> List[ManifestResource]:
 # ---------------------------------------------------------------------------
 
 # @cpt-begin:cpt-cypilot-algo-project-extensibility-resolve-includes:p1:inst-includes-helpers
-_MAX_INCLUDE_DEPTH = 3
+# Maximum chain size including the root manifest itself.  The root is counted
+# when the chain is seeded (``include_chain = {root_manifest_path}``), so a
+# value of 4 allows 3 effective nesting levels beyond the root (root → A → B → C).
+_MAX_INCLUDE_DEPTH = 4
 
 
 def _rewrite_component_paths(
@@ -442,7 +536,6 @@ def _rewrite_component_paths(
         else:
             kwargs[fname] = val
     # Copy all other fields unchanged by rebuilding via __class__
-    import dataclasses
     existing = {f.name: getattr(component, f.name) for f in dataclasses.fields(component)}
     existing.update(kwargs)
     return component.__class__(**existing)
@@ -456,6 +549,7 @@ def resolve_includes(
     manifest_dir: Path,
     include_chain: Optional[Set[Path]] = None,
     trusted_root: Optional[Path] = None,
+    include_order: Optional[List[Path]] = None,
 ) -> ManifestV2:
     """Resolve the ``includes`` array in *manifest*, merging sub-manifests in.
 
@@ -468,12 +562,16 @@ def resolve_includes(
         manifest:      Parsed v2 manifest whose ``includes`` list to process.
         manifest_dir:  Directory that contains the current manifest file.
         include_chain: Set of already-visited absolute manifest file paths
-                       (used for circular detection). Pass ``None`` for the
-                       initial call.
+                       (used for O(1) circular detection). Pass ``None`` for
+                       the initial call.
         trusted_root:  Absolute directory that all include paths must stay
                        within (path-traversal guard). Defaults to
                        ``manifest_dir`` on the initial call and is propagated
                        unchanged through recursion.
+        include_order: List of already-visited absolute manifest file paths in
+                       traversal order (used to produce readable cycle error
+                       messages). Pass ``None`` for the initial call; always
+                       kept in sync with *include_chain*.
 
     Returns:
         A new ``ManifestV2`` instance with all included components merged in.
@@ -489,8 +587,13 @@ def resolve_includes(
     # @cpt-end:cpt-cypilot-algo-project-extensibility-resolve-includes:p1:inst-step1-read-includes
 
     # @cpt-begin:cpt-cypilot-algo-project-extensibility-resolve-includes:p1:inst-init-collections
-    if include_chain is None:
-        include_chain = set()
+    if include_chain is None or include_order is None:
+        # Seed the root manifest's own path so a cycle like root → A → root is
+        # detected when A tries to include root (depth 2) and the error chain
+        # lists the true originating node first.
+        root_manifest_path = (manifest_dir / "manifest.toml").resolve()
+        include_chain = {root_manifest_path}
+        include_order = [root_manifest_path]
     if trusted_root is None:
         trusted_root = manifest_dir.resolve()
 
@@ -532,7 +635,7 @@ def resolve_includes(
 
         # @cpt-begin:cpt-cypilot-algo-project-extensibility-resolve-includes:p1:inst-step2.2-circular-check
         if resolved in include_chain:
-            chain_str = " -> ".join(str(p) for p in sorted(include_chain)) + f" -> {resolved}"
+            chain_str = " -> ".join(str(p) for p in include_order) + f" -> {resolved}"
             raise ValueError(
                 f"Circular include detected: {chain_str}"
             )
@@ -554,7 +657,8 @@ def resolve_includes(
 
         # @cpt-begin:cpt-cypilot-algo-project-extensibility-resolve-includes:p1:inst-step2.5-recurse
         new_chain: Set[Path] = include_chain | {resolved}
-        included_manifest = resolve_includes(included_manifest, included_dir, new_chain, trusted_root)
+        new_order: List[Path] = include_order + [resolved]
+        included_manifest = resolve_includes(included_manifest, included_dir, new_chain, trusted_root, new_order)
         # @cpt-end:cpt-cypilot-algo-project-extensibility-resolve-includes:p1:inst-step2.5-recurse
 
         # @cpt-begin:cpt-cypilot-algo-project-extensibility-resolve-includes:p1:inst-step2.6-rewrite-paths
@@ -867,6 +971,9 @@ def _validate_against_schema(data: Dict[str, Any]) -> List[str]:
 
     # --- [[resources]] ---
     resources = data.get("resources")
+    if resources is None:
+        # V1 manifest without resources — allowed; treat as empty.
+        return errors
     if not isinstance(resources, list) or len(resources) == 0:
         errors.append("[[resources]] must be a non-empty array")
         return errors
@@ -943,8 +1050,12 @@ def load_manifest(kit_source: Path) -> Optional[Union[Manifest, ManifestV2]]:
 
     # Detect V2 manifests early and delegate to V2 parser, skipping V1 validation
     meta = data.get("manifest", {})
-    if str(meta.get("version", "")).strip() == "2.0":
+    _raw_version = meta.get("version", "")
+    _version = str(_raw_version).strip()
+    if _version == "2.0":
         return parse_manifest_v2(manifest_path)
+    if _version:
+        meta["version"] = _version
 
     # Schema-level structural validation (V1 only)
     schema_errors = _validate_against_schema(data)

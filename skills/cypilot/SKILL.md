@@ -1,233 +1,101 @@
 ---
 name: cf-constructor
-description: "Invoke when user asks to do something with Cyber Constructor, or wants to analyze/validate artifacts, or create/generate/implement anything using Cyber Constructor workflows, or plan phased execution. Core capabilities: workflow routing (plan/analyze/generate/auto-config); deterministic validation (structure, cross-refs, traceability, TOC); code↔artifact traceability with @cpt-* markers; spec coverage measurement; ID search/navigation; init/bootstrap; adapter + registry discovery; auto-configuration of brownfield projects (scan conventions, generate rules); kit management (install/update with file-level diff); TOC generation; agent integrations (Windsurf, Cursor, Claude, Copilot, OpenAI)."
+description: "Invoke when running Cyber Constructor planning, generation, analysis, validation, traceability, kit, workspace, and agent-integration workflows."
 ---
-
-# Cyber Constructor Unified Tool
-
 
 <!-- toc -->
 
-- [Cyber Constructor Unified Tool](#cyber-constructor-unified-tool)
-  - [Goal](#goal)
-  - [Preconditions](#preconditions)
-  - [⚠️ MUST Instruction Semantics ⚠️](#️-must-instruction-semantics-️)
-  - [Agent Acknowledgment](#agent-acknowledgment)
-  - [Execution Logging](#execution-logging)
-  - [Variables](#variables)
-    - [Template Variable Resolution](#template-variable-resolution)
-  - [CLI Resolution](#cli-resolution)
-  - [Protocol Guard](#protocol-guard)
-  - [Cyber Constructor Mode](#cyber-constructor-mode)
-  - [Agent-Safe Invocation](#agent-safe-invocation)
-  - [Quick Commands](#quick-commands)
-    - [Direct CLI Commands (No Workflow Routing)](#direct-cli-commands-no-workflow-routing)
-    - [Workflow Shortcuts](#workflow-shortcuts)
-  - [Workflow Routing](#workflow-routing)
-  - [Command Reference](#command-reference)
-  - [Auto-Configuration](#auto-configuration)
-  - [Project Configuration](#project-configuration)
+  - [Context Budget & Fail-Safe](#context-budget--fail-safe)
+  - [Phase-Skip Gate (loaded with the skill)](#phase-skip-gate-loaded-with-the-skill)
+  - [Session Sub-Agent Approval Gate](#session-sub-agent-approval-gate)
+- [Completion Invariants](#completion-invariants)
 
 <!-- /toc -->
 
-## Goal
+# Cyber Constructor Unified Tool
 
-Cyber Constructor provides artifact validation, cross-reference validation, code traceability, spec coverage measurement, ID search/navigation, kit management, TOC generation/validation, multi-agent integration, and design-to-code implementation with `@cpt-*` markers.
+ALWAYS SET {cfc_mode} = `on` FIRST. MUST/ALWAYS are mandatory.
 
-## Preconditions
+### Context Budget & Fail-Safe
 
-- `cfc` available (preferred) or `python3` as fallback
-- Target paths exist and are readable
+Before opening the mandatory protocol, dispatch, and routing files, estimate the line count of each target file when tooling permits. Only minimal metadata and sizing reads are allowed before this gate; full content loads are not. Load only those files and the directly selected workflow sections for the current request. If the required files cannot fit in context, stop with a checkpoint that lists loaded files, deferred files, and the next exact file to open. If tooling does not permit a size estimate, treat each file as ~200 lines (the practical loadable-resource cap) and load files one at a time, checkpointing if the cumulative load approaches the conservative budget.
 
----
+Open, load, and follow `protocol.md` for logging, CLI, Protocol Guard, invocation, language, write-confirmation rules.
+Open, load, and follow `sub-agent-dispatch.md` before any `cf-constructor-*` sub-agent dispatch.
+Open, load, and follow `routing.md` for commands and workflows.
 
-## ⚠️ MUST Instruction Semantics ⚠️
+### Phase-Skip Gate (loaded with the skill)
 
-**MUST** and **ALWAYS** are mandatory. Skipping any MUST instruction invalidates execution, the output must be discarded, and the workflow fails.
+On skill load, MUST set `CF_PHASE_GATE=armed`. The gate has these states:
 
-## Agent Acknowledgment
+- `armed` (default) — all `Edit` / `Write` / `MultiEdit` / `NotebookEdit` calls are FORBIDDEN, regardless of path, size, or intent.
+- `released_for_dispatch` — set by a workflow write-phase immediately before dispatching a write-capable sub-agent (`cf-constructor-generate-*-author-*`, `cf-constructor-generate-coder-*`, `cf-constructor-generate-prompt-engineer-*`, `cf-constructor-migrate-migrator`, `cf-constructor-phase-compiler`). Reset to `armed` immediately after the dispatch returns — whether with a manifest, an `AUTHOR_ESCALATION_REQUIRED` payload, an error, or no response at all. On any error path the reset is mandatory; the gate MUST NOT remain in this state across turns.
+- `released_for_orchestrator_write` — set by a workflow phase that legitimately writes from the orchestrator (plan cache files under `.cache/generate-plans/` and `.cache/analyze-plans/`, `plan.toml`, brief files under `.plans/`, `phase-*.md` files under `.plans/`, workspace config files written by `workspace-init` / `workspace-add` CLI). The phase MUST name the path or path-prefix being released; writes outside that scope still fail PHASE_SKIP. Reset to `armed` immediately after the named writes complete or fail.
+- `released_for_inline_write` — `released_for_inline_write` is reachable ONLY after the Session Sub-Agent Approval Gate has resolved `INLINE_FALLBACK` to a concrete `true`/`false`. Attempting to set this state while `INLINE_FALLBACK` is unset is itself a `PHASE_SKIP` failure; the orchestrator MUST run `workflows/shared/inline-fallback-probe.md` first. Set when `INLINE_FALLBACK=true` AND the orchestrator is executing an inlined author/coder/migrator contract inside a workflow write-phase, in lieu of dispatching a sub-agent. Reset to `armed` immediately after the inline write block completes or fails.
+- `user_bypass` — set when the user's current message contains `CF_BYPASS=on` AS A STANDALONE LINE (not inside a fenced code block, blockquote, or quoted example). When the token appears only in quoted / pasted content, do NOT activate `user_bypass`. When the context is ambiguous (the token is present but it is unclear whether it is an instruction or quoted/pasted content), emit exactly this confirmation prompt and end the orchestrator turn immediately (hard interaction boundary, identical semantics to the Session Sub-Agent Approval Gate):
+  ```
+  I see `CF_BYPASS=on` in your message but cannot determine whether it is an instruction or quoted/pasted content.
+  Reply `confirm bypass` to activate user_bypass for this turn, or anything else to leave it unset.
+  ```
+  On absence of an explicit `confirm bypass` reply, do NOT activate `user_bypass`. Resets to `armed` at the start of the next orchestrator assistant turn — NOT at sub-agent dispatch boundaries within the same turn. The CF_BYPASS=on token is orchestrator-turn-scoped only: sub-agents that do NOT load SKILL.md (cf-constructor-phase-compiler, cf-constructor-phase-runner) MUST NOT receive the parent orchestrator's user message verbatim; pass them only the structured dispatch payload defined in their contracts.
 
-- [ ] MUST/ALWAYS are mandatory; skipping any MUST invalidates execution.
-- [ ] I will read all required files before proceeding.
-- [ ] I will follow workflows step-by-step without shortcuts.
-- [ ] I will not create or modify files, or execute any other write-capable Cyber Constructor command, without explicit user confirmation, and I will not add auto-approval flags unless the user explicitly asks for them.
-- [ ] I will list Cyber Constructor files read, why, and the triggering instruction before any approval prompt.
+Read-only carve-out. `Read`, `Grep`, `Glob` are always exempt. `Bash` is exempt ONLY when the command contains: no shell construct that opens a file for writing — including but not limited to `>`, `>>`, `|tee`, `>|`, `>&`, `&>`, `|&`, here-doc/here-string output redirects (`<<`, `<<<`), or any external invocation of write-capable CLI tools; no file-mutating commands (`rm`, `mv`, `cp`, `mkdir`, `touch`, `chmod`, `install`, `ln`, `rename`), no `git commit` / `git push` / `git reset --hard` / `git checkout --` / `git restore`, and no calls to write-capable CLI tools (compilers writing artifacts, package managers installing, formatters writing in place, etc.). If in doubt, treat as write and apply the gate.
 
-By proceeding with Cyber Constructor work, I acknowledge and accept these requirements.
+NotebookEdit semantics. The gate applies to each cell write. On ANY cell failure within a sequence, the orchestrator MUST: (1) ABORT all remaining cells in the sequence (do NOT continue executing remaining cells under the released gate), AND (2) reset the gate to `armed`. Cell execution side-effects (shell commands writing files from executed cells) are subject to the same gate rules as direct `Write` calls. Treat any individual `MultiEdit` edit failure with the same abort-then-reset semantics.
 
-ALWAYS SET {cfc_mode} = `on` FIRST when loading this skill
+Sub-agent propagation. Gate state is NOT inherited by dispatched sub-agents. Each sub-agent that loads SKILL.md independently starts at `armed`. Write capability for author / coder / prompt-engineer / migrator sub-agents derives from their own tool contracts in the dispatched context, not from gate inheritance. Exception: `cf-constructor-phase-compiler` and `cf-constructor-phase-runner` intentionally do not load SKILL.md; write access for those agents is bounded by host isolation only.
 
-## Execution Logging
+Actor warning. `released_for_*` states are trust-based windows — the gate cannot verify which entity is calling write tools. While `released_for_dispatch` is active, the orchestrator MUST NOT call `Edit` / `Write` / `MultiEdit` / `NotebookEdit` itself; only the dispatched sub-agent owns those writes. Orchestrator-side writes are permitted only under `released_for_orchestrator_write` (with a named scope) or `released_for_inline_write`. For cf-constructor-phase-compiler and cf-constructor-phase-runner dispatch, the released_for_dispatch window is intentionally broader because these agents do not load SKILL.md. The orchestrator MUST suppress its own writes during this window; trust the agent's host isolation for the rest.
 
-ALWAYS provide execution visibility:
-- Notify the user when entering any H2 section of a Cyber Constructor prompt.
-- Notify the user when completing any `- [ ]` checklist task.
-- Use `- [CONTEXT]: MESSAGE`; set context to the file/section and message to the action + why.
-- Logging must help the user understand loaded prompts, routing decisions, debugging state, and workflow progress.
+Violation handling. Any `Edit` / `Write` / `MultiEdit` / `NotebookEdit` invocation while `CF_PHASE_GATE=armed` is a `PHASE_SKIP` failure: STOP immediately, surface to the user `"phase-skip prevented — switching to /cf-constructor-<workflow>"`, and route into the matching workflow without performing the write.
 
-Example:
+If an `Edit` / `Write` / `MultiEdit` / `NotebookEdit` call is observed under `released_for_dispatch` from the orchestrator itself (rather than the dispatched sub-agent), this is also a `PHASE_SKIP` failure: STOP immediately, reset gate to `armed`, surface `"phase-skip prevented — orchestrator wrote during released_for_dispatch"`, and route to the matching workflow without performing the write. The same handler applies to writes outside the named scope under `released_for_orchestrator_write`.
+
+### Session GIT_COMMIT_MODE Gate
+
+`GIT_COMMIT_MODE` is a session-scoped flag probed once per chat session by the generate workflow (Phase 0.x). It controls how write-capable sub-agents (`cf-constructor-generate-*-author-*`, `cf-constructor-generate-coder-*`, `cf-constructor-generate-prompt-engineer-*`, `cf-constructor-migrate-migrator`, `cf-constructor-phase-compiler`) interact with git. Three modes (`commit`, `stage`, `none`) — full definitions and permitted operations are defined in `workflows/generate/phase-0-git-commit-mode.md` § Mode Semantics; the same definitions are propagated verbatim to each write-capable sub-agent dispatch payload's `git_constraint` field via `workflows/generate/phase-4-write.md` § Git constraint blocks.
+
+Probe semantics: once per chat session (parallel to `SUB_AGENT_SESSION_APPROVED`). External-entry handoffs (briefs_only stop + resume in a new chat) re-probe. Do NOT re-probe on every workflow run within the same chat. `GIT_COMMIT_MODE` carries across multiple `/cf-constructor-generate` runs within the same chat session, just like `SUB_AGENT_SESSION_APPROVED`.
+
+`GIT_COMMIT_MODE` is orthogonal to the Phase-Skip Gate. The Phase-Skip Gate guards write tool calls (`Edit`/`Write`/`MultiEdit`/`NotebookEdit`); `GIT_COMMIT_MODE` guards git tool calls. Both apply simultaneously and independently.
+
+Every write-capable sub-agent dispatch payload MUST carry both `GIT_COMMIT_MODE` and `CONTRIBUTING_GUIDE` (path + key directives, or `null` when not found). The dispatch payload MUST include the mode-matched constraint block from `workflows/generate/phase-4-write.md` § Git constraint blocks.
+
+### Session Sub-Agent Approval Gate
+
+Native sub-agent dispatch requires explicit user approval once per chat session. `SUB_AGENT_SESSION_APPROVED=true` approves it for the session. This gate is orchestrator-only: dispatched sub-agents skip it unless they will dispatch another `cf-constructor-*` sub-agent.
+
+If `SUB_AGENT_SESSION_APPROVED` is unset and the host supports native sub-agents, emit exactly this numbered-menu prompt (Approve sub-agent use for this session):
+
 ```text
-- [execution-protocol]: Entering "Load Rules" — target is CODE, loading codebase/rules.md
-- [DESIGN rules]: Completing "Validate structure" — all required sections present
-- [workflows/generate.md]: Entering "Determine Target" — user requested code implementation
+This workflow can use Cyber Constructor sub-agents for isolated/parallel work.
+
+| Option | Action |
+|---|---|
+| 1 | Use native sub-agents — isolated/parallel dispatch, remembered for this session |
+| 2 | Use inline fallback for this workflow — no isolation, slower, but no host primitive needed |
+
+Suggested: 1 because native dispatch preserves context-isolation and parallelism when the host supports it.
+
+Reply with 1 or 2.
 ```
 
-## Variables
+The approval prompt is a hard interaction boundary: after emitting it, the orchestrator MUST end the assistant turn immediately. Absence of a user reply is not option `2`. Reply `1` = approve; reply `2` = decline; anything else re-prompts. Replies are trimmed of leading/trailing whitespace before matching. Replies containing the literal token "1" or "2" embedded in a longer phrase (e.g., "option 1 please") are accepted as the matching numeric choice.
 
-| Variable | Value | Use |
-|---|---|---|
-| `{cf-constructor-path}` | Directory path resolved from root `AGENTS.md` | Base path for all Cyber Constructor-relative references |
-| `{cfc_mode}` | `on` or `off` | Current Cyber Constructor mode state |
-| `{cfc_cmd}` | `cfc` or `python3 {cf-constructor-path}/.core/skills/cypilot/scripts/cypilot.py` | Resolved CLI entrypoint |
-| `{cfc_installed}` | `true` or `false` | Whether the `cfc` CLI is available |
+Set `INLINE_FALLBACK=false` only when `SUB_AGENT_SESSION_APPROVED=true` (user replied `1`). Set `INLINE_FALLBACK=true` only when the user replied `2` or the host has no native sub-agent support. MUST NOT set `INLINE_FALLBACK=false` from host capability alone. MUST NOT default `INLINE_FALLBACK=true` from missing approval. Do not collapse the remaining states into a generic `otherwise` branch.
 
-Setting `{cfc_mode}`: explicit `cf-constructor on/off` or a prompt that activates/deactivates Cyber Constructor workflows.
+Probe once per workflow run. External-entry handoffs count as a new run and MUST re-probe. `SUB_AGENT_SESSION_APPROVED` carries across; `INLINE_FALLBACK` does not. A `briefs_only` plan-workflow stop followed by a resume in a new chat is an external-entry handoff and MUST re-probe; the prior session's `SUB_AGENT_SESSION_APPROVED` carries across only when the resume happens in the same chat session.
 
-### Template Variable Resolution
+## Completion Invariants
 
-- Resolve variables from `{cfc_cmd} --json info` first; parse the returned `variables` dict.
-- Use `{cfc_cmd} --json resolve-vars` only when a fresh or filtered map is needed.
-- Variable sources: system (`cf-constructor-path`, `project_root`) + installed kit resources.
-- ALWAYS resolve `{variable}` references to absolute paths before using kit markdown files.
+A `/cf-constructor-generate` file-writing run with no remaining findings is
+not complete until the final response ends with the `Post-Write Review Handoff` menu. If remaining findings exist, it is not complete until the
+final response ends with the `Remediation Handoff` menu as the only actionable
+reply menu; `W1`/`W2`/`W3` choices remain locked until remediation clears and
+Phase 6 re-enters with `remaining_findings` empty.
 
-## CLI Resolution
+A `/cf-constructor-analyze` run with actionable issues is not complete until the final response ends with the `Remediation Handoff` menu.
 
-Run before Protocol Guard when `{cfc_mode}` is `on`:
-1. `command -v cfc` → `{cfc_cmd} = cfc`, `{cfc_installed} = true`
-2. Otherwise `{cfc_cmd} = python3 {cf-constructor-path}/.core/skills/cypilot/scripts/cypilot.py`, `{cfc_installed} = false`
-3. If `{cfc_installed}` is `false` and the marker file `~/.cf-constructor/cache/cfc-prompt-dismissed` does not exist, display this prompt verbatim and wait for input:
-   `Install cfc to enable the short 'cfc' command? Reply 'yes' or 'no' [y/N]:`
-   - `y` or `yes` (case-insensitive) → run `pipx install git+https://github.com/cyberfabric/cyber-constructor.git`; on success set `{cfc_cmd} = cfc` and `{cfc_installed} = true`
-   - `n` or `no` (case-insensitive) → decline; keep `{cfc_cmd} = python3 {cf-constructor-path}/.core/skills/cypilot/scripts/cypilot.py` and create the marker file `~/.cf-constructor/cache/cfc-prompt-dismissed` so the prompt is not shown again
-   - Pressing Enter with no input → use the default `no` (the capital `N` in `[y/N]` indicates the default); treat as decline and create the marker file
-   - `Ctrl+C` / interrupt → treat as decline/abort: do not install, create the marker file, and continue with the long-path invocation
-4. Re-offer installation (re-display the prompt above and, on dismissal, refresh the marker file) only when the user later asks about the long invocation path `python3 {cf-constructor-path}/.core/skills/cypilot/scripts/cypilot.py`; otherwise the marker file suppresses re-prompting
+A `/cf-constructor-plan` run that compiled phase files is not complete until the final response ends with the Phase 4.2 next-steps menu OR the Phase 3.2A brief-checkpoint menu (for `briefs_only` stops). A run that stopped at the raw-input `n`-path or the decomposition `n`-path is a valid completion state and requires no terminal menu — the orchestrator must still emit the canonical stop message defined in `workflows/plan.md`.
 
-ALWAYS use `{cfc_cmd}` for all later CLI invocations.
-
-## Protocol Guard
-
-- ALWAYS FIRST open and remember `{cf-constructor-path}/.gen/AGENTS.md`
-- ALWAYS open and follow `{cf-constructor-path}/config/AGENTS.md` when it exists
-- ALWAYS open and follow `{cf-constructor-path}/.gen/SKILL.md` when it exists
-- ALWAYS open and follow `{cf-constructor-path}/config/SKILL.md` when it exists
-- ALWAYS FIRST run `{cfc_cmd} --json info` before any Cyber Constructor workflow action
-- ALWAYS store the `variables` dict from `info` output and use it to resolve `{variable}` references in AGENTS/SKILL/rules/workflows
-- ALWAYS follow this load order: `info` → registry/intent/target/rules resolution from `execution-protocol.md` → matched WHEN-clause specs
-- ALWAYS load matched WHEN-clause specs only after registry understanding, target determination, and `rules.md` resolution provide enough context to match safely
-- ALWAYS FIRST parse and load all matched WHEN-clause specs before proceeding
-- MUST NOT preload every AGENTS/SKILL/spec file up front; load only the smallest set needed for the current request
-- Before opening a large AGENTS/SKILL/spec file, estimate size and prefer chunked reads of matched sections over full-file reads
-- If safe WHEN-clause matching is not yet possible, stop after registry/target/rules resolution and continue only when enough context exists to load specs boundedly
-- If required Protocol Guard context would exceed the current turn budget, checkpoint or escalate instead of proceeding with partial or unbounded spec loading
-- ALWAYS include this block when editing code:
-```text
-Cyber Constructor Context:
-- Cyber Constructor: {path}
-- Target: {artifact|codebase}
-- Specs loaded: {list paths or "none required"}
-```
-- ALWAYS stop and re-run Protocol Guard when required specs should have been loaded but were not
-- ALWAYS open and follow `{cf-constructor-path}/.core/requirements/language-complexity.md` for the global UX rule on output language complexity. Resolved level (`low` / `middle` / `high`, default `middle`) applies to ALL Cyber Constructor user-facing output across every workflow / methodology / skill — chat messages AND user-facing artifact / documentation bodies. Source quotes from input artifacts and spec/normative files (workflows, requirements, kits, agent definitions) are exempt. Resolution: mid-session override `change language complexity to {X}` → `[language] complexity` in `{cf-constructor-path}/config/core.toml` → default `middle`. Override `remember new language complexity` persists to `core.toml`.
-
-## Cyber Constructor Mode
-
-- ALWAYS set `{cfc_mode} = on` first when user invokes `cf-constructor {prompt}`
-- ALWAYS run `info` when enabling Cyber Constructor mode
-- ALWAYS show:
-```text
-Cyber Constructor Mode Enabled
-Cyber Constructor: {FOUND at path | NOT_FOUND}
-```
-
-## Agent-Safe Invocation
-
-- ALWAYS use `{cfc_cmd} --json <subcommand> [options]` for agent-driven CLI calls unless a command-specific exception below says otherwise
-- ALWAYS pass `--json` immediately after `{cfc_cmd}` and before the subcommand when using machine-output mode
-- EXCEPTION: NEVER run `{cfc_cmd} init` with `--json`; always invoke `{cfc_cmd} init ...` without `--json`
-- EXCEPTION: NEVER run `{cfc_cmd} delegate` with `--json`; always invoke `{cfc_cmd} delegate <plan_dir> ...` without `--json`
-- EXCEPTION: NEVER run `{cfc_cmd} update` with `--json`; always invoke `{cfc_cmd} update ...` without `--json`
-- ALWAYS use `=` form for pattern args starting with `-` (example: `--pattern=-req-`)
-- MUST obtain explicit user confirmation before executing any write-capable command, including direct CLI commands that do not route through a workflow
-- MUST NOT add auto-approval flags such as `--yes`, `-y`, or `--force` to write-capable commands unless the user explicitly requested that non-interactive behavior
-
-## Quick Commands
-
-### Direct CLI Commands (No Workflow Routing)
-
-No workflow routing skips workflow selection only. It does not waive confirmation: obtain explicit user confirmation before executing any write-capable direct CLI command below. When asking for that confirmation, explain why the command is needed now, tell the user exactly how to approve or decline, state what approval will do next, and mark the suggested path when one option is clearly safer or more relevant.
-
-| User invocation | Direct action |
-|---|---|
-| `cf-constructor init` | After explicit user confirmation, run `{cfc_cmd} init` without `--json` |
-| `cf-constructor update` | After explicit user confirmation, run `{cfc_cmd} update` without `--json` |
-| `cf-constructor agents <name>` | Run `{cfc_cmd} --json agents --agent <name>` |
-| `cf-constructor generate-agents <name>` | After explicit user confirmation, run `{cfc_cmd} --json generate-agents --agent <name>` |
-| `cf-constructor workspace init` | After explicit user confirmation, run `{cfc_cmd} --json workspace-init [--root <dir>] [--output <path>] [--inline] [--force] [--max-depth <N>] [--dry-run]` |
-| `cf-constructor workspace add` | After explicit user confirmation, run `{cfc_cmd} --json workspace-add --name <name> (--path <path> \| --url <url>) [--branch <branch>] [--role <role>] [--adapter <path>] [--inline] [--force]` |
-| `cf-constructor workspace info` | Run `{cfc_cmd} --json workspace-info` |
-| `cf-constructor workspace sync` | After explicit user confirmation, run `{cfc_cmd} --json workspace-sync [--source <name>] [--dry-run] [--force]`; `--force` is destructive |
-
-### Workflow Shortcuts
-
-| User invocation | Action |
-|---|---|
-| `cf-constructor auto-config` / `cf-constructor configure` | Open and follow `{cf-constructor-path}/.core/workflows/generate.md` |
-
-## Workflow Routing
-
-Cyber Constructor has exactly three core workflows plus specialized sub-workflows and dedicated capability agents. Routing priority is `delegate` > `compile-phase` > `execute-phase` > `plan` > `generate`/`analyze`. Delegation intent MUST route to the `cf-constructor-ralphex` capability agent rather than falling through to generic planning or generation. Generated-plan phase compilation intent MUST route to the dedicated `cf-constructor-phase-compiler` capability agent, and generated-plan phase execution intent MUST route to the dedicated `cf-constructor-phase-runner` capability agent rather than back into generic planning.
-
-Oversized-input invariant: if the raw task input exceeds `500` total lines across the direct prompt text, attached or provided files, or one large file, Cyber Constructor MUST explicitly offer `/cf-constructor-plan` before any direct `/cf-constructor-generate` or `/cf-constructor-analyze` execution continues. Line count = sum( lines in direct prompt text if present + lines in each attached or provided file ); when stdin is used the direct prompt text is included in this sum as `input/direct-prompt.md`; intermediate/generated chunk files are excluded from this count (only raw user inputs are counted). If the user chooses the plan path, the planner MUST first compute the input signature using the read-only `{cfc_cmd} --json chunk-input ... --dry-run` mode (which writes no files) to check for existing package reuse, and MUST obtain explicit user approval before materializing that input under `{cf-constructor-path}/.plans/{task-slug}/input/` using the write-capable `{cfc_cmd} --json chunk-input ... --max-lines 300 --threshold-lines 500` command (without `--dry-run`). The planner MUST pass `--include-stdin` when direct prompt text must be packaged together with provided files; when stdin is used, it MUST also preserve that raw prompt as `input/direct-prompt.md`. The emitted chunk files become mandatory plan inputs for the relevant phases. If the user declines plan escalation, Cyber Constructor MAY continue in the direct workflow only after an explicit warning that reduced guarantees apply.
-
-Completion invariants for workflow outputs:
-- A `/cf-constructor-plan` run is not complete until it reaches one of three valid stopping points defined by `workflows/plan.md`: `(a)` the raw-input approval checkpoint, where the planner has identified oversized input and presented the `Proceed with raw-input materialization? [y/n]` prompt — the user may approve (`y`) to continue on the plan path or reject (`n`) to decline raw-input materialization with no filesystem mutations; `(b)` the brief checkpoint where `plan.toml` and every required `brief-*` file exist on disk and the response presents the explicit next-step choice set; or `(c)` the fully compiled plan state where every corresponding `phase-*` file also exists on disk after the user chose inline generation or `cf-constructor-phase-compiler` execution.
-- A `/cf-constructor-generate` run that wrote or updated any files is not complete until the final response includes both `Plan Review Prompt` and `Direct Review Prompt` blocks. This applies on both the validated success path and the RELAXED explicitly unvalidated recovery path.
-- A `/cf-constructor-analyze` run with any actionable issue is not complete until the final response includes both `Fix Prompt` and `Plan Prompt` blocks.
-- A `/cf-constructor delegate` run is not complete until the final response includes delegation status, handoff result or error details, and next-step options.
-- A native plan-phase compilation run is not complete until the final response includes compiled phase identity, output file path, and compile-time validation outcome.
-- A native plan-phase execution run is not complete until the final response includes executed phase status, manifest update outcome, and the next-phase handoff or recovery action.
-- MUST NOT end a workflow response immediately after the summary, analysis report, or next-step options when one of the required prompt pairs is still missing.
-
-| Intent | Match | Action |
-|---|---|---|
-| Delegate | `delegate`, `delegate to ralphex`, `ralphex execute`, `ralphex review`, `hand off to ralphex`, `run with ralphex`, `ralphex delegation` | Open and follow `{cf-constructor-path}/.core/skills/cypilot/agents/cf-constructor-ralphex.md` |
-| Compile phase | `compile phase`, `compile next phase`, `compile plan phase`, `generate phase file`, `compile from brief`, `build phase from brief` | Open and follow `{cf-constructor-path}/.core/skills/cypilot/agents/cf-constructor-phase-compiler.md` |
-| Execute phase | `execute phase`, `run next phase`, `continue plan`, `resume plan`, `execute plan phase`, `run plan phase`, `execute the next phase` | Open and follow `{cf-constructor-path}/.core/skills/cypilot/agents/cf-constructor-phase-runner.md` |
-| Plan | `plan`, `create a plan`, `execution plan`, `break down`, `decompose`, or `plan to ...` | Open and follow `{cf-constructor-path}/.core/workflows/plan.md` first |
-| Generate | `create`, `edit`, `fix`, `update`, `implement`, `refactor`, `delete`, `add`, `setup`, `configure`, `build`, `code` and user did not say `plan` | Open and follow `{cf-constructor-path}/.core/workflows/generate.md` |
-| Analyze | `analyze`, `validate`, `review`, `check`, `inspect`, `audit`, `compare`, `list`, `show`, `find`, `explain`, `tell me about`, `walk me through`, `teach me`, `present`, `introduce`, `let's understand`, `make sense of` (or equivalents in any user language; intent matching is language-agnostic) and user did not say `plan` | Open and follow `{cf-constructor-path}/.core/workflows/analyze.md` (storytelling intent activates `EXPLAIN_MODE=true` via the WHEN-rule for `requirements/storytelling.md`) |
- | Workspace | `workspace`, `multi-repo`, `add source`, `add repo`, `cross-reference`, `cross-repo` | Open and follow `{cf-constructor-path}/.core/workflows/workspace.md` |
- | Migrate from cypilot | `migrate from cypilot`, `migrate-from-cypilot`, `cf-constructor migrate from cypilot`, `cf-constructor migrate-from-cypilot` (intent-based; accept Russian "доделать миграцию с cypilot" / "мигрировать с cypilot" equivalently) | Open and follow `{cf-constructor-path}/.core/skills/cypilot/migrate-from-cypilot.md` |
- | Unclear | `help`, `look at`, `work with`, `handle` | Ask `Why this input is needed: I need the Cyber Constructor mode to route your request correctly. Reply with plan / generate / analyze. plan = phased execution for large or multi-step work; generate = create or modify files; analyze = read-only inspection or review. Suggested: generate for requested changes; analyze for inspection-only requests.` and stop if the user cancels |
- 
- `configure` and `auto-config` are workflow shortcuts, not direct no-protocol commands; both route through `generate.md`, which may auto-trigger `requirements/auto-config.md` for brownfield projects with no project-specific rules.
- 
- ## Command Reference
-
-Entrypoint: `{cfc_cmd} <command> [options]`
-Machine output: add `--json` immediately after `{cfc_cmd}` and before the subcommand, except for `init`, `delegate`, and `update`, which MUST run without `--json`. Exit codes: `0 = PASS`, `1 = filesystem/config error`, `2 = FAIL`.
-Legacy aliases: `validate-code` = `validate`; `validate-rules` = `validate-kits`.
-
-| Category | Commands |
-|---|---|
-| Validation | `validate`, `validate-kits`, `validate-toc`, `self-check`, `spec-coverage` |
-| Search | `list-ids`, `list-id-kinds`, `get-content`, `where-defined`, `where-used` |
-| Kit management | `kit install`, `kit update` |
-| Delegation | `delegate <plan_dir>` |
-| Utilities | `toc`, `chunk-input`, `info`, `resolve-vars`, `init`, `update`, `agents`, `generate-agents` |
-| Workspace | `workspace-init`, `workspace-add`, `workspace-info`, `workspace-sync` |
-
-Use `validate` for artifact or code validation, `toc` for Markdown TOC generation, `chunk-input` for oversized workflow inputs, `info` and `resolve-vars` for discovery/path resolution, and `generate-agents` for integration generation. Use `kit update` for file-level kit refresh, `delegate` for ralphex handoff, and workspace commands for multi-repo setup.
-
-See `{cf-constructor-path}/.core/skills/cypilot/cypilot.clispec` for full syntax, arguments, options, exit semantics, and examples.
-
- ---
-
- ## Auto-Configuration
-
-Use auto-config after `cf-constructor init` on a brownfield project, when project conventions are unknown, or after major structural changes. It scans structure/conventions, generates `{cf-constructor-path}/config/rules/{slug}.md`, adds WHEN rules to `{cf-constructor-path}/config/AGENTS.md`, and registers systems in `{cf-constructor-path}/config/artifacts.toml`. Invoke via `cf-constructor auto-config`, `cf-constructor configure`, or the automatic offer inside `generate.md`.
-
-## Project Configuration
-
-Project configuration lives in `{cf-constructor-path}/config/core.toml` (systems, kits, ignore lists). Artifact registry lives in `{cf-constructor-path}/config/artifacts.toml` (artifact paths, kinds, system mappings, codebase paths, autodetect rules). All commands output JSON when invoked with `--json`. Exit codes: 0=PASS, 1=filesystem error, 2=FAIL.
+`Fix Prompt`, `Plan Prompt`, `Direct Review Prompt`, and `Plan Review Prompt` blocks are emitted only on the next turn when the user chooses the matching handoff option.

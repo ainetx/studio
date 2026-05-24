@@ -4,9 +4,47 @@ from __future__ import annotations
 import io
 import json
 import os
+import sys
 from contextlib import redirect_stdout
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+
+
+def _make_agent(**kwargs) -> "Any":
+    """Create an AgentEntry with safe defaults for every field.
+
+    Covers all current AgentEntry fields (id, description, prompt_file,
+    source, agents, append, mode, isolation, model, tools, disallowed_tools,
+    skills, color, memory_dir, role, target, provider, reasoning_effort,
+    context_window).  Pass keyword arguments to override any default.
+    """
+    from cypilot.utils.manifest import AgentEntry
+
+    defaults: Dict[str, Any] = {
+        "id": "test-agent",
+        "description": "A test agent",
+        "prompt_file": "",
+        "source": "",
+        "agents": ["claude"],
+        "append": None,
+        "mode": "readwrite",
+        "isolation": False,
+        "model": "",
+        "tools": [],
+        "disallowed_tools": [],
+        "skills": [],
+        "color": "",
+        "memory_dir": "",
+        "role": "any",
+        "target": "any",
+        "provider": "anthropic",
+        "reasoning_effort": None,
+        "context_window": None,
+    }
+    defaults.update(kwargs)
+    return AgentEntry(**defaults)
 
 
 def write_constraints_toml(path: Path, data: Dict[str, Any]) -> None:

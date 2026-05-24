@@ -4,14 +4,21 @@ TOML utilities for Cyber Constructor config files.
 - Reading: stdlib ``tomllib`` (Python 3.11+)
 - Writing: minimal serializer for the subset Cyber Constructor uses
 - Markdown: extract ``toml`` fenced code blocks from AGENTS.md
+- Locking: ``_with_core_toml_lock`` context manager for safe concurrent writes
 
 @cpt-algo:cpt-cypilot-algo-core-infra-config-management:p1
 """
 
 # @cpt-begin:cpt-cypilot-algo-core-infra-toml-utils:p1:inst-toml-datamodel
+import contextlib
+import datetime
+import math
+import os
 import re
+import sys
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from ._tomllib_compat import tomllib
 
@@ -88,6 +95,7 @@ def dumps(data: TomlData, header_comment: Optional[str] = None) -> str:
 
     Supports tables (``[table]``) and arrays of tables (``[[table]]``).
     """
+    _validate_lists(data)
     lines: List[str] = []
     if header_comment:
         for cl in header_comment.splitlines():
@@ -106,6 +114,22 @@ def dump(data: TomlData, path: Path, header_comment: Optional[str] = None) -> No
     """Serialize and write a TOML file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(dumps(data, header_comment), encoding="utf-8")
+
+
+def _validate_lists(node: Any) -> None:
+    """Raise TypeError if any list in *node* mixes dict and non-dict items."""
+    if isinstance(node, dict):
+        for v in node.values():
+            _validate_lists(v)
+    elif isinstance(node, list):
+        dict_count = sum(1 for x in node if isinstance(x, dict))
+        non_dict_count = sum(1 for x in node if not isinstance(x, dict))
+        if dict_count > 0 and non_dict_count > 0:
+            raise TypeError(
+                "TOML serializer cannot mix dict and scalar items in the same list"
+            )
+        for v in node:
+            _validate_lists(v)
 
 
 def _is_array_of_tables(value: Any) -> bool:
@@ -162,11 +186,122 @@ def _format_value(value: Any) -> str:
         return "true" if value else "false"
     if isinstance(value, int):
         return str(value)
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            raise TypeError(f"TOML cannot serialize non-finite float: {value!r}")
+        return repr(value)
+    if isinstance(value, (datetime.datetime, datetime.date)):
+        return value.isoformat()
     if isinstance(value, str):
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{escaped}"'
+        out_chars = []
+        for ch in value:
+            cp = ord(ch)
+            if ch == "\\":
+                out_chars.append("\\\\")
+            elif ch == '"':
+                out_chars.append('\\"')
+            elif ch == "\b":
+                out_chars.append("\\b")
+            elif ch == "\t":
+                out_chars.append("\\t")
+            elif ch == "\n":
+                out_chars.append("\\n")
+            elif ch == "\f":
+                out_chars.append("\\f")
+            elif ch == "\r":
+                out_chars.append("\\r")
+            elif cp < 0x20 or cp == 0x7F:
+                out_chars.append(f"\\u{cp:04X}")
+            else:
+                out_chars.append(ch)
+        return '"' + "".join(out_chars) + '"'
     if isinstance(value, list):
         items = ", ".join(_format_value(v) for v in value)
         return f"[{items}]"
     raise TypeError(f"Unsupported TOML value type: {type(value).__name__}")
 # @cpt-end:cpt-cypilot-algo-core-infra-toml-utils:p1:inst-toml-serialize
+
+
+# ---------------------------------------------------------------------------
+# File locking
+# ---------------------------------------------------------------------------
+
+@contextlib.contextmanager
+def _with_core_toml_lock(core_toml_path: Path) -> Generator[None, None, None]:
+    """Context manager that holds an exclusive lock while the caller writes to
+    *core_toml_path*.
+
+    On POSIX systems ``fcntl.flock`` is used for advisory locking.  On
+    platforms where ``fcntl`` is unavailable (Windows) a ``.lock`` sentinel
+    file is created with ``O_CREAT | O_EXCL`` and a short retry loop is used
+    to wait for concurrent writers to finish.
+
+    Usage::
+
+        with _with_core_toml_lock(core_toml_path):
+            toml_utils.dump(data, core_toml_path, header_comment=...)
+    """
+    try:
+        import fcntl  # type: ignore[import]
+        _use_fcntl = True
+    except ImportError:
+        _use_fcntl = False
+
+    if _use_fcntl:
+        lock_file = core_toml_path.with_suffix(core_toml_path.suffix + ".lock")
+        fh = None
+        try:
+            lock_file.parent.mkdir(parents=True, exist_ok=True)
+            fh = open(lock_file, "a")  # noqa: WPS515
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            yield
+        finally:
+            if fh is not None:
+                try:
+                    fcntl.flock(fh, fcntl.LOCK_UN)
+                except OSError:
+                    pass
+                fh.close()
+            # Intentionally leave the .lock sentinel on disk; advisory flock locking
+            # is independent of the file's existence between runs and unlinking it
+            # introduces a TOCTOU race with concurrent acquirers.
+    else:
+        # Windows fallback: O_CREAT | O_EXCL sentinel with retry
+        lock_path = core_toml_path.with_suffix(core_toml_path.suffix + ".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_fd: Optional[int] = None
+        deadline = time.monotonic() + 10.0  # wait up to 10 s
+        while True:
+            try:
+                lock_fd = os.open(
+                    str(lock_path),
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                )
+                break
+            except FileExistsError:
+                if time.monotonic() > deadline:
+                    # Give up waiting — unlink stale lock if it predates our
+                    # wait window, then proceed without the lock.
+                    try:
+                        mtime = lock_path.stat().st_mtime
+                        if time.time() - mtime > 10.0:
+                            lock_path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                    print(
+                        f"WARNING: cf-constructor could not acquire lock on "
+                        f"{lock_path} within 10 s — proceeding without lock",
+                        file=sys.stderr,
+                    )
+                    lock_fd = None
+                    break
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            if lock_fd is not None:
+                os.close(lock_fd)
+                try:
+                    os.unlink(str(lock_path))
+                except OSError:
+                    pass

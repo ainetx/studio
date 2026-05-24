@@ -25,31 +25,7 @@ from cypilot.commands.agents import (
     _translate_windsurf_schema,
 )
 from cypilot.utils.manifest import AgentEntry, SkillEntry
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _make_agent(**kwargs) -> AgentEntry:
-    """Create an AgentEntry with sensible defaults."""
-    defaults = {
-        "id": "test-agent",
-        "description": "A test agent",
-        "prompt_file": "agents/test-agent.md",
-        "source": "",
-        "agents": [],
-        "append": None,
-        "mode": "readwrite",
-        "isolation": False,
-        "model": "",
-        "tools": [],
-        "disallowed_tools": [],
-        "color": "",
-        "memory_dir": "",
-    }
-    defaults.update(kwargs)
-    return AgentEntry(**defaults)
+from _test_helpers import _make_agent
 
 
 def _make_skill(**kwargs) -> SkillEntry:
@@ -132,45 +108,53 @@ class TestTranslateClaudeSchema(unittest.TestCase):
         result = _translate_claude_schema(agent)
         self.assertEqual(result["body_prefix"], "")
 
-    def test_claude_mcp_tools_filtered_from_tools(self):
-        """mcp__* entries are stripped from tools: frontmatter."""
+    def test_claude_mcp_tools_cause_skip_instead_of_partial_tool_allowlist(self):
+        """mcp__* entries must not be silently dropped from tools."""
         agent = _make_agent(tools=["Bash", "mcp__standctl__standctl_deploy", "Read"])
         result = _translate_claude_schema(agent)
         frontmatter = "\n".join(result["frontmatter"])
-        self.assertIn("tools:", frontmatter)
-        self.assertIn("Bash", frontmatter)
-        self.assertIn("Read", frontmatter)
+        self.assertTrue(result["skip"])
+        self.assertIn("cannot safely represent MCP tools", result["skip_reason"])
+        self.assertEqual(result["frontmatter"], [])
         self.assertNotIn("mcp__", frontmatter)
+        self.assertNotIn("tools:", frontmatter)
 
     def test_claude_mcp_tools_only_omits_tools_field(self):
-        """When tools list contains only mcp__* entries, tools: field is omitted and mode default applies."""
+        """When tools list contains only mcp__* entries, translation skips instead of widening access."""
         agent = _make_agent(tools=["mcp__standctl__standctl_deploy"], mode="readwrite")
         result = _translate_claude_schema(agent)
         frontmatter = "\n".join(result["frontmatter"])
-        # Field must not contain mcp__ tools; mode default readwrite applies
+        self.assertTrue(result["skip"])
+        self.assertIn("Claude frontmatter cannot safely represent MCP-only tools without broadening access", result["skip_reason"])
+        self.assertEqual(result["frontmatter"], [])
+        self.assertEqual(frontmatter, "")
         self.assertNotIn("mcp__", frontmatter)
-        # Falls through to readwrite default
-        self.assertIn("tools:", frontmatter)
-        self.assertIn("Write", frontmatter)
+        self.assertNotIn("tools:", frontmatter)
+        self.assertNotIn("Write", frontmatter)
 
-    def test_claude_mcp_tools_filtered_from_disallowed_tools(self):
-        """mcp__* entries are stripped from disallowedTools: frontmatter."""
+    def test_claude_mcp_disallowed_tools_cause_skip_instead_of_partial_denylist(self):
+        """mcp__* entries must not be silently dropped from disallowedTools."""
         agent = _make_agent(disallowed_tools=["Write", "mcp__standctl__standctl_deploy"])
         result = _translate_claude_schema(agent)
         frontmatter = "\n".join(result["frontmatter"])
-        self.assertIn("disallowedTools:", frontmatter)
-        self.assertIn("Write", frontmatter)
+        self.assertTrue(result["skip"])
+        self.assertIn("cannot safely represent MCP disallowed_tools", result["skip_reason"])
+        self.assertEqual(result["frontmatter"], [])
         self.assertNotIn("mcp__", frontmatter)
+        self.assertNotIn("disallowedTools:", frontmatter)
 
     def test_claude_mcp_tools_only_disallowed_omits_field(self):
-        """When disallowed_tools contains only mcp__* entries, disallowedTools: field is omitted and mode default applies."""
+        """When disallowed_tools contains only mcp__* entries, translation skips instead of widening access."""
         agent = _make_agent(disallowed_tools=["mcp__standctl__standctl_deploy"], mode="readwrite")
         result = _translate_claude_schema(agent)
         frontmatter = "\n".join(result["frontmatter"])
+        self.assertTrue(result["skip"])
+        self.assertIn("Claude frontmatter cannot safely represent MCP-only disallowed_tools", result["skip_reason"])
+        self.assertEqual(result["frontmatter"], [])
+        self.assertEqual(frontmatter, "")
         self.assertNotIn("mcp__", frontmatter)
-        # Falls through to readwrite default
-        self.assertIn("tools:", frontmatter)
-        self.assertIn("Write", frontmatter)
+        self.assertNotIn("tools:", frontmatter)
+        self.assertNotIn("Write", frontmatter)
 
 
 # ---------------------------------------------------------------------------

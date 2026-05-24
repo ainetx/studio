@@ -320,7 +320,7 @@ def _inject_managed_block(target_file: Path, install_dir: str, dry_run: bool = F
         start_idx = content.index(MARKER_START)
         end_idx = content.index(MARKER_END) + len(MARKER_END)
         current_block = content[start_idx:end_idx]
-        if current_block == expected_block.strip():
+        if current_block == expected_block:
             return "unchanged"
         # @cpt-begin:cpt-cypilot-algo-core-infra-inject-root-agents:p1:inst-replace-block
         new_content = content[:start_idx] + expected_block + content[end_idx:]

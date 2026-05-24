@@ -266,12 +266,18 @@ def _resolve_reasons(templates: List[str], issue: Dict[str, object]) -> List[str
 # ---------------------------------------------------------------------------
 
 # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-enrich
-def enrich_issues(issues: List[Dict[str, object]], project_root: Optional[Path] = None) -> None:
-    """Add ``fixing_prompt``, ``reasons``, and strip internal ``path`` from every issue (in-place).
+def enrich_issues(
+    issues: List[Dict[str, object]],
+    project_root: Optional[Path] = None,
+    strip_path: bool = True,
+) -> None:
+    """Add ``fixing_prompt``, ``reasons``, and optionally strip ``path`` from every issue (in-place).
 
-    After this call each issue has ``location`` (PATH:LINE) + ``line`` but no
-    redundant ``path`` key — the consumer reconstructs a pure path from
-    ``location`` if needed.
+    After this call each issue has ``location`` (PATH:LINE) + ``line``.
+    When *strip_path* is ``True`` (the default) the redundant ``path`` key is
+    removed — the consumer reconstructs a pure path from ``location`` if
+    needed.  Pass ``strip_path=False`` to preserve the ``path`` key (useful
+    when callers need the original path after enrichment).
     """
     for issue in issues:
         prompt = _build_fixing_prompt(issue, project_root=project_root)
@@ -284,7 +290,8 @@ def enrich_issues(issues: List[Dict[str, object]], project_root: Optional[Path] 
             if reasons:
                 text += " | Probable causes: " + "; ".join(reasons)
             issue["fixing_prompt"] = text
-        issue.pop("path", None)
+        if strip_path:
+            issue.pop("path", None)
 # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-enrich
 
 
@@ -377,6 +384,7 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
     # ------------------------------------------------------------------
     # Structure — task / checkbox consistency
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-task-consistency
     if code == EC.CDSL_STEP_UNCHECKED:
         return (
             f"Open `{loc}` and mark the CDSL step as checked `[x]`, "
@@ -395,10 +403,12 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
             f"Open `{loc}` and either uncheck parent `{pid}`, "
             f"or check all nested unchecked items under it."
         )
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-task-consistency
 
     # ------------------------------------------------------------------
     # Structure — references
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-references
     if code == EC.REF_NO_DEFINITION:
         return (
             f"Open `{loc}`: add a definition for `{cpt_id}` in the appropriate artifact, "
@@ -431,19 +441,23 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
             f"Open `{loc}`: add a reference to `{cpt_id}` in {other_s}, "
             f"or verify this ID is intentionally unreferenced."
         )
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-references
 
     # ------------------------------------------------------------------
     # Structure — heading numbering
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-heading-numbering
     if code == EC.HEADING_NUMBER_NOT_CONSECUTIVE:
         return (
             f"Open `{loc}`: fix heading number — "
             f"expected `{issue.get('expected_prefix')}` after `{issue.get('previous_prefix')}`."
         )
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-heading-numbering
 
     # ------------------------------------------------------------------
     # Constraints — ID kind presence
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-id-kind-presence
     if code == EC.MISSING_CONSTRAINTS:
         return (
             f"Add constraint definitions for kinds {issue.get('kinds')} in `constraints.toml`."
@@ -462,10 +476,12 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
         return (
             f"Add at least one `{id_kind}` ID definition in `{path_s}`{ctx}.{hdg}{tpl}"
         )
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-id-kind-presence
 
     # ------------------------------------------------------------------
     # Constraints — task / priority on definitions
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-task-priority-defs
     if code == EC.DEF_MISSING_TASK:
         return (
             f"Open `{loc}`: add `- [ ]` before `{cpt_id}`{ctx}.{tpl}"
@@ -488,20 +504,24 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
             f"Open `{loc}`: remove the priority marker from `{cpt_id}` — "
             f"kind `{id_kind}` prohibits priority."
         )
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-task-priority-defs
 
     # ------------------------------------------------------------------
     # Constraints — heading placement for definitions
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-heading-placement
     if code == EC.DEF_WRONG_HEADINGS:
         hdg = _headings_hint(issue, key="headings", info_key="headings_info")
         return (
             f"Open `{loc}`: move `{cpt_id}` to a required section.{hdg} "
             f"Currently under: {issue.get('found_headings')}.{tpl}"
         )
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-heading-placement
 
     # ------------------------------------------------------------------
     # Constraints — heading contract
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-heading-contract
     if code == EC.HEADING_MISSING:
         pat = issue.get("heading_pattern")
         pat_s = f" matching `{pat}`" if pat else ""
@@ -526,10 +546,12 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
         numbered = issue.get("numbered")
         verb = "is required but missing" if numbered is True else "is prohibited but present"
         return f"Open `{loc}`: heading numbering {verb}."
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-heading-contract
 
     # ------------------------------------------------------------------
     # Constraints — cross-reference coverage
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-cross-ref-coverage
     if code == EC.REF_TARGET_NOT_IN_SCOPE:
         return (
             f"At `{loc}`: `{cpt_id}` requires a reference in `{target_kind}` artifact, "
@@ -594,10 +616,12 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
         return (
             f"Open `{loc}`: remove priority marker from reference of `{cpt_id}`{ctx}."
         )
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-cross-ref-coverage
 
     # ------------------------------------------------------------------
     # Code traceability — marker errors
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-marker-errors
     if code == EC.MARKER_DUP_BEGIN:
         return (
             f"Open `{loc}`: close the previous `@cpt-begin` block for `{cpt_id}` "
@@ -665,10 +689,12 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
             f"Open `{loc}`: the code block `inst-{inst}` of `{cpt_id}` has no matching CDSL step in the artifact. "
             f"Add the CDSL step in the artifact, or rename/remove the code marker if the instruction was renamed."
         )
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-marker-errors
 
     # ------------------------------------------------------------------
     # TOC (Table of Contents) validation
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-toc
     if code == EC.TOC_MISSING:
         path_s = loc.rsplit(':', 1)[0] if ':' in loc else loc
         return (
@@ -698,10 +724,12 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
             f"Table of Contents in `{path_s}` is outdated. "
             f"Run `cfc toc {path_s}` to regenerate."
         )
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-toc
 
     # ------------------------------------------------------------------
     # Warnings
     # ------------------------------------------------------------------
+    # @cpt-begin:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-warnings
     if code == EC.ID_NOT_REFERENCED_NO_SCOPE:
         return (
             f"At `{loc}`: `{cpt_id}` has no references — "
@@ -709,4 +737,5 @@ def _build_fixing_prompt(issue: Dict[str, object], project_root: Optional[Path] 
         )
 
     return None
+    # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-warnings
 # @cpt-end:cpt-cypilot-algo-traceability-validation-fixing-prompts:p1:inst-fix-build-prompt

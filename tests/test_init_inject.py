@@ -155,6 +155,27 @@ class TestInjectRootWrappers(unittest.TestCase):
             self.assertEqual(result, "created")
             self.assertFalse((root / "AGENTS.md").exists())
 
+    def test_inject_managed_block_idempotent(self):
+        """Two consecutive injects on an already-injected file report 'unchanged'.
+
+        This test pins the invariant that _inject_managed_block is idempotent:
+        a second call on an already-injected file should return 'unchanged'.
+        (P5-F011: ensures no-op .strip() removal regression)
+        """
+        from cypilot.commands.init import _inject_managed_block
+        with TemporaryDirectory() as td:
+            project_root = Path(td)
+            target = project_root / "AGENTS.md"
+            target.write_text("# Project AGENTS\n\nSome pre-existing content.\n")
+
+            # First inject
+            result_a = _inject_managed_block(target, "cypilot", project_root=project_root)
+            self.assertIn(result_a, {"created", "updated"}, f"First inject should create/update, got {result_a!r}")
+
+            # Second inject on already-injected file
+            result_b = _inject_managed_block(target, "cypilot", project_root=project_root)
+            self.assertEqual(result_b, "unchanged", f"Expected idempotent 'unchanged', got {result_b!r}")
+
 
 class TestPromptKitInstallFlag(unittest.TestCase):
     """Coverage for _prompt_kit_install_flag interactive/non-interactive paths."""

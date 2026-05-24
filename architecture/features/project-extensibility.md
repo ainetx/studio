@@ -295,6 +295,9 @@ The first concrete consumer is the standctl integration into cyber-repo, which d
 
 **Steps**:
 0. [x] - `p1` - Entry point: set up result dict and path template for target agent tool - `inst-generate-manifest-agents`
+
+**Supporting**:
+- [x] - `p1` - Per-tool agent output path templates mapping each supported agent to its native agent file path pattern (`{id}` placeholder) - `inst-agent-output-paths`
 1. [x] - `p1` - **FOR EACH** agent in merged components where target agent is in `agents` list - `inst-iterate-agents`
    1. [x] - `p1` - Call Translate Extended Agent Schema to get translated frontmatter dict and body prefix (Process: Translate Extended Agent Schema) - `inst-translate-schema`
    2. [x] - `p1` - **IF** translation result has `skip = True`, skip this agent and log skip reason — continue to next - `inst-check-skip`
@@ -340,14 +343,14 @@ The extended agent schema uses semantic fields that translate differently per to
 | `mode: readwrite` | `tools: Bash,Read,Write,Edit,Glob,Grep` | `tools: grep,view,edit,bash` | `tools: ["*"]` | `sandbox_mode = "workspace-write"` |
 | `model` | direct passthrough to `model:` | `model:` field | n/a | `model` field (developer maps to tool-specific names) |
 | `isolation: true` | `isolation: worktree` | n/a | n/a | n/a (always sandboxed) |
-| `tools` | `tools:` list in frontmatter | limited tool strings | `tools` JSON array | n/a (MCP server level — noted in developer_instructions) |
-| `disallowed_tools` | `disallowedTools:` list | n/a (ignored) | n/a (ignored) | n/a (ignored) |
+| `tools` | `tools:` list in frontmatter; skip generation if any declared tool is an unsupported `mcp__*` capability | limited tool strings | `tools` JSON array | n/a (MCP server level — noted in developer_instructions) |
+| `disallowed_tools` | `disallowedTools:` list; skip generation if any declared denylist entry is an unsupported `mcp__*` capability | n/a (ignored) | n/a (ignored) | n/a (ignored) |
 | `color` | `color:` in frontmatter | n/a (ignored) | n/a (ignored) | n/a (ignored) |
 | `memory_dir` | injected in prompt body | n/a (ignored) | n/a (ignored) | n/a (ignored) |
 
 **Steps**:
 1. [ ] - `p1` - Validate mutual exclusivity of `tools` and `disallowed_tools` — error if both present - `inst-validate-tools`
-2. [ ] - `p1` - **IF** target is `claude`: build YAML frontmatter with all supported fields (tools, disallowedTools, model, isolation, color); inject memory_dir reference in prompt body if present - `inst-translate-claude`
+2. [ ] - `p1` - **IF** target is `claude`: build YAML frontmatter with all supported fields (tools, disallowedTools, model, isolation, color); if unsupported MCP tool capabilities would be omitted, skip with an explicit reason instead of narrowing access silently; inject memory_dir reference in prompt body if present - `inst-translate-claude`
 3. [ ] - `p1` - **IF** target is `cursor`: build YAML frontmatter with mode/model; tools field has limited mapping (grep, view, edit, bash) — custom MCP tools not supported - `inst-translate-cursor`
 4. [ ] - `p1` - **IF** target is `copilot`: build YAML frontmatter with tools array; no model/isolation/color support - `inst-translate-copilot`
 5. [ ] - `p1` - **IF** target is `openai` (Codex): build TOML config with `sandbox_mode` (from mode), `model`, `developer_instructions`; per-agent tool restrictions are not supported (managed at MCP server level) - `inst-translate-codex`
@@ -491,7 +494,7 @@ The system **MUST** generate skill files from `[[skills]]` manifest entries into
 
 - [x] `p1` - **ID**: `cpt-cypilot-dod-project-extensibility-agents-generation`
 
-The system **MUST** generate agent files from `[[agents]]` manifest entries into agent-native output paths. For each agent entry, `translate_agent_schema()` is called to produce tool-native frontmatter; if the result has `skip = True` (e.g., Windsurf has no subagent support), the agent is silently skipped with reason logged. The assembled file contains a YAML frontmatter block (`name:`, `description:`, plus all translated fields) followed by the body prefix and prompt content. Manifest agents use separate output paths from kit-composed agents.
+The system **MUST** generate agent files from `[[agents]]` manifest entries into agent-native output paths. For each agent entry, `translate_agent_schema()` is called to produce tool-native frontmatter; if the result has `skip = True` (e.g., Windsurf has no subagent support, or Claude cannot represent declared MCP tool capabilities without omission), the agent is skipped with reason logged. Stale output cleanup is allowed only for byte-identical generator output, not locally customized generated files. The assembled file contains a YAML frontmatter block (`name:`, `description:`, plus all translated fields) followed by the body prefix and prompt content. Manifest agents use separate output paths from kit-composed agents.
 
 **Agent Output Paths**:
 
@@ -515,8 +518,8 @@ The system **MUST** generate agent files from `[[agents]]` manifest entries into
 
 The system **MUST** translate extended agent schema fields to agent-native frontmatter for all five supported tools (Claude Code, Cursor, GitHub Copilot, OpenAI Codex, Windsurf). The extended fields are:
 
-- `tools` (string[], optional) — explicit tool allowlist; Claude → `tools:`, Copilot → `tools`, Cursor/Codex → limited or n/a
-- `disallowed_tools` (string[], optional) — explicit tool denylist; Claude → `disallowedTools:`, others → n/a
+- `tools` (string[], optional) — explicit tool allowlist; Claude → `tools:` unless any entry is an unsupported `mcp__*` capability, in which case generation skips with an explicit reason; Copilot → `tools`, Cursor/Codex → limited or n/a
+- `disallowed_tools` (string[], optional) — explicit tool denylist; Claude → `disallowedTools:` unless any entry is an unsupported `mcp__*` capability, in which case generation skips with an explicit reason; others → n/a
 - `color` (string, optional) — Claude → `color:` frontmatter, others → ignored
 - `memory_dir` (string, optional) — Claude → injected in prompt body as persistent memory path, others → ignored
 - `model` (string, passthrough) — any string value; Claude → direct `model:`, Cursor → `model:`, Codex → `model` field, Copilot → n/a

@@ -106,10 +106,27 @@ class TestLoadManifest:
         with pytest.raises(ValueError, match="version"):
             load_manifest(kit)
 
-    def test_manifest_empty_resources_raises(self, tmp_path: Path) -> None:
-        kit = tmp_path / "no-res"
+    def test_manifest_missing_resources_key_allowed(self, tmp_path: Path) -> None:
+        # CR-T6-017: V1 manifest with no `resources` key is allowed (treated as empty).
+        kit = tmp_path / "no-res-key"
         kit.mkdir()
         _write_manifest(kit, """\
+            [manifest]
+            version = "1.0"
+        """)
+        m = load_manifest(kit)
+        assert m is not None
+        assert m.resources == []
+
+    def test_manifest_empty_resources_array_raises(self, tmp_path: Path) -> None:
+        # CR-T6-017: explicit top-level `resources = []` (empty array) is still rejected.
+        kit = tmp_path / "empty-res-array"
+        kit.mkdir()
+        # resources must be at the top level (before [manifest]) to be parsed
+        # as a top-level TOML key rather than a key inside [manifest].
+        _write_manifest(kit, """\
+            resources = []
+
             [manifest]
             version = "1.0"
         """)

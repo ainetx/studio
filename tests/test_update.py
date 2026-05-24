@@ -8,6 +8,7 @@ import os
 import shutil
 import sys
 import unittest
+from contextlib import contextmanager
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -143,6 +144,37 @@ class TestUpdateHelpers(unittest.TestCase):
             _write_toml(p, {"other": "data"})
             self.assertEqual(_read_conf_version(p), 0)
 
+    def test_remove_system_locks_full_read_modify_write_cycle(self):
+        """Concurrent core.toml changes made before lock acquisition are preserved."""
+        from cypilot.commands.update import _remove_system_from_core_toml
+        from cypilot.utils import toml_utils
+
+        with TemporaryDirectory() as td:
+            config_dir = Path(td)
+            core_toml = config_dir / "core.toml"
+            _write_toml(core_toml, {
+                "system": {"name": "legacy"},
+                "kits": {"sdlc": {"path": "config/kits/sdlc"}},
+            })
+
+            @contextmanager
+            def fake_lock(_path):
+                _write_toml(core_toml, {
+                    "system": {"name": "legacy"},
+                    "kits": {
+                        "sdlc": {"path": "config/kits/sdlc"},
+                        "custom": {"path": "config/kits/custom"},
+                    },
+                })
+                yield
+
+            with patch.object(toml_utils, "_with_core_toml_lock", fake_lock):
+                self.assertTrue(_remove_system_from_core_toml(config_dir))
+
+            data = toml_utils.load(core_toml)
+            self.assertNotIn("system", data)
+            self.assertIn("custom", data["kits"])
+
 
 # =========================================================================
 # cmd_update error paths
@@ -150,14 +182,6 @@ class TestUpdateHelpers(unittest.TestCase):
 
 class TestCmdUpdateErrors(unittest.TestCase):
     """Error handling in cmd_update."""
-
-    def setUp(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(True)
-
-    def tearDown(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(False)
 
     def test_no_project_root(self):
         from cypilot.commands.update import cmd_update
@@ -236,6 +260,83 @@ class TestCmdUpdateErrors(unittest.TestCase):
             finally:
                 os.chdir(cwd)
 
+    def test_cmd_update_handles_unexpected_exception_type(self):
+        """Regression: update_kit raising TypeError must not surface as UnboundLocalError.
+
+        The except clause in cmd_update only catches (OSError, ValueError, KeyError,
+        RuntimeError).  A TypeError propagates outward.  The kit_r variable is
+        initialized before the try block so there should be no UnboundLocalError.
+
+        Test setup note: _migrate_kit_sources is patched to return {} to prevent
+        it from adding a github: source to the kit entry (which would trigger a
+        download attempt that fails before update_kit is called).  The cache
+        fallback path is used instead so update_kit is actually invoked.
+        """
+        from cypilot.commands.update import cmd_update
+        with TemporaryDirectory() as td:
+            root = Path(td) / "proj"
+            root.mkdir()
+            cache = Path(td) / "cache"
+            _make_cache(cache)
+            _init_project(root, cache)
+
+            cwd = os.getcwd()
+            raised_exc = None
+            return_code = None
+            try:
+                os.chdir(str(root))
+                with (
+                    patch("cypilot.commands.update.CACHE_DIR", cache),
+                    # Prevent source-migration step from adding github: source —
+                    # otherwise the download fails before update_kit is reached.
+                    patch(
+                        "cypilot.commands.update._migrate_kit_sources",
+                        return_value={},
+                    ),
+                    patch(
+                        "cypilot.commands.kit.update_kit",
+                        side_effect=TypeError("simulated unexpected error"),
+                    ),
+                ):
+                    buf = io.StringIO()
+                    err_buf = io.StringIO()
+                    try:
+                        with redirect_stdout(buf), redirect_stderr(err_buf):
+                            return_code = cmd_update(["--yes"])
+                    except Exception as exc:
+                        raised_exc = exc
+            finally:
+                os.chdir(cwd)
+
+            # The function must NOT raise UnboundLocalError regardless of outcome.
+            self.assertNotIsInstance(
+                raised_exc,
+                UnboundLocalError,
+                "cmd_update must not raise UnboundLocalError when update_kit raises TypeError",
+            )
+            # Exactly one of: an exception was raised OR a non-zero return code was returned.
+            # return_code is None when an exception propagated out of cmd_update, which counts
+            # as the "exception raised" side of the contract, not the "non-zero rc" side.
+            rc_nonzero = return_code is not None and return_code != 0
+            exc_raised = raised_exc is not None
+            self.assertTrue(
+                exc_raised ^ rc_nonzero,
+                "expected exactly one of: an exception raised OR non-zero rc",
+            )
+            if return_code is not None:
+                # If cmd_update returned normally, it should report error status.
+                self.assertNotEqual(
+                    return_code, 0,
+                    "cmd_update must return non-zero when update_kit raises TypeError",
+                )
+            else:
+                # TypeError propagated — confirm it is TypeError, not UnboundLocalError.
+                self.assertIsInstance(
+                    raised_exc,
+                    TypeError,
+                    f"Expected TypeError to propagate, got {type(raised_exc).__name__}",
+                )
+
 
 # =========================================================================
 # cmd_update full pipeline
@@ -243,14 +344,6 @@ class TestCmdUpdateErrors(unittest.TestCase):
 
 class TestCmdUpdatePipeline(unittest.TestCase):
     """Full update pipeline: init then update."""
-
-    def setUp(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(True)
-
-    def tearDown(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(False)
 
     def test_update_after_init(self):
         """Update on a freshly initialized project succeeds."""
@@ -265,7 +358,12 @@ class TestCmdUpdatePipeline(unittest.TestCase):
             cwd = os.getcwd()
             try:
                 os.chdir(str(root))
-                with patch("cypilot.commands.update.CACHE_DIR", cache):
+                with (
+                    patch("cypilot.commands.update.CACHE_DIR", cache),
+                    # _migrate_kit_sources performs a network fetch on init.py-stripped
+                    # GitHub sources; isolate by patching to a no-op.
+                    patch("cypilot.commands.update._migrate_kit_sources", return_value={}),
+                ):
                     buf = io.StringIO()
                     err = io.StringIO()
                     with redirect_stdout(buf), redirect_stderr(err):
@@ -313,12 +411,20 @@ class TestCmdUpdatePipeline(unittest.TestCase):
             _make_cache(cache)
             _init_project(root, cache)
 
-            with patch("cypilot.commands.update.CACHE_DIR", cache):
+            with (
+                patch("cypilot.commands.update.CACHE_DIR", cache),
+                # _migrate_kit_sources performs a network fetch on init.py-stripped
+                # GitHub sources; isolate by patching to a no-op.
+                patch("cypilot.commands.update._migrate_kit_sources", return_value={}),
+            ):
                 buf = io.StringIO()
                 err = io.StringIO()
                 with redirect_stdout(buf), redirect_stderr(err):
                     rc = cmd_update(["--project-root", str(root)])
             self.assertEqual(rc, 0)
+            out = json.loads(buf.getvalue())
+            self.assertIn("actions", out)
+            self.assertIn(str(root), json.dumps(out))
 
     def test_update_version_drift(self):
         """When cache has newer kit version, update applies file-level diff."""
@@ -378,7 +484,12 @@ class TestCmdUpdatePipeline(unittest.TestCase):
             cwd = os.getcwd()
             try:
                 os.chdir(str(root))
-                with patch("cypilot.commands.update.CACHE_DIR", cache):
+                with (
+                    patch("cypilot.commands.update.CACHE_DIR", cache),
+                    # _migrate_kit_sources performs a network fetch on init.py-stripped
+                    # GitHub sources; isolate by patching to a no-op.
+                    patch("cypilot.commands.update._migrate_kit_sources", return_value={}),
+                ):
                     buf = io.StringIO()
                     err = io.StringIO()
                     with redirect_stdout(buf), redirect_stderr(err):
@@ -461,7 +572,12 @@ class TestUpdateHelperExceptions(unittest.TestCase):
             cwd = os.getcwd()
             try:
                 os.chdir(str(root))
-                with patch("cypilot.commands.update.CACHE_DIR", cache):
+                with (
+                    patch("cypilot.commands.update.CACHE_DIR", cache),
+                    # _migrate_kit_sources performs a network fetch on init.py-stripped
+                    # GitHub sources; isolate by patching to a no-op.
+                    patch("cypilot.commands.update._migrate_kit_sources", return_value={}),
+                ):
                     buf = io.StringIO()
                     err = io.StringIO()
                     with redirect_stdout(buf), redirect_stderr(err):
@@ -895,14 +1011,6 @@ class TestShowCoreWhatsnew(unittest.TestCase):
 
 
 class TestCmdUpdateWhatsnew(unittest.TestCase):
-
-    def setUp(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(True)
-
-    def tearDown(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(False)
     """Integration tests for core whatsnew in cmd_update pipeline."""
 
     def test_update_shows_whatsnew_and_copies_to_core(self):
@@ -923,7 +1031,12 @@ class TestCmdUpdateWhatsnew(unittest.TestCase):
             cwd = os.getcwd()
             try:
                 os.chdir(str(root))
-                with patch("cypilot.commands.update.CACHE_DIR", cache):
+                with (
+                    patch("cypilot.commands.update.CACHE_DIR", cache),
+                    # _migrate_kit_sources performs a network fetch on init.py-stripped
+                    # GitHub sources; isolate by patching to a no-op.
+                    patch("cypilot.commands.update._migrate_kit_sources", return_value={}),
+                ):
                     buf = io.StringIO()
                     err = io.StringIO()
                     with redirect_stdout(buf), redirect_stderr(err):
@@ -955,7 +1068,12 @@ class TestCmdUpdateWhatsnew(unittest.TestCase):
             try:
                 os.chdir(str(root))
                 # First update — shows whatsnew (non-interactive to avoid input())
-                with patch("cypilot.commands.update.CACHE_DIR", cache):
+                # _migrate_kit_sources performs a network fetch on init.py-stripped
+                # GitHub sources; isolate by patching to a no-op.
+                with (
+                    patch("cypilot.commands.update.CACHE_DIR", cache),
+                    patch("cypilot.commands.update._migrate_kit_sources", return_value={}),
+                ):
                     buf = io.StringIO()
                     err = io.StringIO()
                     with redirect_stdout(buf), redirect_stderr(err):
@@ -963,7 +1081,10 @@ class TestCmdUpdateWhatsnew(unittest.TestCase):
                 self.assertIn("Test", err.getvalue())
 
                 # Second update — whatsnew already in .core/, nothing to show
-                with patch("cypilot.commands.update.CACHE_DIR", cache):
+                with (
+                    patch("cypilot.commands.update.CACHE_DIR", cache),
+                    patch("cypilot.commands.update._migrate_kit_sources", return_value={}),
+                ):
                     buf2 = io.StringIO()
                     err2 = io.StringIO()
                     with redirect_stdout(buf2), redirect_stderr(err2):
@@ -1129,14 +1250,6 @@ class TestCmdUpdateWhatsnew(unittest.TestCase):
 class TestMaybeRegenerateAgents(unittest.TestCase):
     """Tests for auto-regeneration of agent files during update."""
 
-    def setUp(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(True)
-
-    def tearDown(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(False)
-
     def _make_project_with_agents(self, root: Path, cache: Path) -> Path:
         """Create a project with init + generate-agents for one agent."""
         _make_cache(cache)
@@ -1239,6 +1352,15 @@ class TestMaybeRegenerateAgents(unittest.TestCase):
             cache = Path(td) / "cache"
             cypilot_dir = self._make_project_with_agents(root, cache)
 
+            # Place SKILL.md in the cache's skills dir so cmd_update copies it
+            # to .core/skills/cypilot/SKILL.md (needed by _process_single_agent).
+            cache_skill = cache / "skills" / "cypilot" / "SKILL.md"
+            cache_skill.parent.mkdir(parents=True, exist_ok=True)
+            cache_skill.write_text(
+                "---\nname: cypilot\ndescription: Test skill\n---\nContent\n",
+                encoding="utf-8",
+            )
+
             # Create Cyber Constructor-specific windsurf marker file
             wf = root / ".windsurf" / "workflows" / "cf-constructor.md"
             wf.parent.mkdir(parents=True)
@@ -1247,7 +1369,12 @@ class TestMaybeRegenerateAgents(unittest.TestCase):
             cwd = os.getcwd()
             try:
                 os.chdir(str(root))
-                with patch("cypilot.commands.update.CACHE_DIR", cache):
+                with (
+                    patch("cypilot.commands.update.CACHE_DIR", cache),
+                    # _migrate_kit_sources performs a network fetch on init.py-stripped
+                    # GitHub sources; isolate by patching to a no-op.
+                    patch("cypilot.commands.update._migrate_kit_sources", return_value={}),
+                ):
                     buf = io.StringIO()
                     err = io.StringIO()
                     with redirect_stdout(buf), redirect_stderr(err):
@@ -2030,14 +2157,6 @@ class TestHumanUpdateOkEdgeCases(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestCmdUpdateLayoutMigration(unittest.TestCase):
-    def setUp(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(True)
-
-    def tearDown(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(False)
-
     def test_update_triggers_layout_migration(self):
         """cmd_update migrates old kits/ layout to config/kits/."""
         from cypilot.commands.update import cmd_update
@@ -2084,7 +2203,7 @@ class TestCmdUpdateLayoutMigration(unittest.TestCase):
             root.mkdir()
             cache = Path(td) / "cache"
             _make_cache(cache)
-            adapter = _init_project(root, cache)
+            _init_project(root, cache)
 
             cwd = os.getcwd()
             try:
@@ -2392,14 +2511,6 @@ class TestMaybeMigrateLegacyToManifest(unittest.TestCase):
 class TestCmdUpdateManifestMigration(unittest.TestCase):
     """Pipeline integration tests for WP7 manifest migration in cmd_update."""
 
-    def setUp(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(True)
-
-    def tearDown(self):
-        from cypilot.utils.ui import set_json_mode
-        set_json_mode(False)
-
     def test_update_triggers_manifest_migration_version_match(self):
         """When kit versions match but no resources, migration still triggers.
 
@@ -2515,7 +2626,7 @@ class TestCmdUpdateManifestMigration(unittest.TestCase):
     def test_update_skips_migration_when_resources_exist(self):
         """When kit already has resources in core.toml, migration is skipped."""
         from cypilot.commands.update import cmd_update
-        import tomllib, textwrap
+        import textwrap
 
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"

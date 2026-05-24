@@ -23,6 +23,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
 
 from cypilot.commands.agents import (
+    _build_legacy_openai_agent_file,
     _build_openai_agent_file,
     _escape_toml_basic_string,
     _escape_toml_multiline_string,
@@ -222,11 +223,14 @@ class TestBuildOpenaiAgentFileInjection(unittest.TestCase):
         variables: Optional[Dict[str, str]] = None,
         agent_id: str = "test-agent",
         description: str = "desc",
+        translated_overrides: Optional[Dict[str, object]] = None,
     ) -> str:
         agent = _FakeAgentEntry(id=agent_id, description=description, append=append)
         translated: Dict = {"sandbox_mode": "workspace-write"}
         if model:
             translated["model"] = model
+        if translated_overrides:
+            translated.update(translated_overrides)
         content, rel_out = _build_openai_agent_file(
             agent_id, agent, translated, source, ".codex/agents/{id}.md", variables,
         )
@@ -241,35 +245,53 @@ class TestBuildOpenaiAgentFileInjection(unittest.TestCase):
 
     def test_literal_backslash_n_in_source(self):
         data = self._build_and_parse(source=r"Use \n to separate items")
-        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        instructions = data["developer_instructions"]
         self.assertIn(r"\n", instructions)
         self.assertNotIn("\x00", instructions)  # no corruption
 
     def test_literal_backslash_t_in_source(self):
         data = self._build_and_parse(source=r"col1\tcol2")
-        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        instructions = data["developer_instructions"]
         self.assertIn(r"\t", instructions)
 
     def test_literal_backslash_u_in_source(self):
         data = self._build_and_parse(source=r"emoji \u2603 here")
-        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        instructions = data["developer_instructions"]
         self.assertIn(r"\u2603", instructions)
 
     def test_invalid_escape_sequence_in_source(self):
         """\\p is not a valid TOML escape — must not crash the parser."""
         data = self._build_and_parse(source=r"regex: \p{L}+")
-        self.assertIn(r"\p{L}+", data["agents"]["test_agent"]["developer_instructions"])
+        self.assertIn(r"\p{L}+", data["developer_instructions"])
 
     def test_triple_quote_in_source_no_injection(self):
         data = self._build_and_parse(source='before"""\nevil = "injected"\n"""after')
-        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        instructions = data["developer_instructions"]
         self.assertIn('"""', instructions)
-        self.assertNotIn("evil", data["agents"]["test_agent"].get("evil", ""))
+        self.assertNotIn("evil", data.get("evil", ""))
 
     def test_windows_path_in_source(self):
         data = self._build_and_parse(source=r"C:\Users\me\file.txt")
         self.assertIn(r"C:\Users\me\file.txt",
-                       data["agents"]["test_agent"]["developer_instructions"])
+                       data["developer_instructions"])
+
+    def test_codex_tuning_fields_are_emitted(self):
+        data = self._build_and_parse(
+            translated_overrides={
+                "model_reasoning_effort": "high",
+                "model_context_window": 1050000,
+            }
+        )
+        self.assertEqual(data["model_reasoning_effort"], "high")
+        self.assertEqual(data["model_context_window"], 1050000)
+
+    def test_variable_in_description_escapes_basic_string_context(self):
+        data = self._build_and_parse(
+            description="{desc}",
+            variables={"desc": 'safe"\nevil = "injected'},
+        )
+        self.assertEqual(data["description"], 'safe"\nevil = "injected')
+        self.assertNotIn("evil", data)
 
     # -- backslash in append content --
 
@@ -278,7 +300,7 @@ class TestBuildOpenaiAgentFileInjection(unittest.TestCase):
             source="main content",
             append=r"appended path: C:\data\out",
         )
-        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        instructions = data["developer_instructions"]
         self.assertIn(r"C:\data\out", instructions)
 
     def test_triple_quote_in_append_no_injection(self):
@@ -286,18 +308,18 @@ class TestBuildOpenaiAgentFileInjection(unittest.TestCase):
             source="main",
             append='"""\nfoo = "bar"',
         )
-        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        instructions = data["developer_instructions"]
         self.assertIn('"""', instructions)
 
     # -- model field escaping --
 
     def test_model_with_quotes_roundtrips(self):
         data = self._build_and_parse(model='gpt-4"turbo')
-        self.assertEqual(data["agents"]["test_agent"]["model"], 'gpt-4"turbo')
+        self.assertEqual(data["model"], 'gpt-4"turbo')
 
     def test_model_with_backslash_roundtrips(self):
         data = self._build_and_parse(model="org\\model")
-        self.assertEqual(data["agents"]["test_agent"]["model"], "org\\model")
+        self.assertEqual(data["model"], "org\\model")
 
     # -- variable substitution inside multi-line strings --
 
@@ -306,7 +328,7 @@ class TestBuildOpenaiAgentFileInjection(unittest.TestCase):
             source="root is {cf-constructor-path}",
             variables={"cf-constructor-path": r"C:\projects\root"},
         )
-        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        instructions = data["developer_instructions"]
         self.assertIn(r"C:\projects\root", instructions)
 
     def test_variable_with_triple_quote_no_injection(self):
@@ -314,8 +336,8 @@ class TestBuildOpenaiAgentFileInjection(unittest.TestCase):
             source="val is {cf-constructor-path}",
             variables={"cf-constructor-path": '"""injected = true\n'},
         )
-        instructions = data["agents"]["test_agent"]["developer_instructions"]
-        self.assertNotIn("injected", data["agents"]["test_agent"].get("injected", ""))
+        instructions = data["developer_instructions"]
+        self.assertNotIn("injected", data.get("injected", ""))
 
     # -- combined stress test --
 
@@ -329,7 +351,7 @@ class TestBuildOpenaiAgentFileInjection(unittest.TestCase):
             "end"
         )
         data = self._build_and_parse(source=nasty_source)
-        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        instructions = data["developer_instructions"]
         # All content must survive the round-trip
         self.assertIn("\\backslash", instructions)
         self.assertIn('"quotes"', instructions)
@@ -365,6 +387,66 @@ class TestFormatTomlEntryInjection(unittest.TestCase):
         entry = {"id": "c", "description": "line1\nline2"}
         data = self._entry_roundtrip(entry)
         self.assertEqual(data["agents"][0]["description"], "line1\nline2")
+
+
+# ===========================================================================
+# _build_legacy_openai_agent_file — CR-T9-009
+# ===========================================================================
+
+class TestBuildLegacyOpenaiAgentFileInjection(unittest.TestCase):
+    """Backslash and triple-quote round-trip tests for _build_legacy_openai_agent_file."""
+
+    def _build(
+        self,
+        source: str = "# Hello",
+        agent_id: str = "test-agent",
+        description: str = "desc",
+        model: str = "",
+        variables: Optional[Dict[str, str]] = None,
+    ) -> str:
+        agent = _FakeAgentEntry(id=agent_id, description=description)
+        translated: Dict = {"sandbox_mode": "workspace-write"}
+        if model:
+            translated["model"] = model
+        return _build_legacy_openai_agent_file(agent_id, agent, translated, source, variables)
+
+    def _build_and_parse(self, **kwargs) -> dict:
+        content = self._build(**kwargs)
+        self.assertTrue(content, "Expected non-empty TOML content")
+        return _roundtrip_toml(content)
+
+    def test_backslash_in_source_roundtrips(self):
+        """A literal backslash in source content round-trips through TOML."""
+        data = self._build_and_parse(source=r"Use C:\data\out as the path")
+        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        self.assertIn(r"C:\data\out", instructions)
+
+    def test_triple_quote_in_source_roundtrips(self):
+        """Triple-quote in source does not break TOML multi-line string parsing."""
+        data = self._build_and_parse(source='before"""\nevil = "injected"\n"""after')
+        instructions = data["agents"]["test_agent"]["developer_instructions"]
+        self.assertIn('"""', instructions)
+        # The injected key must NOT appear as a real top-level key
+        self.assertNotIn("evil", data.get("evil", ""))
+
+
+# ===========================================================================
+# _render_toml_agent — CR-T9-010: None description round-trip
+# ===========================================================================
+
+class TestRenderTomlAgentNoneDescription(unittest.TestCase):
+    """_render_toml_agent with description=None must produce description = "" (CR-T9-010)."""
+
+    def test_none_description_roundtrips(self):
+        agent = {"name": "t", "description": None, "model": "inherit"}
+        result = _render_toml_agent(agent, "@/t.md")
+        data = _roundtrip_toml(result)
+        self.assertEqual(data["description"], "")
+
+    def test_none_description_produces_empty_string_in_toml(self):
+        agent = {"name": "t", "description": None, "model": "inherit"}
+        result = _render_toml_agent(agent, "@/t.md")
+        self.assertIn('description = ""', result)
 
 
 if __name__ == "__main__":

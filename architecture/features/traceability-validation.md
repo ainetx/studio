@@ -394,6 +394,17 @@ Catches structural and traceability issues that AI agents miss or hallucinate â€
 
 **Supporting**:
 - [x] - `p1` - Imports, SafeDict formatter, reason resolver, and prompt helper functions (location, kind context, headings hint, relative path) - `inst-fix-datamodel`
+- [x] - `p1` - Fixing prompts for task/checkbox consistency errors (CDSL step unchecked, parent unchecked when all done, parent checked with nested unchecked) - `inst-fix-task-consistency`
+- [x] - `p1` - Fixing prompts for reference errors (undefined ID, ref done but def not, def done but ref not, ref task with no def task, unreferenced ID) - `inst-fix-references`
+- [x] - `p1` - Fixing prompt for non-consecutive heading number sequence errors - `inst-fix-heading-numbering`
+- [x] - `p1` - Fixing prompts for ID kind presence errors (missing constraints, disallowed kind, required kind missing) - `inst-fix-id-kind-presence`
+- [x] - `p1` - Fixing prompts for task/priority definition errors (missing/prohibited task checkbox, missing/prohibited priority marker) - `inst-fix-task-priority-defs`
+- [x] - `p1` - Fixing prompt for ID definition placed under wrong headings - `inst-fix-heading-placement`
+- [x] - `p1` - Fixing prompts for heading contract violations (missing heading, duplicate, requires multiple, numbering mismatch) - `inst-fix-heading-contract`
+- [x] - `p1` - Fixing prompts for cross-reference coverage rule violations (target not in scope, missing from kind, wrong headings, missing/prohibited task or priority on reference) - `inst-fix-cross-ref-coverage`
+- [x] - `p1` - Fixing prompts for code marker structural and cross-validation errors (duplicate begin, end without begin, empty block, unclosed block, duplicate scope, DOCS-ONLY, orphan ref, unchecked task, missing marker, orphaned inst block) - `inst-fix-marker-errors`
+- [x] - `p1` - Fixing prompts for TOC validation errors (missing TOC, broken anchor, heading not in TOC, stale TOC) - `inst-fix-toc`
+- [x] - `p1` - Fixing prompt for unreferenced ID warning (no scope) and final None fallback - `inst-fix-warnings`
 
 ### Headings Contract Validation
 

@@ -42,6 +42,11 @@ class TestValidateAgentEntryNewFields(unittest.TestCase):
             entry = self._validate({"model": "cf:tier:expensive"}, Path(td))
             self.assertEqual(entry["model"], "cf:tier:expensive")
 
+    def test_unknown_cf_model_falls_back_to_inherit(self):
+        with TemporaryDirectory() as td:
+            entry = self._validate({"model": "cf:tier:invalid-tier"}, Path(td))
+            self.assertEqual(entry["model"], "cf:inherit")
+
     def test_invalid_role_falls_back_to_any(self):
         with TemporaryDirectory() as td:
             entry = self._validate({"role": "bogus"}, Path(td))
@@ -185,12 +190,40 @@ class TestResolveModelId(unittest.TestCase):
             "claude-opus-4-7",
         )
 
+    def test_unknown_cf_tier_does_not_passthrough(self):
+        from cypilot.commands.agents import _resolve_model_id
+        self.assertIsNone(
+            _resolve_model_id("claude", "anthropic", "cf:tier:balnced", "any", "any"),
+        )
+
     def test_provider_fallback_for_unsupported(self):
         from cypilot.commands.agents import _resolve_model_id
         # codex tool with anthropic provider → falls back to openai
         self.assertEqual(
             _resolve_model_id("codex", "anthropic", "balanced", "any", "any"),
             "gpt-5.4",
+        )
+
+    def test_copilot_anthropic_cheap(self):
+        from cypilot.commands.agents import _resolve_model_id
+        self.assertEqual(
+            _resolve_model_id("copilot", "anthropic", "cheap", "any", "any"),
+            "Claude Haiku 4.5",
+        )
+
+    def test_cursor_openai_cheap(self):
+        from cypilot.commands.agents import _resolve_model_id
+        self.assertEqual(
+            _resolve_model_id("cursor", "openai", "cheap", "any", "any"),
+            "gpt-5.4-mini",
+        )
+
+    def test_cheap_planning_codebase_resolution(self):
+        from cypilot.commands.agents import _resolve_model_id
+        # Test that cheap planning on codebase target resolves to the bumped tier
+        self.assertEqual(
+            _resolve_model_id("claude", "anthropic", "cheap", "planning", "codebase"),
+            "sonnet",
         )
 
 
@@ -207,10 +240,55 @@ class TestResolveModelIdCrossProduct(unittest.TestCase):
                 for role in _VALID_AGENT_ROLES:
                     for target in _VALID_AGENT_TARGETS:
                         got = _resolve_model_id(tool, provider, tier, role, target)
-                        self.assertIsInstance(
-                            got, str,
-                            f"({tool}, {provider}, {tier}, {role}, {target}) → {got!r}",
+                        assert got and isinstance(got, str), (
+                            f"({tool}, {provider}, {tier}, {role}, {target}) → {got!r} "
+                            f"must be a non-empty string"
                         )
+            for (o_tier, o_role, o_target), o_model in cell["overrides"].items():
+                got = _resolve_model_id(tool, provider, o_tier, o_role, o_target)
+                assert got and isinstance(got, str), (
+                    f"override ({tool}, {provider}, {o_tier}, {o_role}, {o_target}) → "
+                    f"{got!r} must be a non-empty string"
+                )
+
+    def test_special_tier_values_across_tools(self):
+        """Explicit assertions for the non-matrix tier values:
+
+        - `cf:inherit` → always None (no model: line emitted).
+        - `cf:auto`    → None on tools without a literal auto (claude, codex);
+                         the literal "auto" string on tools that support it
+                         (cursor, copilot).
+        - ``""`` / None → empty tier means inherit → None.
+        """
+        from cypilot.commands.agents import _resolve_model_id, _AUTO_VALUE
+        tools_providers = [
+            ("claude", "anthropic"),
+            ("codex", "openai"),
+            ("cursor", "anthropic"),
+            ("cursor", "openai"),
+            ("copilot", "anthropic"),
+            ("copilot", "openai"),
+        ]
+        for tool, provider in tools_providers:
+            with self.subTest(tool=tool, provider=provider, tier="cf:inherit"):
+                self.assertIsNone(
+                    _resolve_model_id(tool, provider, "cf:inherit", "any", "any"),
+                )
+            with self.subTest(tool=tool, provider=provider, tier="cf:auto"):
+                expected_auto = _AUTO_VALUE.get(tool)
+                got = _resolve_model_id(tool, provider, "cf:auto", "any", "any")
+                self.assertEqual(got, expected_auto)
+                # cursor / copilot emit the literal "auto"; claude / codex
+                # degrade to inherit (None).
+                if expected_auto is None:
+                    self.assertIsNone(got)
+                else:
+                    self.assertIsInstance(got, str)
+            for empty in ("", None):
+                with self.subTest(tool=tool, provider=provider, tier=empty):
+                    self.assertIsNone(
+                        _resolve_model_id(tool, provider, empty, "any", "any"),
+                    )
 
     def test_inherit_always_none(self):
         from cypilot.commands.agents import _resolve_model_id
@@ -219,6 +297,35 @@ class TestResolveModelIdCrossProduct(unittest.TestCase):
                 self.assertIsNone(
                     _resolve_model_id(tool, provider, "inherit", "any", "any"),
                 )
+
+
+    def test_cross_product_regression_anchors(self):
+        """Pin 3 representative (tool, provider, tier, role, target) anchors.
+
+        These are regression anchors for matrix edits: if the _MODEL_MATRIX
+        values change, this test breaks loudly, forcing a deliberate update
+        rather than a silent drift.
+        """
+        from cypilot.commands.agents import _resolve_model_id
+
+        # Regression anchor 1: claude/anthropic balanced with generate+codebase
+        # — no override for (balanced, generate, codebase), so base tier wins.
+        self.assertEqual(
+            _resolve_model_id("claude", "anthropic", "cf:tier:balanced", "generate", "codebase"),
+            "sonnet",  # regression anchor for matrix edits
+        )
+        # Regression anchor 2: codex/openai cheap with analyze+artifact
+        # — override only applies to analyze+codebase, not artifact; base wins.
+        self.assertEqual(
+            _resolve_model_id("codex", "openai", "cf:tier:cheap", "analyze", "artifact"),
+            "gpt-5.4-mini",  # regression anchor for matrix edits
+        )
+        # Regression anchor 3: cursor/openai balanced with generate+codebase
+        # — explicit override kicks in for this (tier, role, target) triple.
+        self.assertEqual(
+            _resolve_model_id("cursor", "openai", "cf:tier:balanced", "generate", "codebase"),
+            "gpt-5.3-codex",  # regression anchor for matrix edits
+        )
 
 
 class TestCodexContextTokens(unittest.TestCase):

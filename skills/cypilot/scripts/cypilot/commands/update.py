@@ -116,11 +116,9 @@ def cmd_update(argv: List[str]) -> int:
 
         legacy_rel = args.from_dir or detect_legacy_cypilot_install(project_root)
         if legacy_rel:
-            migrate = (
-                args.dry_run and args.migrate_from_cypilot == "ask"
-            ) or should_migrate_from_cypilot(
+            migrate = should_migrate_from_cypilot(
                 args.migrate_from_cypilot,
-                interactive=not args.no_interactive and not args.yes,
+                interactive=not args.dry_run and not args.no_interactive and not args.yes,
                 project_root=project_root,
                 legacy_rel=legacy_rel,
                 decline_hint="Press N to abort update.",
@@ -178,7 +176,7 @@ def cmd_update(argv: List[str]) -> int:
     if legacy_rel:
         migrate = should_migrate_from_cypilot(
             args.migrate_from_cypilot,
-            interactive=not args.no_interactive and not args.yes,
+            interactive=not args.dry_run and not args.no_interactive and not args.yes,
             project_root=project_root,
             legacy_rel=legacy_rel,
             heading="Cyber Pilot detected alongside Cyber Constructor.",
@@ -393,6 +391,7 @@ def cmd_update(argv: List[str]) -> int:
                 kit_results[kit_slug] = kit_r
                 continue
 
+        kit_r: Dict[str, Any] = {}
         try:
             kit_r = update_kit(
                 kit_slug, kit_src, cypilot_dir,
@@ -565,7 +564,7 @@ def cmd_update(argv: List[str]) -> int:
             else:
                 ui.step("Validate kits: PASS")
         except (OSError, ValueError, KeyError) as exc:
-            warnings.append(f"validate-kits failed to run: {exc}")
+            errors.append({"path": "validate-kits", "error": f"validate-kits failed to run: {exc}"})
     # @cpt-end:cpt-cypilot-flow-version-config-update:p1:inst-self-check
 
     # @cpt-begin:cpt-cypilot-flow-version-config-update:p1:inst-return-report
@@ -587,7 +586,7 @@ def cmd_update(argv: List[str]) -> int:
 
     ui.result(update_result, human_fn=_human_update_ok)
     # @cpt-end:cpt-cypilot-flow-version-config-update:p1:inst-return-report
-    return 0
+    return 1 if errors else 0
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -648,7 +647,14 @@ def _maybe_migrate_legacy_to_manifest(
 
     try:
         manifest = load_manifest(kit_src)
-    except (ValueError, OSError):
+    except FileNotFoundError:
+        # manifest.toml legitimately absent — not an error
+        return None
+    except (ValueError, OSError) as exc:
+        sys.stderr.write(
+            f"update: warning: skipping manifest migration for kit '{kit_slug}' "
+            f"at {kit_src}: {exc}\n"
+        )
         return None
 
     if manifest is None:
@@ -680,7 +686,7 @@ def _maybe_regenerate_agents(
     kits_changed = any(
         isinstance(kr, dict)
         and isinstance(kr.get("version"), dict)
-        and kr["version"].get("status") in ("created", "migrated")
+        and kr["version"].get("status") in ("created", "migrated", "updated")
         for kr in kit_results.values()
     )
     if not core_changed and not kits_changed:
@@ -760,21 +766,21 @@ def _remove_system_from_core_toml(config_dir: Path) -> bool:
         return False
 
     try:
-        with open(core_toml, "rb") as f:
-            data = tomllib.load(f)
-    except (OSError, ValueError) as exc:
-        sys.stderr.write(f"update: warning: cannot read {core_toml}: {exc}\n")
-        return False
-
-    if "system" not in data:
-        return False
-
-    del data["system"]
-
-    try:
         from ..utils import toml_utils
-        toml_utils.dump(data, core_toml, header_comment="Cyber Constructor project configuration")
-    except (OSError, ValueError) as exc:
+        with toml_utils._with_core_toml_lock(core_toml):
+            try:
+                with open(core_toml, "rb") as f:
+                    data = tomllib.load(f)
+            except (OSError, ValueError, TypeError) as exc:
+                sys.stderr.write(f"update: warning: cannot read {core_toml}: {exc}\n")
+                return False
+
+            if "system" not in data:
+                return False
+
+            del data["system"]
+            toml_utils.dump(data, core_toml, header_comment="Cyber Constructor project configuration")
+    except (OSError, ValueError, TypeError) as exc:
         sys.stderr.write(f"update: warning: cannot write {core_toml}: {exc}\n")
         return False
 
@@ -805,43 +811,44 @@ def _deduplicate_legacy_kits(config_dir: Path) -> Dict[str, str]:
     if not core_toml.is_file():
         return {}
 
-    try:
-        with open(core_toml, "rb") as f:
-            data = tomllib.load(f)
-    except (OSError, ValueError):
-        return {}
-
-    kits = data.get("kits", {})
-    if not isinstance(kits, dict):
-        return {}
-
     renamed: Dict[str, str] = {}
 
-    for legacy, canonical in _LEGACY_SLUG_RENAMES.items():
-        if legacy not in kits or canonical not in kits:
-            continue
-        legacy_data = kits.get(legacy, {})
-        canonical_data = kits.get(canonical, {})
-        if not isinstance(legacy_data, dict) or not isinstance(canonical_data, dict):
-            continue
-        if legacy_data.get("path") != canonical_data.get("path"):
-            continue  # Different paths — leave both
+    try:
+        from ..utils import toml_utils
+        with toml_utils._with_core_toml_lock(core_toml):
+            try:
+                with open(core_toml, "rb") as f:
+                    data = tomllib.load(f)
+            except (OSError, ValueError, TypeError) as exc:
+                sys.stderr.write(f"update: warning: cannot parse {core_toml}: skipping migration: {exc}\n")
+                return {}
 
-        # Same path — merge legacy into canonical, delete legacy
-        for k, v in legacy_data.items():
-            if k not in canonical_data or not canonical_data[k]:
-                canonical_data[k] = v
-        del kits[legacy]
+            kits = data.get("kits", {})
+            if not isinstance(kits, dict):
+                return {}
 
-        renamed[legacy] = canonical
+            for legacy, canonical in _LEGACY_SLUG_RENAMES.items():
+                if legacy not in kits or canonical not in kits:
+                    continue
+                legacy_data = kits.get(legacy, {})
+                canonical_data = kits.get(canonical, {})
+                if not isinstance(legacy_data, dict) or not isinstance(canonical_data, dict):
+                    continue
+                if legacy_data.get("path") != canonical_data.get("path"):
+                    continue  # Different paths — leave both
 
-    if renamed:
-        # Write core.toml
-        try:
-            from ..utils import toml_utils
-            toml_utils.dump(data, core_toml, header_comment="Cyber Constructor project configuration")
-        except (OSError, ValueError):
-            pass
+                # Same path — merge legacy into canonical, delete legacy
+                for k, v in legacy_data.items():
+                    if k not in canonical_data or not canonical_data[k]:
+                        canonical_data[k] = v
+                del kits[legacy]
+
+                renamed[legacy] = canonical
+
+            if renamed:
+                toml_utils.dump(data, core_toml, header_comment="Cyber Constructor project configuration")
+    except (OSError, ValueError, TypeError) as exc:
+        sys.stderr.write(f"warning: legacy kit dedup core.toml write failed: {exc}\n")
 
     # Update artifacts.toml — fix system.kit references unconditionally.
     # Even if core.toml dedup didn't fire (e.g. legacy slug already removed
@@ -865,8 +872,8 @@ def _deduplicate_legacy_kits(config_dir: Path) -> Dict[str, str]:
             if changed:
                 from ..utils import toml_utils
                 toml_utils.dump(reg, artifacts_toml, header_comment="Cyber Constructor artifacts registry")
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError, TypeError) as exc:
+            sys.stderr.write(f"warning: legacy kit dedup {artifacts_toml} write failed: {exc}\n")
 
     return renamed
 
@@ -889,35 +896,40 @@ def _migrate_kit_sources(config_dir: Path) -> Dict[str, str]:
     if not core_toml.is_file():
         return {}
 
-    try:
-        with open(core_toml, "rb") as f:
-            data = tomllib.load(f)
-    except (OSError, ValueError):
-        return {}
-
-    kits = data.get("kits", {})
-    if not isinstance(kits, dict):
-        return {}
-
     migrated: Dict[str, str] = {}
-    for slug, kit_data in kits.items():
-        if not isinstance(kit_data, dict):
-            continue
-        if kit_data.get("source"):
-            continue  # Already has a source — skip
-        known_source = _KNOWN_KIT_SOURCES.get(slug, "")
-        if known_source:
-            kit_data["source"] = known_source
-            migrated[slug] = known_source
-
-    if not migrated:
-        return {}
-
     try:
         from ..utils import toml_utils
-        toml_utils.dump(data, core_toml, header_comment="Cyber Constructor project configuration")
-    except (OSError, ValueError):
-        pass
+        with toml_utils._with_core_toml_lock(core_toml):
+            try:
+                with open(core_toml, "rb") as f:
+                    data = tomllib.load(f)
+            except (OSError, ValueError, TypeError) as exc:
+                sys.stderr.write(f"update: warning: cannot parse {core_toml}: skipping migration: {exc}\n")
+                return {}
+
+            kits = data.get("kits", {})
+            if not isinstance(kits, dict):
+                return {}
+
+            for slug, kit_data in kits.items():
+                if not isinstance(kit_data, dict):
+                    continue
+                if kit_data.get("source"):
+                    continue  # Already has a source — skip
+                known_source = _KNOWN_KIT_SOURCES.get(slug, "")
+                if known_source:
+                    kit_data["source"] = known_source
+                    migrated[slug] = known_source
+
+            if not migrated:
+                return {}
+
+            toml_utils.dump(
+                data, core_toml,
+                header_comment="Cyber Constructor project configuration",
+            )
+    except (OSError, ValueError, TypeError) as exc:
+        sys.stderr.write(f"update: warning: kit source migration write failed: {exc}\n")
 
     return migrated
 

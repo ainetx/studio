@@ -1666,10 +1666,12 @@ def test_interactive_update_prompts_and_declining_returns_clear_result(tmp_path,
 
 
 def test_update_dry_run_on_legacy_project_reports_planned_migration(tmp_path, capsys, monkeypatch):
+    # CR-T6-026: dry_run + ask no longer auto-approves migration; user must answer.
+    # Supply _TTYInput("y") so the migration prompt is answered affirmatively.
     from cypilot.cli import main
 
     _make_legacy_project(tmp_path)
-    monkeypatch.setattr("sys.stdin", _FailingInput())
+    monkeypatch.setattr("sys.stdin", _TTYInput("y"))
 
     rc = main(["--json", "update", "--project-root", str(tmp_path), "--dry-run"])
 
