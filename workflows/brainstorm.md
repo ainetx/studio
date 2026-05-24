@@ -7,4 +7,4 @@ version: 1.0
 purpose: Standalone brainstorm command; pass-through to generate.md with BRAINSTORM mode
 ---
 
-ALWAYS OPEN and FOLLOW `workflows/generate.md` using BRAINSTORM mode
+LOAD skill `cf-constructor` IN GENERATE + BRAINSTORM mode

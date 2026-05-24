@@ -7,4 +7,4 @@ version: 1.0
 purpose: Standalone explain command; pass-through to analyze.md with EXPLAIN mode
 ---
 
-ALWAYS OPEN and FOLLOW `workflows/analyze.md` using EXPLAIN mode
+LOAD skill `cf-constructor` IN ANALYZE + EXPLAIN mode, EXPLAIN_MODE=true
