@@ -329,6 +329,8 @@ The response is complete only when:
 - `handle.local_editable_reason` is present and is one of the seven enumerated
   values in the closed enum (`ok`, `outside_project_root`, `target_type_pr`,
   `target_type_directory`, `size_block`, `access_tier_remote`,
-  `cfc_route_unavailable`)
+  `cfc_route_unavailable`). The reason MUST be consistent with `local_editable`:
+  - when `local_editable == true`, `local_editable_reason` MUST equal `"ok"`
+  - when `local_editable == false`, `local_editable_reason` MUST NOT equal `"ok"` (it MUST be one of the other six values)
 - `handle.cfc_route_available` is present and is a boolean
 - the SKILL.md invariant has been satisfied

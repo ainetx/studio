@@ -169,10 +169,12 @@ per-item disposition (Post or Save) has been resolved.
 **Trigger condition**: this gate fires ONLY when ALL of the following are
 true at the moment of dispatch:
 
-- The per-item disposition for this comment resolved to `post-to-resource`
-  or `save-to-file` (i.e. not `chat-only`).
-- `state.handle.local_editable == true`.
-- `state.handle.cfc_route_available == true`.
+- The per-item disposition for this comment resolved to `post-to-resource` or
+  `save-to-file`. (Under `mixed` session disposition, the per-artifact-type
+  resolution for this comment must be `post-to-resource` or `save-to-file` —
+  if it resolved to `chat-only` for this artifact type, this gate does not fire.)
+- `handle.local_editable == true`.
+- `handle.cfc_route_available == true`.
 
 If either `local_editable` or `cfc_route_available` is `false`, the
 orchestrator MUST suppress this gate entirely — no menu is rendered, no
@@ -202,7 +204,7 @@ Also route this comment to cfc for direct fix?
 | 3 | No — record only (current disposition stands; no cfc invocation) |
 | 4 | Never ask again this session — auto-pick option 3 for remaining comments |
 
-Suggested: 3 — record only.
+{suggested_line}
 
 Reply 1 / 2 / 3 / 4. Override the classified intent in the same reply with `1 fix`, `2 brainstorm`, etc.
 ```
@@ -212,6 +214,11 @@ Reply 1 / 2 / 3 / 4. Override the classified intent in the same reply with `1 fi
 1. `state.comment.intent_final == "fix"` AND `state.comment.target_type == "code"` → suggest `1` (Route now).
 2. `state.comment.intent_final == "brainstorm"` → suggest `2` (Queue).
 3. Otherwise → suggest `3` (No).
+
+**Rendering `{suggested_line}`**: after applying the heuristic above, render
+`{suggested_line}` as `Suggested: <N> — <label>.` where `<N>` is the heuristic
+result (1, 2, or 3) and `<label>` is the matching option's terse name
+(`Route now` / `Queue` / `record only` / `Never ask again this session`).
 
 Mark the suggested default option with ` [default]` in the rendered menu.
 
@@ -246,6 +253,9 @@ artifact-disposition choice already recorded):
 - `route_choice`: `"route_now" | "queue" | "no" | "never_ask"`.
 - `intent_final`: may have been rewritten by the inline intent override.
 
+`comment_id` MUST be echoed in the Phase 2 output to identify which buffer
+entry's `route_choice` and `intent_final` are being updated.
+
 **Anti-patterns**:
 
 - Offering this gate when `local_editable = false` or
@@ -257,6 +267,7 @@ artifact-disposition choice already recorded):
 
 ```json
 {
+  "comment_id": "string — Q-N identifying the comment buffer entry whose route_choice and intent_final are being updated",
   "selected_tag": "route_now | queue | no | never_ask | null",
   "intent_override": "generate | fix | brainstorm | null"
 }
@@ -435,13 +446,12 @@ Selects the export format for story output. This gate fires only when
      option's label.
    - For the `audience` gate, derive candidates dynamically per the heuristic
      above before rendering.
-   - For the `cfc-routing` gate, apply the suppression check BEFORE rendering:
-     if `handle.local_editable == false` OR `handle.cfc_route_available == false`
-     OR `session_state.cfc_route_never_ask == true`, return
-     `rendered_menu: null` and `suppressed: true` in the Phase 1 output so
-     the orchestrator knows to skip this gate silently.
+   - For the `cfc-routing` gate, apply the cfc-routing suppression check as
+     defined in § Gate: cfc-routing above; if suppressed, return
+     `rendered_menu: null, suppressed: true` and skip the rest of Phase 1.
      Otherwise, substitute `{classified_mode}` with `state.comment.intent_final`
-     before emitting the fixed menu text.
+     and render `{suggested_line}` per the heuristic before emitting the fixed
+     menu text.
    - For the `plan` gate, draft the plan body then append the approval menu
      block verbatim.
 5. Return the Phase 1 output JSON.
@@ -537,6 +547,6 @@ The response is complete only when:
 - `revision_notes` is `null` for all non-plan gates
 - `intent_override` is `null` for all non-cfc-routing gates
 - Phase 1, `cfc-routing` gate, suppressed: `rendered_menu = null` and `suppressed = true`; no menu is emitted and `parse_table` / `suggested_default_n` may be omitted
-- Phase 1, `cfc-routing` gate, not suppressed: `rendered_menu` is non-empty; `{classified_mode}` has been substituted with `state.comment.intent_final`; `suppressed = null`
+- Phase 1, `cfc-routing` gate, not suppressed: `rendered_menu` is non-empty; `{classified_mode}` has been substituted with `state.comment.intent_final`; `{suggested_line}` has been substituted with the heuristic result (no literal `{suggested_line}` allowed in `rendered_menu`); `suppressed = null`
 - Phase 2, `cfc-routing` gate: `intent_override` is one of `"generate"`, `"fix"`, `"brainstorm"`, or `null`; `selected_tag` is one of `"route_now"`, `"queue"`, `"no"`, `"never_ask"` on successful parse
 - the SKILL.md invariant has been satisfied

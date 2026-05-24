@@ -188,7 +188,7 @@ Append-only; never truncated; never deleted in-session. One record per failure, 
 Per-failure record schema:
 ```json
 {
-  "dispatch_key": "<sha1 — see storytelling-phases.md § Open-question buffer>",
+  "dispatch_key": "<sha1 — see storytelling-phases.md § Open-question buffer entry shape>",
   "class": "write_conflict | transient_io | cfc_invocation_error | validation_rejected | unknown",
   "subclass": "kit_missing | cli_broken | subagent_crashed | permission_denied | null",
   "attempt": <int, 1 or 2>,
@@ -255,6 +255,7 @@ Chat output (the live narrative) follows different rules from artifact language:
   - `handle.cfc_route_available: boolean`
   - `session_state.cfc_route_never_ask: boolean` (set when user picked option 4 in the cfc-routing sub-prompt)
   - `session_state.dispatched_keys: Map<canonical_path, Set<dispatch_key>>` (partitioned by canonical_path; survives session for idempotence within a target scope; cleared on target-pivot for the NEW target only)
+    > Keys in `dispatched_keys` use `failure_class = ""` (empty string sentinel) for the initial dispatch; retry keys use the actual `failure_class` recorded in the dispatch-failures NDJSON. Resume reconstruction MUST apply the same sentinel convention to match keys against the NDJSON records. See `storytelling-phases.md` § Phase E3 — Open-question buffer entry shape for the canonical dispatch_key formula and initial-dispatch sentinel definition.
   - `session_state.pending_retries: Map<dispatch_key, {attempts, first_failed_at, last_class, drift_status?}>` (reconstructed from dispatch-failures NDJSON on resume; see Dispatch-Failure Audit Log)
   - For each open-questions buffer entry, the new fields listed in `storytelling-phases.md` § Phase E3 Open-question buffer entry shape: `dispatch_state, intent_initial, intent_initial_tier, intent_final, intent_override_reason, dispatch_key, dispatched_at, result_received_at, cfc_session_id, result_summary, paused_at, context_fingerprint, last_failure`
 

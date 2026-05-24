@@ -238,6 +238,41 @@ Recognition is intent-based; user may type these in any language (methodology MU
 | `remember new mode` / `remember new page size` / `remember new language` / `remember new disposition` | Persist current value to `{cf-constructor-path}/.cache/explain/preferences.json` |
 | `bookmark` / `mark` / `важно` (or equivalents) | Push current point to takeaways buffer |
 | `stop` / `wrap` / `enough` | Jump to Phase E5 (user-triggered wrap) |
+| `send comments` / `flush queue` / `route queued` / intent equivalents | Trigger **batch flush** of all comment buffer entries with `dispatch_state == "queued"`. Render preview-then-confirm gate (unless `now` qualifier present). |
+| `send comments now` / `<verb> now` | Trigger batch flush with one structured Y/n confirmation (skip preview-only step). Subject to Tier-3 inline pauses per `only intent` / `only tier` filter rules. |
+| bare `send comments` / `preview comments` / `preview queue` | **Preview only** — render the queued-items report grouped by intent (risk-descending: generate → fix → brainstorm). NO dispatch. |
+| `send comments [only Q-N,...] [except Q-N,...] [only intent <generate\|fix\|brainstorm>] [only tier <1\|2\|1-2>] [only fresh]` | Apply filters before flush. `only` / `except` mutually exclusive. Filters AND-combine. `only` + `except` together → parse error: `Cannot combine 'only' and 'except' in the same command — use one or the other.` Unknown tokens → parse error with quoted offending token. |
+| `change to {generate\|fix\|brainstorm}` (when issued at a per-comment cfc-routing sub-prompt before pressing 1/2) | Override the comment's `intent_final` BEFORE the action is applied. Same effect as inline shorthand `1 fix` / `2 brainstorm`. |
+| `retry Q-N` | Retry the dispatch identified by Q-N. Subject to per-`dispatch_key` cap of 2 attempts, drift check (file etag + line-range hash, ±5 line buffer), and class-specific policy (see Dispatch-failure UX § below). |
+| `inspect Q-N` | Open the auto-saved draft path (or the latest NDJSON record for Q-N) in the user's chat as a reference; no state change. |
+| `drop Q-N` | Set comment buffer entry `dispatch_state = "dropped"`. Removes Q-N from any further retry / flush consideration. |
+| `handoff Q-N` | Force Mode C paste-handoff for Q-N regardless of size gate. Emits the canonical Mode C paste block in chat. |
+
+### Dispatch-failure notices (cfc routing)
+
+When a cfc-routing dispatch fails, methodology emits ONE single-line notice per failure in the existing artifact-marker family (alongside `📋` / `📝` / `📤`):
+
+```
+⚠️ Q-N <class> ({subclass-hint?}) — <one-line message head>; <suggested-actions>
+```
+
+Placement rules:
+- Notices land in the methodology's NEXT chat turn, BEFORE the next portion's Opening, separated from the portion by a single blank line.
+- One notice line per failure.
+- Multiple concurrent failures collapse into N consecutive lines sorted ascending by Q-N.
+- NEVER appear inside Opening / Body / Mode-lens / Diagram / Source-refs / viz-marker / progress-marker / Nav. The 8-element portion shape is preserved.
+- NO `---` separator. NO fenced `[cfc-route]` block. NO new portion-structure element.
+
+Per-class notice templates (one-line each; truncate first sentence with `…` if exceeds 80 cols; append ` (+N-1 more in dispatch-failures.jsonl)` overflow indicator when multiple validator issues):
+- write_conflict: `⚠️ Q-3 write_conflict — target moved (etag mismatch); 'retry Q-3' / 'inspect Q-3' / 'drop Q-3'`
+- transient_io:   `⚠️ Q-3 transient_io ({errno}) — retry possible (last attempt <60s); 'retry Q-3' / 'drop Q-3'`
+- cfc_invocation_error/{subclass}: `⚠️ Q-3 cfc_invocation_error/kit_missing — {remediation-hint}; 'retry Q-3' / 'handoff Q-3' / 'drop Q-3'`
+- validation_rejected: `⚠️ Q-3 validation_rejected ({rule-id}) — {first sentence of first issue}; 'edit-draft' / 'inspect Q-3' / 'drop Q-3'` (NO 'retry' in default suggested actions — content will re-fail unchanged)
+- unknown:        `⚠️ Q-3 unknown — {message-head}; 'inspect Q-3' / 'retry Q-3' / 'drop Q-3'`
+
+Full failure payload (all issues, rule context, full message, draft path) is appended to the dispatch-failures NDJSON per `requirements/storytelling-preferences.md` § Dispatch-Failure Audit Log. Notice in chat is the head; NDJSON is the canonical record.
+
+Cross-reference: the 2-attempts-per-key cap (see Phase E3 buffer entry shape below), two-tier drift check, and mode escalation rules live in the comment buffer schema; this notice section documents the rendering surface only.
 
 ### Periodic gates
 
@@ -280,9 +315,48 @@ Hard rules, enforced inside every portion:
      "question": "{plain question to artifact author}",
      "context": "{portion / plan item / location}",
      "source_gap": "{what specifically is missing}",
-     "likely_author": "{auto-guess: 'PRD author' | 'DESIGN author' | 'QA lead' | 'TBD'}"
+     "likely_author": "{auto-guess: 'PRD author' | 'DESIGN author' | 'QA lead' | 'TBD'}",
+     "dispatch_state": "drafted" | "queued" | "in-flight" | "completed" | "failed" | "dropped",
+     "intent_initial": "generate" | "fix" | "brainstorm" | null,
+     "intent_initial_tier": 1 | 2 | 3 | null,
+     "intent_final": "generate" | "fix" | "brainstorm" | null,
+     "intent_override_reason": string | null,
+     "dispatch_key": "<sha1 — content-derived; see formula below>" | null,
+     "dispatched_at": ISO-timestamp | null,
+     "result_received_at": ISO-timestamp | null,
+     "cfc_session_id": string | null,
+     "result_summary": string | null,      // one-line, truncated to terminal width
+     "paused_at": ISO-timestamp | null,    // Tier-3 inline pause marker
+     "context_fingerprint": { "mtime": ISO-timestamp, "git_rev": "<short-sha or null>" },
+     "last_failure": {
+       "class": "write_conflict" | "transient_io" | "cfc_invocation_error" | "validation_rejected" | "unknown",
+       "message": string,
+       "ts": ISO-timestamp,
+       "etag_at_dispatch": "<sha or null>",
+       "line_range_hash_at_dispatch": "<sha or null>",
+       "auto_save_path": "<relative path or null>"
+     } | null
    }
    ```
+
+   All new fields are additive; default null/absent for backward compatibility.
+
+   **dispatch_key formula**:
+   ```
+   dispatch_key = sha1(
+     target_path + "\n" +
+     line_range +  "\n" +
+     draft_body +  "\n" +
+     failure_class
+   )
+   ```
+   Content-derived. Editing the draft yields a new key (and a fresh 2-attempt budget). Replay produces the same key for unchanged inputs.
+
+   **Initial dispatch (before any failure).** Compute the key with `failure_class = ""` (empty string). The key inserted into `session_state.dispatched_keys` at dispatch time uses this empty sentinel. After a failure occurs and a retry is issued, the key is recomputed using the recorded `failure_class` value — producing a different key, a fresh 2-attempt budget for the retry, and a new entry in `dispatched_keys` scoped to the new key. This is intentional: the initial dispatch and a failure-retry are distinct identity events.
+
+   **Idempotence partition**: `session_state.dispatched_keys` is a `Map<canonical_path, Set<dispatch_key>>`. Pivoting target mid-session creates a fresh empty set for the new target only; the old target's dispatched_keys remain scoped to it.
+
+   **Resume reconstruction**: `session_state.pending_retries: Map<dispatch_key, {attempts, first_failed_at, last_class, drift_status?}>` is reconstructed on session resume from the dispatch-failures NDJSON (`requirements/storytelling-preferences.md` § Dispatch-Failure Audit Log). Records with `status="resolved"` are excluded; the 2-attempts-per-key cap survives restarts.
 
 ## Phase E4: Visualize-by-Default
 

@@ -340,3 +340,23 @@ The response is complete only when:
   non-null `resolved_section_text`
 - The JSON block is the entire response — no preamble, no trailing commentary
 - The SKILL.md invariant has been satisfied
+
+### Gate failure semantics
+
+If `mode=review` and the agent cannot satisfy `depth_mode_flags.risk_map=true`
+(because the input has no anchor section appropriate for risk-mapping, or
+because risk-mapping content would be empty), this is a hard contract
+violation. The agent MUST NOT emit a partially-valid `content_pack`. Instead,
+return:
+
+```json
+{
+  "abort": true,
+  "abort_message": "risk_map invariant failed for review mode: <one-line cause>",
+  "content_pack": null
+}
+```
+
+The orchestrator surfaces `abort_message` to the user and aborts the
+storytelling session; mode=review cannot proceed without a risk_map. Other
+completion-gate violations follow the same abort-with-message pattern.
