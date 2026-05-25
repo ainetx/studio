@@ -654,13 +654,22 @@ def _run_followup_kit_update(*, yes: bool) -> int:
     is surfaced as a migration warning rather than a hard failure — the
     rest of the migration has already landed and the user can re-run
     ``cfs kit update`` manually.
+
+    In JSON mode the sub-command's own JSON payload is suppressed from
+    stdout so the outer migration result stays the sole JSON document on
+    the wire. Sub-stdout is discarded — its only purpose is to drive the
+    diff-engine UX, which is not part of the JSON contract.
     """
     from .kit import cmd_kit_update
 
     args: List[str] = []
     if yes:
         args.append("--yes")
-    return cmd_kit_update(args)
+    if not is_json_mode():
+        return cmd_kit_update(args)
+    sink = io.StringIO()
+    with contextlib.redirect_stdout(sink):
+        return cmd_kit_update(args)
 
 
 def _run_followup_update(project_root: Path, *, yes: bool) -> tuple[int, Optional[Any]]:
@@ -1211,6 +1220,7 @@ def _cleanup_legacy_host_integrations(
     files are preserved. Returns ``{"removed": {agent: [relpath, ...]},
     "regenerated": [agent, ...]}``.
     """
+    # @cpt-begin:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-cleanup-legacy-host-import
     # Defer the import: agents.py owns the cleanup constants and helpers; the
     # migrator borrows them so there is exactly one source of truth for
     # legacy-artifact recognition.
@@ -1227,7 +1237,9 @@ def _cleanup_legacy_host_integrations(
     except ImportError as exc:
         warnings.append(f"host-integration cleanup skipped (import failed: {exc})")
         return {"removed": {}, "regenerated": []}
+    # @cpt-end:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-cleanup-legacy-host-import
 
+    # @cpt-begin:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-cleanup-legacy-host-sweep
     removed_by_agent: Dict[str, List[str]] = {}
     for agent in ("claude", "windsurf", "cursor", "copilot", "openai"):
         removed: List[str] = []
@@ -1254,7 +1266,9 @@ def _cleanup_legacy_host_integrations(
                 pass
         if removed:
             removed_by_agent[agent] = removed
+    # @cpt-end:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-cleanup-legacy-host-sweep
 
+    # @cpt-begin:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-cleanup-legacy-host-regen
     # Regenerate every host that had at least one legacy artifact. The
     # presence of any cleaned-up file proves the host was set up
     # previously; the user expects an equivalent install in the new
@@ -1269,10 +1283,12 @@ def _cleanup_legacy_host_integrations(
                     agent, project_root, studio_dir, cfg, None, dry_run=False,
                 )
                 regenerated.append(agent)
-            except Exception as exc:  # noqa: BLE001 — surface failure as warning
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                # Surface failure as warning — host regen is best-effort.
                 warnings.append(f"failed to regenerate {agent} integration: {exc}")
 
     return {"removed": removed_by_agent, "regenerated": regenerated}
+    # @cpt-end:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-cleanup-legacy-host-regen
 
 
 def _human_migrate_ok(data: Dict[str, Any]) -> None:  # pyright: ignore

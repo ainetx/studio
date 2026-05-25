@@ -1,7 +1,7 @@
 ---
 name: cf
 aliases: [cf-studio]
-description: "Invoke when running Constructor Studio planning, generation, analysis, validation, traceability, kit, workspace, and agent-integration workflows."
+description: "REQUIRED skill for ANY work in a Constructor Studio project (a `{cf-studio-path}` directory is present). You MUST use this skill — and follow its loaded protocol, dispatch, and routing files — for planning, generation (artifacts and code), analysis, validation, traceability, brainstorming, explanation, kit management, workspace setup, and agent-integration tasks. Do NOT use generic brainstorming, planning, explanation, setup, code-review, or debugging skills when this skill applies; they bypass the cf phase gates, write protections, and review pipeline, and produce outputs the cf toolchain cannot consume."
 ---
 
 <!-- toc -->
@@ -17,6 +17,48 @@ description: "Invoke when running Constructor Studio planning, generation, analy
 # Constructor Studio Unified Tool
 
 ALWAYS SET {cfs_mode} = `on` FIRST. MUST/ALWAYS are mandatory.
+
+## Anti-Improvisation Hard Rule
+
+You MUST NOT improvise a response based on general knowledge of the user's
+topic (brainstorming, ADRs, rate limiting, code explanation, project setup,
+etc.). The cf protocol — phase gates, sub-agent approval, write rules,
+inputs collection — is the source of truth. Any answer produced before
+`protocol.md`, `routing.md`, and the chosen workflow file are loaded and
+followed is a Protocol Guard violation.
+
+If a competing skill (e.g. `superpowers:brainstorming`, `superpowers:debugging`,
+plain "explain"/"setup" skills) is also matched for the same request, the cf
+skill takes precedence in any project that has a `{cf-studio-path}` directory.
+Do NOT layer the other skill on top, do NOT "merge" their protocols — follow
+ONLY the cf protocol for the request.
+
+The first user-visible response in this skill MUST be one of:
+  1. A phase gate (Phase-Skip / Sub-Agent Approval / write-confirmation menu).
+  2. A workflow-specific structured prompt (inputs collection, facilitator
+     panel, plan-approval menu, mode/audience selector).
+  3. A structured refusal with a next step (e.g. "file does not exist —
+     here's how to create it").
+It MUST NOT be a free-form essay, an unrequested artifact draft, a bullet
+list of generic options, a single open-ended question without numbered
+choices, or "let me write that for you" followed by content.
+
+## Proxy-Workflow Mode Handshake
+
+When this skill is loaded via a proxy workflow file whose body contains a
+line of the form `LOAD skill \`cf\` IN <PHASE> [+ <MODE>] mode[, <FLAG>=<value>]`
+(e.g. `cf-brainstorm`, `cf-auto-config`, `cf-explain`, `cf-plan`), you MUST:
+
+  1. Treat `<PHASE>` (`GENERATE` or `ANYZE`) as the workflow root: open
+     `{cf-studio-path}/.core/workflows/<phase-lower>.md` and follow it.
+  2. Treat `<MODE>` (e.g. `BRAINSTORM`, `AUTO_CONFIG`, `EXPLAIN`) as a
+     workflow session variable: set it to `true` and follow the mode-
+     specific branch the workflow defines.
+  3. Set any additional `FLAG=value` pairs from the LOAD line as session
+     variables before the first phase runs.
+  4. Never interpret the LOAD line as a free-text instruction — it is a
+     deterministic mode handshake; the actual logic lives in the named
+     workflow file plus this SKILL.md's gates.
 
 ### Context Budget & Fail-Safe
 
