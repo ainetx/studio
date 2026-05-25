@@ -14,7 +14,7 @@ ACT_FLAGS ?= --container-architecture $(ACT_ARCH)
 
 PYTHON ?= python3
 PIPX ?= pipx
-CPT ?= cpt
+CFS ?= cfs
 PYTEST_PIPX ?= $(PIPX) run --spec pytest pytest
 PYTEST_PIPX_COV ?= $(PIPX) run --spec pytest-cov pytest
 VULTURE_PIPX ?= $(PIPX) run --spec vulture vulture
@@ -189,7 +189,7 @@ pylint: check-pylint
 # Spec coverage check (Constructor Studio system only)
 spec-coverage:
 	@echo "Checking spec coverage (Constructor Studio system)..."
-	$(PYTHON) .bootstrap/.core/skills/cypilot/scripts/cypilot.py spec-coverage --system studio --min-coverage 90 --min-file-coverage 60 --min-granularity 0.44
+	$(PYTHON) .bootstrap/.core/skills/studio/scripts/studio.py spec-coverage --system studio --min-coverage 90 --min-file-coverage 60 --min-granularity 0.44
 
 # Check version consistency
 check-versions:
@@ -197,26 +197,26 @@ check-versions:
 
 # Update .bootstrap from local source
 update:
-	$(CPT) update --source . --force
+	$(CFS) update --source . --force
 
 # Validate core methodology spec
 validate:
-	$(CPT) validate
+	$(CFS) validate
 
 # Validate SDLC examples against templates
 self-check:
 	@echo "Running self-check: validating SDLC examples against templates..."
-	$(CPT) self-check
+	$(CFS) self-check
 
 # Validate all registered kits
 validate-kits:
 	@echo "Validating all registered kits..."
-	$(CPT) validate-kits
+	$(CFS) validate-kits
 
 # Validate kits/sdlc kit by path
 validate-kits-sdlc:
 	@echo "Validating kits/sdlc..."
-	$(CPT) validate-kits kits/sdlc
+	$(CFS) validate-kits kits/sdlc
 
 # Install Python dependencies
 install-pipx: check-pipx

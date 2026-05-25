@@ -150,7 +150,7 @@ def test_internal_migration_copies_config_and_rewrites_markers(tmp_path):
 
     _make_legacy_project(tmp_path)
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 0
     assert out["status"] == "PASS"
@@ -409,7 +409,7 @@ def test_config_markdown_rewrite_contract_covers_all_supported_files(tmp_path):
 
     changed = _migrate_config_markdown(config_dir)
 
-    assert changed == ["AGENTS.md", "SKILL.md", "README.md"]
+    assert sorted(changed) == sorted(["AGENTS.md", "SKILL.md", "README.md"])
     for name in changed:
         text = (config_dir / name).read_text(encoding="utf-8")
         assert "Path {cf-studio-path}" in text
@@ -499,7 +499,7 @@ def test_internal_migration_removes_duplicate_legacy_root_blocks(tmp_path):
     (tmp_path / "AGENTS.md").write_text(duplicate_blocks, encoding="utf-8")
     (tmp_path / "CLAUDE.md").write_text(duplicate_blocks, encoding="utf-8")
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 0
     assert out["status"] == "PASS"
@@ -529,7 +529,7 @@ def test_internal_migration_preserves_malformed_legacy_root_block_tail(tmp_path)
     (tmp_path / "AGENTS.md").write_text(malformed_content, encoding="utf-8")
     (tmp_path / "CLAUDE.md").write_text(malformed_content, encoding="utf-8")
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 0
     assert out["status"] == "PASS"
@@ -553,7 +553,7 @@ def test_internal_migration_reports_missing_toml_actions_without_failing(tmp_pat
     (tmp_path / "cypilot" / "config" / "core.toml").unlink()
     (tmp_path / "cypilot" / "config" / "artifacts.toml").unlink()
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 0
     assert out["status"] == "PASS"
@@ -570,7 +570,7 @@ def test_internal_migration_reports_invalid_toml_actions_without_failing(tmp_pat
     (tmp_path / "cypilot" / "config" / "core.toml").write_text("version = [\n", encoding="utf-8")
     (tmp_path / "cypilot" / "config" / "artifacts.toml").write_text("[[systems]\n", encoding="utf-8")
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 0
     assert out["status"] == "PASS"
@@ -634,7 +634,7 @@ def test_internal_migration_preserves_partial_success_when_followup_update_fails
     update_result = {"status": "ERROR", "message": "boom"}
     monkeypatch.setattr(migration, "_run_followup_update", lambda project_root, *, yes: (7, update_result))
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=False)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir="cypilot", skip_update=False, to_dir=".cf-constructor")
 
     assert rc == 7
     assert out["status"] == "WARN"
@@ -671,7 +671,7 @@ def test_internal_migration_removes_legacy_kit_key_when_canonical_exists(tmp_pat
         encoding="utf-8",
     )
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 0
     assert out["actions"]["core_toml"] == "updated"
@@ -710,7 +710,7 @@ def test_internal_migration_promotes_legacy_only_kit_and_normalizes_default_meta
         encoding="utf-8",
     )
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 0
     assert out["actions"]["core_toml"] == "updated"
@@ -751,7 +751,7 @@ def test_internal_migration_recursively_migrates_child_system_kit_refs(tmp_path)
         encoding="utf-8",
     )
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 0, out
     assert out["actions"]["artifacts_toml"] == "updated"
@@ -767,7 +767,7 @@ def test_internal_migration_dry_run_reports_plan_without_writes(tmp_path):
     agents_before = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     claude_before = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, dry_run=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, dry_run=True, to_dir=".cf-constructor")
 
     assert rc == 0
     assert out["status"] == "PASS"
@@ -790,7 +790,7 @@ def test_internal_migration_refuses_existing_target_without_force(tmp_path):
     _make_legacy_project(tmp_path)
     (tmp_path / ".cf-constructor").mkdir()
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 1
     assert out["status"] == "ERROR"
@@ -890,7 +890,7 @@ def test_internal_migration_accepts_common_relative_from_dirs(tmp_path, legacy_d
 
     _make_legacy_project(tmp_path, legacy_dir=legacy_dir)
 
-    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir=legacy_dir, skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, from_dir=legacy_dir, skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 0
     assert out["status"] == "PASS"
@@ -1611,7 +1611,7 @@ def test_update_after_completed_migration_ignores_leftover_legacy_directory(
     import studio.commands.update as update_cmd
 
     _make_legacy_project(tmp_path)
-    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True, to_dir=".cf-constructor")
     assert rc == 0
     assert out["status"] == "PASS"
     agents_text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
@@ -2420,7 +2420,7 @@ def test_migrate_returns_error_when_legacy_install_cannot_be_detected(tmp_path):
     from studio.commands.migrate_from_cypilot import migrate_from_cypilot
 
     # bare tmp_path has no AGENTS.md and no candidate dirs -> detect returns None
-    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True)
+    rc, out = migrate_from_cypilot(project_root=tmp_path, skip_update=True, to_dir=".cf-constructor")
 
     assert rc == 1
     assert out["status"] == "ERROR"
