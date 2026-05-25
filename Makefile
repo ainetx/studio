@@ -189,7 +189,7 @@ pylint: check-pylint
 # Spec coverage check (Constructor Studio system only)
 spec-coverage:
 	@echo "Checking spec coverage (Constructor Studio system)..."
-	$(PYTHON) .bootstrap/.core/skills/studio/scripts/studio.py spec-coverage --system studio --min-coverage 90 --min-file-coverage 60 --min-granularity 0.43
+	$(PYTHON) .bootstrap/.core/skills/studio/scripts/studio.py spec-coverage --system studio --min-coverage 90 --min-file-coverage 60 --min-granularity 0.44
 
 # Check version consistency
 check-versions:
