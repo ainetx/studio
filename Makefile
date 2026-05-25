@@ -1,5 +1,5 @@
 # @cpt-algo:cpt-studio-spec-init-structure-change-infrastructure:p1
-.PHONY: test test-verbose test-quick test-coverage test-coverage-diff validate validate-examples validate-feature validate-code validate-code-feature self-check validate-kits validate-kits-sdlc vulture vulture-ci pylint install install-pipx install-proxy clean help check-pytest check-pytest-cov check-pipx check-vulture check-pylint check-versions update spec-coverage ci lint-ci
+.PHONY: test test-verbose test-quick test-coverage test-coverage-diff validate validate-examples validate-feature validate-code validate-code-feature self-check validate-kits validate-kits-sdlc vulture vulture-ci pylint install install-pipx install-proxy install-prompt-tests clean help check-pytest check-pytest-cov check-pipx check-vulture check-pylint check-versions check-prompt-tests update spec-coverage ci lint-ci test-prompts test-prompts-view
 
 # Detect container architecture for act (arm64 on Apple Silicon, amd64 otherwise)
 UNAME_M := $(shell uname -m)
@@ -25,6 +25,12 @@ DIFF_COVER_MIN ?= 80
 VULTURE_MIN_CONF ?= 0
 PYLINT_TARGETS ?= src/studio_proxy skills/studio/scripts/studio
 
+# Prompt-tests (cf-skill UX pilot, tests/prompts/cf-ux/)
+PROMPTFOO_VERSION ?= latest
+PROMPTFOO ?= npx -y promptfoo@$(PROMPTFOO_VERSION)
+PROMPT_TESTS_DIR ?= tests/prompts/cf-ux
+PROMPT_TESTS_TIMEOUT_MS ?= 900000
+
 # Default target
 help:
 	@echo "Constructor Studio Makefile"
@@ -48,6 +54,9 @@ help:
 	@echo "  make lint-ci                       - Lint GitHub Actions workflow files"
 	@echo "  make install                       - Install Python dependencies"
 	@echo "  make install-proxy                 - Reinstall cfs proxy from local source"
+	@echo "  make install-prompt-tests          - Pre-cache promptfoo for cf-skill UX tests"
+	@echo "  make test-prompts                  - Run cf-skill UX pilot (claude + codex)"
+	@echo "  make test-prompts-view             - Open promptfoo HTML report for last run"
 	@echo "  make update                        - Update .bootstrap from local source"
 	@echo "  make clean                         - Remove Python cache files"
 	@echo "  make help                          - Show this help message"
@@ -230,6 +239,62 @@ install: install-pipx
 # Reinstall cfs/constructor-studio proxy from local source
 install-proxy: check-pipx
 	$(PIPX) install --force .
+
+# cf-skill UX prompt-tests (tests/prompts/cf-ux/) -----------------------------
+#
+# Dependencies the tests need at runtime:
+#   - node / npx        (for promptfoo)
+#   - claude CLI        (provider + grader)
+#   - codex  CLI        (provider)
+#   - cfs    CLI        (sandbox init via the local studio engine — already
+#                        installed by `make install-proxy`)
+#
+# Test runs spin up fresh `cfs init`-ed tmpdir sandboxes and consume real
+# Claude / Codex API tokens. Defaults to cheap models (Haiku 4.5, gpt-5.4-mini
+# at low effort, 128k context); override via CF_UX_* env vars — see
+# tests/prompts/cf-ux/README.md.
+check-prompt-tests:
+	@command -v node >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ERROR: node not found (needed for npx promptfoo)"; \
+		echo "  Install via nvm:  https://github.com/nvm-sh/nvm"; \
+		echo ""; \
+		exit 1; \
+	}
+	@command -v claude >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ERROR: claude CLI not found"; \
+		echo "  Install:  https://docs.claude.com/en/docs/claude-code"; \
+		echo ""; \
+		exit 1; \
+	}
+	@command -v codex >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ERROR: codex CLI not found"; \
+		echo "  Install:  https://developers.openai.com/codex/cli"; \
+		echo ""; \
+		exit 1; \
+	}
+	@command -v $(CFS) >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ERROR: cfs not found — run \`make install-proxy\` first"; \
+		echo ""; \
+		exit 1; \
+	}
+
+install-prompt-tests: check-prompt-tests
+	@echo "Pre-caching promptfoo@$(PROMPTFOO_VERSION) via npx..."
+	@$(PROMPTFOO) --version >/dev/null
+	@echo "Done. Run prompt tests with:  make test-prompts"
+
+test-prompts: check-prompt-tests
+	@echo "Running cf-skill UX pilot in $(PROMPT_TESTS_DIR)..."
+	@cd $(PROMPT_TESTS_DIR) && \
+		REQUEST_TIMEOUT_MS=$(PROMPT_TESTS_TIMEOUT_MS) $(PROMPTFOO) eval --no-cache
+
+test-prompts-view:
+	@cd $(PROMPT_TESTS_DIR) && $(PROMPTFOO) view
+# --------------------------------------------------------------------------
 
 # Lint CI workflow files
 lint-ci:
