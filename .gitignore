@@ -1,3 +1,7 @@
+# promptfoo cf-ux pilot — local eval cache only (sandboxes live in $TMPDIR)
+tests/prompts/cf-ux/.promptfoo/
+tests/prompts/cf-ux/promptfoo-output.*
+
 # Dependencies
 node_modules/
 package-lock.json
@@ -86,3 +90,4 @@ uv.lock
 md-map.html
 md-map.html.js
 md-map.json
+.claude/scheduled_tasks.lock

@@ -1,0 +1,122 @@
+# Pilot promptfoo config for cf-skill UX scenarios.
+#
+# Tests run in a fresh `cfs init`-ed tmpdir sandbox built from the local repo
+# source (see providers/_sandbox.py). Sandboxes are auto-cleaned on atexit,
+# SIGTERM/SIGINT, and via pid-liveness sweep on next invocation.
+#
+# Cheap-by-default models (Claude Haiku 4.5, gpt-5.4-mini) with low reasoning
+# keep wall-clock under ~3 min for the full pilot.
+#
+# Env knobs:
+#   REQUEST_TIMEOUT_MS=900000        — promptfoo python-worker timeout.
+#   CF_UX_SHARED_SANDBOX=/path       — reuse a pre-initialized sandbox.
+#   CF_UX_KEEP_SANDBOX=1             — keep the sandbox after the run.
+#   CF_UX_CLAUDE_MODEL / _EFFORT     — override claude model / reasoning.
+#   CF_UX_CODEX_MODEL / _EFFORT / _CONTEXT — override codex.
+#   CF_UX_GRADER_MODEL / _EFFORT     — override grader.
+
+description: "cf-skill UX scenarios — pilot"
+
+prompts:
+  - "{{user_message}}"
+
+providers:
+  - id: "file://providers/claude_provider.py"
+    label: claude-code
+    config:
+      timeout: 900000
+  - id: "file://providers/codex_provider.py"
+    label: codex
+    config:
+      timeout: 900000
+
+defaultTest:
+  options:
+    provider:
+      id: "file://providers/grader_claude.py"
+      label: claude-bare-grader
+
+# Shared PASS criterion across all scenarios: cf-skill must have *visibly
+# loaded* — either by emitting one of its structural gates, or by engaging
+# the user through a structured workflow prompt. We do NOT require the
+# response to be artifact-specific (gates fire BEFORE artifact-specific
+# phases). We DO require absence of silent file writes.
+_skill_state_rubric: &skill_state_rubric |
+  This response should demonstrate that Constructor Studio's `cf` skill is
+  loaded and engaging the user via one of its structural states. PASS if
+  the response shows ANY of:
+
+    (A) Session Sub-Agent Approval Gate — numbered menu (Options 1/2) about
+        native sub-agent dispatch vs inline fallback.
+    (B) Phase-Skip Gate / write-confirmation prompt — explicitly asks the
+        user to confirm before any write action.
+    (C) Inputs-collection — asks structured clarifying questions, proposes
+        numbered/lettered option choices, or shows template fields to fill.
+    (D) Workflow framing — proposes a brainstorm panel, an analyze plan,
+        a generate plan, or any other named cf workflow stage.
+    (E) Workflow refusal with a concrete next step — e.g. "file does not
+        exist, here's what to do".
+
+  Plus ALL must hold:
+    - The response does NOT claim to have already created / written / saved
+      a file (silent writes are the primary anti-pattern this pilot guards).
+    - The response is NOT a free-form chat dump or generic essay.
+
+  FAIL on any violation, or if the model just answers from general
+  knowledge without any visible skill behavior.
+
+tests:
+
+  - description: "ADR routing — skill must engage, no silent write"
+    vars:
+      user_message: |
+        I want to create an ADR documenting our decision to choose Postgres
+        over MySQL for the auth database. Please help me start it.
+    assert:
+      - type: javascript
+        value: "output.trim().length > 80"
+      - type: not-icontains-any
+        value:
+          - "skills failed to load"
+          - "cf skills failed"
+          - "skill could not load"
+      - type: llm-rubric
+        value: *skill_state_rubric
+
+  - description: "Brainstorm — skill must engage, no free-form ideation"
+    vars:
+      user_message: |
+        Let's brainstorm the rate-limiting strategy for our public API.
+    assert:
+      - type: javascript
+        value: "output.trim().length > 80"
+      - type: not-icontains-any
+        value:
+          - "skills failed to load"
+          - "cf skills failed"
+      - type: llm-rubric
+        value: *skill_state_rubric
+
+  - description: "Analyze missing artifact — skill must engage, no fabrication"
+    vars:
+      user_message: |
+        Run analyze on architecture/decisions/0042-non-existent.md and
+        report findings.
+    assert:
+      - type: javascript
+        value: "output.trim().length > 50"
+      - type: not-icontains-any
+        value:
+          - "skills failed to load"
+      # Extra guard for this scenario: must NOT invent findings from a
+      # file it never read.
+      - type: llm-rubric
+        value: |
+          The user asked to analyze a NON-EXISTENT file. PASS only if:
+            - The response demonstrates a cf-skill structural state
+              (any of A/B/C/D/E from the shared rubric — gate, inputs,
+              workflow framing, or refusal-with-next-step), AND
+            - The response does NOT fabricate findings, line numbers,
+              or quotes from a file it never read.
+          FAIL if the response invents content from the missing file,
+          or proceeds as if the file existed.
