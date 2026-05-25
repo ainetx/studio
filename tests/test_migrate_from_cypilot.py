@@ -422,6 +422,33 @@ def test_config_markdown_rewrite_contract_covers_all_supported_files(tmp_path):
         assert "{cypilot_path}" not in text
 
 
+def test_config_markdown_recursive_rules_subdir(tmp_path):
+    from cypilot.commands.migrate_from_cypilot import _migrate_config_markdown
+
+    config_dir = tmp_path / "config"
+    rules_dir = config_dir / "rules"
+    rules_dir.mkdir(parents=True)
+
+    # Place a markdown file in the rules subdirectory with legacy placeholders.
+    rules_foo = rules_dir / "foo.md"
+    rules_foo.write_text(
+        "Cypilot is X\n"
+        "{cypilot_path}/y\n",
+        encoding="utf-8",
+    )
+
+    changed = _migrate_config_markdown(config_dir)
+
+    rewritten = rules_foo.read_text(encoding="utf-8")
+    assert "Constructor Studio is X" in rewritten
+    assert "{cf-studio-path}/y" in rewritten
+    assert "Cypilot" not in rewritten
+    assert "{cypilot_path}" not in rewritten
+
+    assert "rules/foo.md" in changed
+    assert "foo.md" not in changed
+
+
 def test_config_toml_template_vars_rewrites_cypilot_path_placeholder(tmp_path):
     from cypilot.commands.migrate_from_cypilot import migrate_from_cypilot
 
