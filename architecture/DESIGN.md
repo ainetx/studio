@@ -53,7 +53,7 @@ Each kit is a file package: a collection of artifact definitions (rules, checkli
 
 - [x] `p1` - `cpt-studio-fr-core-telemetry`
 
-**Design Response**: Telemetry module (`studio_proxy.telemetry`) in the CLI Proxy layer. On every invocation, `main()` spawns a daemon thread that: (1) collects git identity and remote URL via a single `git config --get-regexp` call, (2) appends a JSONL record to `~/.cf-studio/logs/YYYY-MM-DD.log`, (3) rotates old log files when a new day's file is created (at most once per day), (4) optionally POSTs an OTLP Logs JSON payload to `STUDIO_TELEMETRY_URL`. The daemon thread is fire-and-forget — if the main process exits before the HTTP call completes, the thread is silently killed. All errors are caught and logged to the local log file. Zero impact on command latency. Controlled by three env vars: `STUDIO_TELEMETRY` (disable), `STUDIO_TELEMETRY_URL` (endpoint), `STUDIO_TELEMETRY_RETENTION_DAYS` (rotation, default 5 days). Stdlib-only: `urllib.request`, `threading`, `subprocess`, `json`.
+**Design Response**: Telemetry module (`studio_proxy.telemetry`) in the CLI Proxy layer. On every invocation, `main()` spawns a daemon thread that: (1) collects git identity and remote URL via a single `git config --get-regexp` call, (2) appends a JSONL record to `~/.cf-studio/logs/YYYY-MM-DD.log`, (3) rotates old log files when a new day's file is created (at most once per day), (4) optionally POSTs an OTLP Logs JSON payload to `CFS_TELEMETRY_URL`. The daemon thread is fire-and-forget — if the main process exits before the HTTP call completes, the thread is silently killed. All errors are caught and logged to the local log file. Zero impact on command latency. Controlled by three env vars: `CFS_TELEMETRY` (disable), `CFS_TELEMETRY_URL` (endpoint), `CFS_TELEMETRY_RETENTION_DAYS` (rotation, default 5 days). Stdlib-only: `urllib.request`, `threading`, `subprocess`, `json`.
 
 ##### Project Initialization
 
@@ -97,7 +97,7 @@ Accepted delegated execution extends this model by allowing Studio-authored plan
 
 - [x] `p1` - `cpt-studio-fr-core-kits`
 
-**Design Response**: Kit Manager handles kit lifecycle: installation from GitHub repositories (`cfs kit install --github <owner/repo>`), copying kit files into the kit's config directory, registration in `core.toml` (with config path, GitHub source, and version), and version tracking via GitHub tags. Each kit is a collection of ready-to-use files (rules, templates, checklists, examples, constraints, workflows, scripts). Kit updates download the new version from GitHub and display version-specific release notes from `whatsnew.toml` (if present) before the interactive file-level diff — showing all entries between the installed version and the new version, allowing users to review changes before proceeding. File-level diff compares each file in the new version against the user's installed copy, and all changed files are presented as unified diffs with interactive accept/decline/accept-all/decline-all/modify prompts. `cfs kit move-config <slug>` relocates a kit's config output directory. Studio core bundles no kits — all kits are external GitHub packages. A plugin system for custom CLI subcommands and hooks is planned for p2.
+**Design Response**: Kit Manager handles kit lifecycle: installation from GitHub repositories (`cfs kit install <owner/repo[@version]>`), copying kit files into the kit's config directory, registration in `core.toml` (with config path, GitHub source, and version), and version tracking via GitHub tags. Each kit is a collection of ready-to-use files (rules, templates, checklists, examples, constraints, workflows, scripts). Kit updates download the new version from GitHub and display version-specific release notes from `whatsnew.toml` (if present) before the interactive file-level diff — showing all entries between the installed version and the new version, allowing users to review changes before proceeding. File-level diff compares each file in the new version against the user's installed copy, and all changed files are presented as unified diffs with interactive accept/decline/accept-all/decline-all/modify prompts. Studio core bundles no kits — all kits are external GitHub packages. A plugin system for custom CLI subcommands and hooks is planned for p2.
 
 ##### Declarative Kit Installation Manifest
 
@@ -220,7 +220,7 @@ user_modifiable = false
 - [ ] `p3` - `cpt-studio-fr-core-hooks`
 - [ ] `p3` - `cpt-studio-fr-core-completions`
 
-**Design Response**: Utility commands are implemented as standalone handlers in the Skill Engine with no architectural impact beyond the standard command routing pattern. `self-check` validates examples against templates. `doctor` checks environment health (Python version, git, gh, agents, config integrity). `hook install/uninstall` manages git pre-commit hooks for lightweight validation. `completions install` generates shell completion scripts for bash/zsh/fish.
+**Design Response**: Utility commands are implemented as standalone handlers in the Skill Engine with no architectural impact beyond the standard command routing pattern. `validate-kits` validates kit structure, templates, and examples (`self-check` remains a legacy alias). `doctor` checks environment health (Python version, git, gh, agents, config integrity). Hook management and shell completions remain planned utility surfaces, not current CLI commands.
 
 ##### Spec Coverage
 
@@ -679,9 +679,9 @@ Ensures config integrity by centralizing all config file operations behind schem
 - Schema validation before any write operation (including resource bindings validated against `core-config.schema.json`)
 - Deterministic TOML serialization
 - Config migration between versions (with backup before migration)
-- JSON → TOML format migration (`migrate-config` command): detect legacy `.json` files, convert to `.toml`, validate, remove originals
+- JSON → TOML format migration during `cfs update`: detect legacy `.json` files, convert to `.toml`, validate, remove originals
 - Backward-compatible config loading: read `.toml` first, fall back to `.json` with deprecation warning
-- Provide CLI commands for config inspection (`config show`)
+- Provide CLI commands for config inspection (`info`, `resolve-vars`)
 
 ##### Responsibility boundaries
 
@@ -703,13 +703,12 @@ Manages the kit lifecycle — installing, registering, and updating kits. Enable
 
 ##### Responsibility scope
 
-- Kit installation from GitHub: download kit from GitHub repository (`cfs kit install --github <owner/repo>`), copy all kit files from source into `{cf-studio-path}/config/kits/{slug}/`, register in `core.toml` with GitHub source and version, regenerate `.gen/AGENTS.md` and `.gen/SKILL.md` to include the new kit's navigation and skill routing. All files in the kit's config directory are user-editable and preserved across updates via interactive diff
+- Kit installation from GitHub or local directories: download kit from a GitHub source (`cfs kit install <owner/repo[@version]>`) or install from a local directory (`cfs kit install --path <dir>`), copy all kit files from source into `{cf-studio-path}/config/kits/{slug}/`, register in `core.toml` with source and version metadata, regenerate `.gen/AGENTS.md` and `.gen/SKILL.md` to include the new kit's navigation and skill routing. All files in the kit's config directory are user-editable and preserved across updates via interactive diff
 - Manifest-driven installation (see `cpt-studio-fr-core-kit-manifest`): if the kit source contains `manifest.toml`, the Kit Manager validates it against `kit-manifest.schema.json`, reads all declared resources, prompts the user for destination paths on `user_modifiable` resources (offering defaults), copies each resource to its resolved path, resolves template variables (`{identifier}`) in kit files, and registers all resolved paths in `core.toml` under `[kits.{slug}.resources]`. If no `manifest.toml` is present, falls back to the current behavior (copy predefined content directories and files). The kit root directory itself (`{cf-studio-path}/config/kits/{slug}`) may be relocated by the user during manifest-driven installation if the manifest declares `user_modifiable = true`
 - Kit registration: add kit entry to `{cf-studio-path}/config/core.toml` with config output path, GitHub source (`github:<owner>/<repo>`), version (GitHub tag), and resolved resource paths (`resources` map)
 - Version tracking: store kit version in `{cf-studio-path}/config/kits/{slug}/conf.toml`; kit source and version also tracked in `core.toml`
 - Update modes: force (`--force`) overwrites all kit files; interactive (default) uses file-level diff — compares each file in the new version against user's installed copy, shows unified diffs, prompts with accept/decline/accept-all/decline-all/modify via Resource Diff Engine. For manifest-driven kits, updates apply diffs to the registered resource paths (not just the kit directory), detect new resources in the updated manifest (prompt user for path and register), and warn about resources removed from the manifest (preserve existing paths in `core.toml`). When updating a legacy-installed kit (no `resources` section in `core.toml`) and the new version introduces a manifest, auto-populate all resource bindings from existing kit root + manifest defaults before applying diffs
 - Resource path exposure: resolved resource variables are returned by `cfs info` as part of kit information, enabling agents and scripts to discover resource locations programmatically
-- Kit config relocation: `cfs kit move-config <slug>` moves the kit's config directory to a new location, updates `core.toml` (including all resource paths that are relative to the kit root)
 - Layout restructuring: detect old directory layout and automatically restructure (move generated outputs from `.gen/kits/` to `config/kits/`, clean up `.gen/kits/`)
 - Kit structural validation (`validate-kits` command): verify kit directory exists with required files (`conf.toml`, `constraints.toml`, `artifacts/` directory); for manifest-driven kits, additionally verify all registered resource paths exist on disk
 - Plugin loading (p2): discover and load kit Python entry points at runtime
@@ -810,20 +809,14 @@ The following kits are external packages that can be installed and managed by th
 | `agents [--agent A]` | Show generated agent integration files (read-only listing; no files written) | 0 |
 | `generate-agents [--agent A] [--dry-run]` | Generate or update agent integration files (full overwrite on each invocation) | 0 |
 | `doctor` | Environment health check | 0=healthy, 2=issues |
-| `config show` | Display current core config | 0 |
-| `config system add/remove` | Manage system definitions | 0 |
 | `init` | Initialize project | 0 |
 | `update` | Update project skill to cached version | 0 |
-| `hook install/uninstall` | Manage pre-commit hooks | 0 |
-| `migrate-config` | Migrate legacy JSON configs to TOML | 0 |
-| `self-check` | Validate examples against templates | 0=PASS, 2=FAIL |
 | `toc` | Generate/update table of contents in artifact | 0 |
 | `validate-toc` | Validate table of contents consistency | 0=PASS, 2=FAIL |
 | `list-id-kinds` | List all known ID kind tokens | 0 |
 | `validate-kits` | Validate kit structural correctness | 0=PASS, 2=FAIL |
 | `kit install` | Install a kit (copy files, register in core.toml) | 0 |
 | `kit update [--force]` | Update kit files (interactive: file-level diff; force: overwrite) | 0 |
-| `kit move-config <slug>` | Relocate a kit's config output directory | 0 |
 | `workspace-init [--root] [--output] [--inline] [--force] [--max-depth N] [--dry-run]` | Scan nested sub-dirs, generate workspace config | 0, 1=error |
 | `workspace-add --name N (--path P \| --url U) [--branch] [--role] [--adapter] [--inline] [--force]` | Add a source to workspace config | 0, 1=error, 2=invalid args |
 | `workspace-info` | Display workspace status and per-source details | 0, 1=error |
@@ -961,7 +954,7 @@ sequenceDiagram
             Skill Engine-->>User: "Studio initialized with SDLC kit"
         else user declines
             User-->>Skill Engine: [d]ecline
-            Skill Engine-->>User: "Studio initialized. Install kits later: cfs kit install --github <owner/repo>"
+            Skill Engine-->>User: "Studio initialized. Install kits later: cfs kit install <owner/repo[@version]>"
         end
     end
 ```
@@ -971,16 +964,16 @@ sequenceDiagram
 **Root AGENTS.md / CLAUDE.md injection**: During initialization (and verified on every CLI invocation), the engine ensures the project root `AGENTS.md` and `CLAUDE.md` files contain the same managed block with only the configured adapter path:
 
 ````markdown
-<!-- @cpt:root-agents -->
+<!-- @cf:root-agents -->
 ```toml
-studio_path = ".bootstrap"
+cf-studio-path = ".bootstrap"
 ```
-<!-- @/cpt:root-agents -->
+<!-- /@cf:root-agents -->
 ````
 
-The block is inserted at the **beginning** of each file. If a file does not exist, it is created. The managed content is a TOML fence that declares only `studio_path`, and the path reflects the actual install directory. Content between the `<!-- @cpt:root-agents -->` and `<!-- @/cpt:root-agents -->` comment markers is fully managed by Studio — it is overwritten on every check, so manual edits inside the block are discarded.
+The block is inserted at the **beginning** of each file. If a file does not exist, it is created. The managed content is a TOML fence that declares only `cf-studio-path`, and the path reflects the actual install directory. Content between the `<!-- @cf:root-agents -->` and `<!-- /@cf:root-agents -->` comment markers is fully managed by Studio — it is overwritten on every check, so manual edits inside the block are discarded.
 
-**Integrity invariant**: every Studio CLI command (not just `init`) verifies the root `AGENTS.md` and `CLAUDE.md` blocks exist and are correct before proceeding. If a block is missing or the path is stale (e.g., install directory changed), the engine silently re-injects it. This guarantees that root agent files always expose the current `studio_path` without duplicating navigation rules.
+**Integrity invariant**: every Studio CLI command (not just `init`) verifies the root `AGENTS.md` and `CLAUDE.md` blocks exist and are correct before proceeding. If a block is missing or the path is stale (e.g., install directory changed), the engine silently re-injects it. This guarantees that root agent files always expose the current `cf-studio-path` without duplicating navigation rules.
 
 #### Artifact Validation
 
@@ -1086,7 +1079,7 @@ sequenceDiagram
 sequenceDiagram
     User->>AI Agent: "delegate this task/plan to ralphex"
     AI Agent->>Skill Engine: info
-    Skill Engine-->>AI Agent: studio_path, plan vars, resolved kit bindings
+    Skill Engine-->>AI Agent: cf-studio-path, plan vars, resolved kit bindings
     AI Agent->>AI Agent: load plan workflow and accepted delegation rules
     AI Agent->>AI Agent: compile bounded delegated plan from canonical Studio sources
     AI Agent->>AI Agent: write docs/plans/<task>.md and optional derived .ralphex/ overrides
@@ -1363,7 +1356,7 @@ All configuration and constraint files are migrating from JSON to TOML:
 
 **Rationale**: TOML is human-readable, supports comments, and is used consistently for all Studio configuration files. JSON remains the CLI output format (stdout).
 
-**Migrator** (`cfs migrate-config`):
+**Migrator** (automatic during `cfs update`):
 1. Detect existing `.json` config files in `config/` and `.studio-adapter/`
    - `.studio-adapter/artifacts.toml` migrates to `{cf-studio-path}/config/artifacts.toml` (new location)
 2. For each file: parse JSON → serialize as TOML → write `.toml` alongside `.json`
@@ -1372,9 +1365,9 @@ All configuration and constraint files are migrating from JSON to TOML:
 5. If validation fails: keep `.json`, report error, skip that file
 6. `constraints.toml` is a kit file — updated via file-level diff during kit update
 7. The migrator runs automatically during `cfs update` when upgrading from a JSON-based version
-8. Manual trigger: `cfs migrate-config` for explicit migration
+8. Explicit standalone migration is not exposed as a separate CLI command; use `cfs update` to run the current migrator path.
 
-**Backward compatibility**: the Config Manager reads `.toml` first; if not found, falls back to `.json` and emits a deprecation warning suggesting `cfs migrate-config`.
+**Backward compatibility**: the Config Manager reads `.toml` first; if not found, falls back to `.json` and emits a deprecation warning that the next `cfs update` will migrate legacy config.
 
 ### Testing Approach
 

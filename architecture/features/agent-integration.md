@@ -85,7 +85,7 @@ Without this feature, users would need to manually create and maintain agent-spe
    1. - `p1` - Generate agent-native entry points (skill shims, workflow proxies, rules) - `inst-generate-entry-points`
    2. - `p1` - Write files to agent directory (e.g., `.windsurf/workflows/`, `.cursor/commands/`) - `inst-write-files`
 8. - `p1` - Compose and write main SKILL.md from collected skill sections - `inst-compose-skill`
-9. - `p1` - Inject the same managed `studio_path` block into root AGENTS.md and CLAUDE.md - `inst-inject-agents`
+9. - `p1` - Inject the same managed `cf-studio-path` block into root AGENTS.md and CLAUDE.md - `inst-inject-agents`
 10. [x] - `p1` - **RETURN** generation report (agents, files written, workflows discovered) - `inst-return-report`
 
 **Supporting**:
@@ -113,7 +113,7 @@ Without this feature, users would need to manually create and maintain agent-spe
 
 - [x] `p1` - **ID**: `cpt-studio-algo-agent-integration-discover-agents`
 
-1. [x] - `p1` - Define agent registry: windsurf, cursor, claude, copilot, openai. Detection uses Studio-specific generated files per agent (e.g. `.claude/skills/studio/SKILL.md`, `.windsurf/workflows/studio.md`, `.cursor/commands/studio.md`, `.github/.studio-installed` or legacy Studio-managed `copilot-instructions.md` for Copilot, `.codex/.studio-installed` or `.codex/agents/` with content or legacy `.agents/skills/studio/SKILL.md` for OpenAI) — not generic tool directories. The shared OpenAI fallback is valid only when no other agent's primary or legacy Studio marker is present. User-authored files are never overwritten, and legacy manifest skill files are removed only when they are provably generated copies or pure generated stubs. - `inst-define-registry`
+1. [x] - `p1` - Define agent registry: windsurf, cursor, claude, copilot, openai. Detection uses Constructor Studio-specific generated files per agent (e.g. `.claude/skills/cf/SKILL.md`, `.windsurf/workflows/cf.md`, `.cursor/commands/cf.md`, `.github/.constructor-studio-installed` or legacy Studio-managed `copilot-instructions.md` for Copilot, `.codex/.constructor-studio-installed` or `.codex/agents/` with content or legacy `.agents/skills/cf/SKILL.md` for OpenAI) — not generic tool directories. The shared OpenAI fallback is valid only when no other agent's primary or legacy Studio marker is present. User-authored files are never overwritten, and legacy manifest skill files are removed only when they are provably generated copies or pure generated stubs. - `inst-define-registry`
 2. - `p1` - **IF** `--agent` flag provided, filter to single agent - `inst-if-filter`
 3. - `p1` - **RETURN** list of agents to generate for - `inst-return-agents`
 4. [x] - `p1` - Resolve config/kits/ directory and registered kit dirs from core.toml for workflow/skill discovery - `inst-resolve-kits`

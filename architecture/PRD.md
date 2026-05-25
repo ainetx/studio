@@ -505,11 +505,11 @@ The system MUST provide non-blocking usage telemetry that tracks CLI invocations
 
 1. Record every `cfs` CLI invocation with: git user identity (`user.name`, `user.email`), git remote URL (`remote.origin.url`), command name, timestamp, and Studio version.
 2. Write telemetry records as JSONL to local log files in `~/.cf-studio/logs/` organized by date (`YYYY-MM-DD.log`).
-3. Optionally send telemetry to a remote HTTP endpoint in OTLP Logs JSON format when `STUDIO_TELEMETRY_URL` is set.
-4. Rotate local log files by deleting files older than a configurable retention period (default: 5 days, override via `STUDIO_TELEMETRY_RETENTION_DAYS`). Rotation MUST run at most once per day (triggered only when a new day's log file is created).
+3. Optionally send telemetry to a remote HTTP endpoint in OTLP Logs JSON format when `CFS_TELEMETRY_URL` is set.
+4. Rotate local log files by deleting files older than a configurable retention period (default: 5 days, override via `CFS_TELEMETRY_RETENTION_DAYS`). Rotation MUST run at most once per day (triggered only when a new day's log file is created).
 5. Never block or slow down CLI command execution — all telemetry work MUST run in a background daemon thread.
 6. Never crash or affect CLI behavior on telemetry failure — HTTP errors MUST be logged to the local log file, not printed to stderr.
-7. Be fully disableable via `STUDIO_TELEMETRY=0`.
+7. Be fully disableable via `CFS_TELEMETRY=0`.
 8. Use only Python stdlib (no third-party dependencies).
 9. Collect git identity via a single `git config --get-regexp` subprocess call — git handles all config resolution (local, global, includes, conditional includes).
 
@@ -1045,7 +1045,7 @@ The plugin MUST delegate all validation logic to the installed Studio CLI to ens
 **Flow**:
 
 1. User runs `workspace-init [--root DIR] [--output PATH] [--inline] [--force] [--max-depth N] [--dry-run]` from project root
-2. Tool scans nested sub-directories (up to `--max-depth` levels, default 3) for repos with `.git` or `AGENTS.md` with `@cpt:root-agents` marker (uses capability `cpt-studio-fr-core-workspace`)
+2. Tool scans nested sub-directories (up to `--max-depth` levels, default 3) for repos with `.git` or `AGENTS.md` with `@cf:root-agents` marker (uses capability `cpt-studio-fr-core-workspace`)
 3. Tool infers source roles (`artifacts`, `codebase`, `kits`, `full`) based on adapter contents
 4. Tool checks for existing workspace config conflicts (cross-type or same-type without `--force`)
 5. Tool writes workspace config with discovered sources and default traceability settings: standalone `.studio-workspace.toml` by default, or inline `[workspace]` in `config/core.toml` when `--inline` is specified

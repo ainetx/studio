@@ -2409,6 +2409,23 @@ class TestCmdKitInstallGithubPath(unittest.TestCase):
 # cmd_kit_update CLI paths
 # ---------------------------------------------------------------------------
 
+def test_cmd_kit_update_accepts_project_root(tmp_path, monkeypatch):
+    from studio.commands import kit as kit_mod
+
+    captured = {}
+
+    def fake_resolve_studio_dir(project_root_arg=None):
+        captured["project_root_arg"] = project_root_arg
+        return None
+
+    monkeypatch.setattr(kit_mod, "_resolve_studio_dir", fake_resolve_studio_dir)
+
+    rc = kit_mod.cmd_kit_update(["--project-root", str(tmp_path)])
+
+    assert rc == 1
+    assert captured["project_root_arg"] == tmp_path
+
+
 class TestCmdKitUpdateCli(unittest.TestCase):
     def setUp(self):
         from studio.utils.ui import set_json_mode

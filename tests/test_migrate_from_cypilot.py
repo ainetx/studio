@@ -2770,6 +2770,25 @@ def test_run_followup_update_in_json_mode_with_empty_stdout_returns_none(tmp_pat
     assert parsed is None
 
 
+def test_run_followup_kit_update_passes_project_root(tmp_path, monkeypatch):
+    import studio.commands.kit as kit_mod
+    import studio.commands.migrate_from_cypilot as migration
+
+    captured = {}
+
+    def fake_cmd_kit_update(argv):
+        captured["argv"] = list(argv)
+        return 0
+
+    monkeypatch.setattr(kit_mod, "cmd_kit_update", fake_cmd_kit_update)
+    monkeypatch.setattr(migration, "is_json_mode", lambda: False)
+
+    rc = migration._run_followup_kit_update(project_root=tmp_path, yes=True)
+
+    assert rc == 0
+    assert captured["argv"] == ["--project-root", tmp_path.as_posix(), "--yes"]
+
+
 def test_post_copy_rewrite_failure_with_no_backup_records_no_backup_action(
     tmp_path, monkeypatch
 ):

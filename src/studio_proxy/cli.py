@@ -219,7 +219,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                 from studio_proxy.cache import download_and_cache
 
                 # @cpt-begin:cpt-studio-flow-core-infra-cli-invocation:p1:inst-explicit-cache-update
-                explicit = target_version or (args[1] if len(args) > 1 else None)
+                explicit = target_version
+                if explicit is None and len(args) > 1 and not args[1].startswith("-"):
+                    explicit = args[1]
                 success, message = download_and_cache(version=explicit, force=force_update, url=custom_url)
                 # @cpt-end:cpt-studio-flow-core-infra-cli-invocation:p1:inst-explicit-cache-update
 
@@ -236,11 +238,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             # @cpt-end:cpt-studio-state-core-infra-project-install:p1:inst-update-complete
 
         sys.stderr.write("Updating project...\n")
-        # Forward only 'update' + any remaining flags (strip version positional arg)
-        update_args = ["update"]
-        for flag in ("--dry-run", "--help", "-h", "--no-interactive", "-y", "--yes"):
-            if flag in args:
-                update_args.append(flag)
+        # Forward the engine-owned update arguments after stripping only the
+        # optional cache-version positional. Proxy-owned flags (--version,
+        # --source, --url, --force, --no-cache) were already consumed above.
+        update_args = list(args)
+        if target_version is None and len(args) > 1 and not args[1].startswith("-"):
+            update_args = ["update"] + args[2:]
         # @cpt-begin:cpt-studio-flow-core-infra-cli-invocation:p1:inst-return-cache-update
         return _forward_to_skill(skill_path, update_args)
         # @cpt-end:cpt-studio-flow-core-infra-cli-invocation:p1:inst-return-cache-update

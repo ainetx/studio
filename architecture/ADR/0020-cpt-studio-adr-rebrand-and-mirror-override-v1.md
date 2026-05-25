@@ -133,8 +133,8 @@ Implementation lives in `src/studio_proxy/mirrors.py` exporting `load_overrides(
 
 Confirmed when:
 - `cfs --version` returns `1.0.0`
-- `cfs init` creates `.studio-workspace.toml` and `~/.cf-studio/cache/`
-- `cfs generate-agents` produces files under `skills/cf/` (not `skills/studio/` — cf is the skill name, studio is the directory in skills/)
+- `cfs init` creates the project install directory and uses `~/.cf-studio/cache/` for cached skill bundles
+- `cfs generate-agents` produces host integration files under agent-specific locations such as `.agents/skills/cf/` and `.claude/skills/cf/`; canonical source files remain under `skills/studio/`
 - `cfs mirror override github.com/constructorfabric/studio github.com/myorg/studio` writes to XDG path on fresh install
 - `cfs mirror list` shows merged set with correct source path for each entry
 - Migrating a cypilot 3.9.0 project writes `.studio-workspace.toml` directly (no intermediate Cyber Constructor form)

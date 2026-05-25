@@ -82,7 +82,7 @@ Enables users to install, update, and validate kit packages with interactive fil
 
 **Actor**: `cpt-studio-actor-user`
 
-**Trigger**: User runs `cfs kit install <path> [--force] [--dry-run]`
+**Trigger**: User runs `cfs kit install <owner/repo[@version]> [--force] [--dry-run]` or `cfs kit install --path <dir> [--force] [--dry-run]`
 
 **Steps**:
 1. [x] - `p1` - Parse CLI arguments (path, --force, --dry-run) - `inst-parse-args`
@@ -606,7 +606,7 @@ Enables users to install, update, and validate kit packages with interactive fil
 
 ## 7. Acceptance Criteria
 
-- [ ] `p1` - `cfs kit install <path>` installs a kit and returns JSON with status, files_copied
+- [ ] `p1` - `cfs kit install <owner/repo[@version]>` or `cfs kit install --path <dir>` installs a kit and returns JSON with status, files_copied
 - [ ] `p1` - `cfs kit install` with manifest: validates `manifest.toml`, prompts for `user_modifiable` paths, copies resources to resolved paths, registers bindings in `core.toml`
 - [ ] `p1` - `cfs kit update <path>` shows interactive diff and applies accepted changes
 - [ ] `p1` - `cfs kit update` with manifest on legacy install: auto-populates resource bindings from existing kit root + manifest defaults

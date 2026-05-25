@@ -59,7 +59,7 @@ Enables users to install Studio globally, initialize it in any project with sens
 
 | Actor | Role in Feature |
 |-------|-----------------|
-| `cpt-studio-actor-user` | Runs `cfs init`, `cfs config show`, `cfs migrate-config` |
+| `cpt-studio-actor-user` | Runs `cfs init`, `cfs info`, `cfs update` |
 | `cpt-studio-actor-studio-cli` | Global proxy that resolves skill target and forwards commands |
 
 ### 4. References
@@ -134,7 +134,7 @@ Enables users to install Studio globally, initialize it in any project with sens
 - No cached skill bundle → error with install instructions
 
 **Steps**:
-1. [x] - `p1` - User invokes `cfs init [--dir DIR] [--agents AGENTS]` - `inst-user-init`
+1. [x] - `p1` - User invokes `cfs init [--project-root ROOT] [--install-dir DIR]` - `inst-user-init`
 2. [x] - `p1` - Check if `{cf-studio-path}/` (or specified dir) already exists - `inst-check-existing`
 3. [x] - `p1` - **IF** already initialized - `inst-if-exists`
    1. [x] - `p1` - **RETURN** error: "Studio already initialized. Use 'cfs update' to upgrade." (exit 2) - `inst-return-exists`
@@ -152,7 +152,7 @@ Enables users to install Studio globally, initialize it in any project with sens
 12. [x] - `p1` - Algorithm: create config/AGENTS.md using `cpt-studio-algo-core-infra-create-config-agents` - `inst-create-config-agents`
 13. [x] - `p1` - **RETURN** JSON: `{status, install_dir, kits_installed, agents_configured, systems}` (exit 0) - `inst-return-init-ok`
 14. [x] - `p1` - Helper functions: copy from cache, generate READMEs for .core/.gen/config dirs, default core.toml, path prompting, slug-to-PascalCase - `inst-init-helpers`
-15. [x] - `p1` - Detect existing Studio installation by reading AGENTS.md TOML block with `studio_path` variable - `inst-init-detect-existing`
+15. [x] - `p1` - Detect existing Studio installation by reading AGENTS.md TOML block with `cf-studio-path` variable - `inst-init-detect-existing`
 16. [x] - `p1` - Inject/update CLAUDE.md managed block for Claude agent integration - `inst-init-inject-claude`
 17. [x] - `p1` - Human-friendly formatters for init success and error output - `inst-init-format-output`
 
@@ -233,7 +233,7 @@ Enables users to install Studio globally, initialize it in any project with sens
 **Output**: Path to skill engine entry point, or error
 
 **Steps**:
-1. [x] - `p1` - Walk from current directory upward looking for `AGENTS.md` with `<!-- @cpt:root-agents -->` marker, read `{cf-studio-path}` variable to get install dir - `inst-walk-parents`
+1. [x] - `p1` - Walk from current directory upward looking for `AGENTS.md` with `<!-- @cf:root-agents -->` marker, read `cf-studio-path` variable to get install dir - `inst-walk-parents`
 2. [x] - `p1` - **IF** install dir found and skill entry point exists at `{cf-studio-path}/.core/skills/studio/scripts/studio.py` - `inst-if-marker`
    1. [x] - `p1` - **RETURN** path to project skill engine - `inst-return-project-path`
 3. [x] - `p1` - **ELSE** check `~/.cf-studio/cache/` for cached skill bundle - `inst-check-global-cache`
@@ -306,9 +306,9 @@ Enables users to install Studio globally, initialize it in any project with sens
 
 **Steps**:
 1. [x] - `p1` - Validate target file path is within project root; raise error if it would escape - `inst-validate-path`
-2. [x] - `p1` - Compute managed block content: TOML fenced block with `studio_path = "{install_dir}"`, navigation rule `ALWAYS open and follow {cf-studio-path}/config/AGENTS.md FIRST` - `inst-compute-block`
+2. [x] - `p1` - Compute managed block content: TOML fenced block with `cf-studio-path = "{install_dir}"`, navigation rule `ALWAYS open and follow {cf-studio-path}/config/AGENTS.md FIRST` - `inst-compute-block`
 3. [x] - `p1` - **IF** `{project_root}/AGENTS.md` does not exist - `inst-if-no-agents`
-   1. [x] - `p1` - Create file with managed block wrapped in `<!-- @cpt:root-agents -->` markers - `inst-create-agents-file`
+   1. [x] - `p1` - Create file with managed block wrapped in `<!-- @cf:root-agents -->` markers - `inst-create-agents-file`
 3. [x] - `p1` - **ELSE** read existing file content - `inst-read-existing`
    1. [x] - `p1` - **IF** managed block markers found - `inst-if-markers-exist`
       1. [x] - `p1` - Replace content between markers with computed block - `inst-replace-block`
@@ -387,7 +387,7 @@ Enables users to install Studio globally, initialize it in any project with sens
 **Input**: Start path (directory to begin searching from)
 
 1. [x] - `p1` - Resolve start path to absolute - `inst-root-resolve-start`
-2. [x] - `p1` - Walk up directory hierarchy (max 25 levels) looking for AGENTS.md with `@cpt:root-agents` marker or `.git` directory - `inst-root-walk-up`
+2. [x] - `p1` - Walk up directory hierarchy (max 25 levels) looking for AGENTS.md with `@cf:root-agents` marker or `.git` directory - `inst-root-walk-up`
 3. [x] - `p1` - **IF** found AGENTS.md with marker **RETURN** that directory as project root - `inst-root-found-agents`
 4. [x] - `p1` - **IF** found `.git` **RETURN** that directory as project root - `inst-root-found-git`
 5. [x] - `p1` - **ELSE RETURN** None - `inst-root-not-found`
@@ -401,7 +401,7 @@ Enables users to install Studio globally, initialize it in any project with sens
 
 **Input**: Adapter directory path, project root
 
-1. [x] - `p1` - Read `studio_path` variable from root AGENTS.md TOML block - `inst-cfg-read-var`
+1. [x] - `p1` - Read `cf-studio-path` variable from root AGENTS.md TOML block - `inst-cfg-read-var`
 2. [x] - `p1` - Load project config from `config/core.toml` (with fallback to flat layout) - `inst-cfg-load-core`
 3. [x] - `p1` - Find studio directory: priority 1 = TOML variable, priority 2 = recursive search - `inst-cfg-find-dir`
 4. [x] - `p1` - Load studio config from AGENTS.md and rules directory - `inst-cfg-load-config`
@@ -584,7 +584,7 @@ The system **MUST** provide a `cfs init` command that copies skill bundle from c
 
 - [x] `p1` - **ID**: `cpt-studio-dod-core-infra-agents-integrity`
 
-The system **MUST** verify the root `AGENTS.md` managed block on every CLI invocation (not just init). If the `<!-- @cpt:root-agents -->` block is missing, stale, or the file does not exist, the system silently re-injects it with the correct block pointing to the `{cf-studio-path}/` directory.
+The system **MUST** verify the root `AGENTS.md` managed block on every CLI invocation (not just init). If the `<!-- @cf:root-agents -->` block is missing, stale, or the file does not exist, the system silently re-injects it with the correct block pointing to the `{cf-studio-path}/` directory.
 
 **Implements**:
 - `cpt-studio-algo-core-infra-inject-root-agents`
@@ -600,7 +600,7 @@ The system **MUST** verify the root `AGENTS.md` managed block on every CLI invoc
 
 - [x] `p1` - **ID**: `cpt-studio-dod-core-infra-telemetry`
 
-The system **MUST** provide non-blocking usage telemetry in the CLI proxy that records every invocation. The telemetry module **MUST**: collect git user identity (`user.name`, `user.email`) and remote URL via a single `git config --get-regexp` subprocess call; append JSONL records to `~/.cf-studio/logs/YYYY-MM-DD.log`; optionally POST OTLP Logs JSON to `STUDIO_TELEMETRY_URL`; rotate old log files when a new day's file is created; log HTTP errors to the local log file (never to stderr); be fully disableable via `STUDIO_TELEMETRY=0`; use only Python stdlib.
+The system **MUST** provide non-blocking usage telemetry in the CLI proxy that records every invocation. The telemetry module **MUST**: collect git user identity (`user.name`, `user.email`) and remote URL via a single `git config --get-regexp` subprocess call; append JSONL records to `~/.cf-studio/logs/YYYY-MM-DD.log`; optionally POST OTLP Logs JSON to `CFS_TELEMETRY_URL`; rotate old log files when a new day's file is created; log HTTP errors to the local log file (never to stderr); be fully disableable via `CFS_TELEMETRY=0`; use only Python stdlib.
 
 **Implements**:
 - `cpt-studio-flow-core-infra-cli-invocation`

@@ -100,8 +100,8 @@ Studio DESIGN is decomposed into features organized around architectural layers 
   - `p1` - `cpt-studio-component-config-manager`
 
 - **API**:
-  - `cfs init [--dir DIR] [--agents AGENTS]`
-  - `cfs config show`
+  - `cfs init [--project-root ROOT] [--install-dir DIR]`
+  - `cfs info`
 
 - **Sequences**:
   - `cpt-studio-seq-init`
@@ -125,7 +125,7 @@ Studio DESIGN is decomposed into features organized around architectural layers 
   - Legacy install migration: when updating a kit that was installed without a manifest and the new version introduces one, auto-populate all resource bindings from existing kit root + manifest `default_path` values without requiring re-installation
   - Update model: force mode (full overwrite) and interactive mode (file-level diff — compare each file in new version against user's installed copy, present unified diffs with accept/decline/accept-all/decline-all/modify prompts). For manifest-driven kits, updates use registered resource paths, detect new resources (prompt for path), warn about removed resources
   - Resource Diff Engine: interactive conflict resolution for kit file updates (`accept-file`, `reject-file`, `accept-all`, `reject-all`, `modify` with git-style conflict markers)
-  - Kit config relocation: `cfs kit move-config <slug>` moves kit config directory, updates `core.toml` (including all resource paths relative to kit root)
+  - Kit install/update from GitHub or local directories with manifest-aware resource registration
   - SKILL composition: collect kit `SKILL.md` files and write to `{cf-studio-path}/config/SKILL.md`
   - System prompt composition: collect kit AGENTS.md content and append to `{cf-studio-path}/config/AGENTS.md`
   - Kit structural validation: verify required files (`conf.toml`, `constraints.toml`, `artifacts/` directory); for manifest-driven kits, verify all registered resource paths exist on disk
@@ -163,9 +163,8 @@ Studio DESIGN is decomposed into features organized around architectural layers 
   - `p1` - `cpt-studio-component-kit-manager`
 
 - **API**:
-  - `cfs kit install <path>`
+  - `cfs kit install <owner/repo[@version]>` or `cfs kit install --path <dir>`
   - `cfs kit update [--force]`
-  - `cfs kit move-config <slug>`
 
 - **Sequences**:
 
@@ -323,7 +322,7 @@ Studio DESIGN is decomposed into features organized around architectural layers 
   - Update command: copy cached skill to project, detect and auto-restructure old directory layout, migrate `{cf-studio-path}/config/core.toml`, migrate bundled kit references to GitHub sources (versions < 3.0.8), regenerate agent entry points
   - Layout restructuring: automatically detect old directory layout during `cfs update` and restructure (move generated outputs from `.gen/kits/` to `config/kits/`, remove old reference copies)
   - Config migration: backup before applying, preserve all user settings across versions
-  - CLI config interface: `config system add/remove`, dry-run mode
+  - CLI inspection interface: `info`, `resolve-vars`
   - Schema validation before all config writes
   - Version information: `--version` flag
 
@@ -355,10 +354,9 @@ Studio DESIGN is decomposed into features organized around architectural layers 
   Components reused from Feature 1 (`config-manager`, `skill-engine`) and Feature 2 (`kit-manager`)
 
 - **API**:
-  - `cfs update [--check]`
-  - `cfs migrate-config`
-  - `cfs config system add <name> [--kit K]`
-  - `cfs config system remove <name>`
+  - `cfs update [--project-root ROOT] [--from-dir DIR]`
+  - `cfs info`
+  - `cfs resolve-vars`
   - `cfs --version`
 
 - **Sequences**:
@@ -379,10 +377,10 @@ Studio DESIGN is decomposed into features organized around architectural layers 
 - **Scope**:
   - VS Code extension: ID syntax highlighting, go-to-definition, real-time validation, autocompletion, hover info, CodeLens, traceability tree view, quick fixes — all delegated to `cfs validate`
   - `cfs doctor`: check Python version, git, gh CLI, agents, config integrity
-  - `cfs self-check`: validate examples against templates
+  - `cfs validate-kits`: validate kit structure, templates, and examples (`self-check` remains a legacy alias)
   - `cfs resolve-vars`: resolve template variables (`{adr_template}`, `{scripts}`, etc.) to absolute paths from core.toml resource bindings
-  - `cfs hook install/uninstall`: git pre-commit hooks for validation
-  - `cfs completions install`: shell completion scripts for bash/zsh/fish
+  - Planned: git pre-commit hooks for validation
+  - Planned: shell completion scripts for bash/zsh/fish
 
 - **Out of scope**:
   - VS Code extension publishing (separate repo/process)
@@ -414,11 +412,8 @@ Studio DESIGN is decomposed into features organized around architectural layers 
 
 - **API**:
   - `cfs doctor`
-  - `cfs self-check`
+  - `cfs validate-kits`
   - `cfs resolve-vars`
-  - `cfs hook install`
-  - `cfs hook uninstall`
-  - `cfs completions install`
 
 - **Sequences**:
 
