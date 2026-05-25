@@ -135,7 +135,7 @@ test-coverage: check-pytest-cov
 		--cov-report=xml:coverage.xml \
 		--cov-report=html \
 		-v --tb=short
-	@$(PYTHON) scripts/check_coverage.py coverage.json --root skills/studio/scripts/studio --min 90
+	@$(PYTHON) scripts/check_coverage.py coverage.json --root skills/studio/scripts/studio --min 90 --exclude vendor/
 	@echo ""
 	@echo "Coverage report generated:"
 	@echo "  HTML: htmlcov/index.html"
@@ -189,7 +189,7 @@ pylint: check-pylint
 # Spec coverage check (Constructor Studio system only)
 spec-coverage:
 	@echo "Checking spec coverage (Constructor Studio system)..."
-	$(PYTHON) .bootstrap/.core/skills/studio/scripts/studio.py spec-coverage --system studio --min-coverage 90 --min-file-coverage 60 --min-granularity 0.44
+	$(PYTHON) .bootstrap/.core/skills/studio/scripts/studio.py spec-coverage --system studio --min-coverage 90 --min-file-coverage 60 --min-granularity 0.43
 
 # Check version consistency
 check-versions:

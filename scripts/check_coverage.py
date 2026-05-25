@@ -18,6 +18,8 @@ def main() -> int:
     p.add_argument("coverage_json", help="Path to coverage JSON report (pytest-cov --cov-report=json:...) ")
     p.add_argument("--root", default="skills/studio/scripts/studio", help="Only enforce threshold for files under this directory")
     p.add_argument("--min", dest="min_percent", type=float, default=90.0, help="Minimum required per-file coverage percent")
+    p.add_argument("--exclude", dest="excludes", action="append", default=[], metavar="PATTERN",
+                   help="Skip files whose path contains PATTERN (repeatable; substring match)")
     args = p.parse_args()
 
     report_path = Path(args.coverage_json)
@@ -35,6 +37,9 @@ def main() -> int:
             continue
 
         if pth.suffix != ".py":
+            continue
+
+        if any(pat in str(pth) for pat in args.excludes):
             continue
 
         try:
