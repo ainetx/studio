@@ -1154,14 +1154,23 @@ def _migrate_config_toml_template_vars(config_dir: Path) -> List[str]:
 
 def _migrate_config_markdown(config_dir: Path) -> List[str]:
     # @cpt-begin:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-migrate-config-markdown
-    # Conservative rewriter: only rewrite well-known mechanical tokens.
-    # Preserves cpt. (punctuated) and line-start cpt per project_markdown_rewriter_conservative rule.
+    # Conservative rewriter: only rewrite well-known mechanical tokens across
+    # all *.md files under config_dir (recursively, including config/rules/*.md
+    # and any other subdirectory).  Applies four substitution rules unchanged:
+    #   {cypilot_path}  ->  {cf-studio-path}
+    #   `cpt            ->  `cfs
+    #    cpt            ->   cfs   (space-surrounded token only)
+    #   Cypilot         ->  Constructor Studio
+    # Preserves cpt. (punctuated) and line-start cpt per
+    # project_markdown_rewriter_conservative rule.  Tolerates per-file OSError
+    # gracefully (skips the file, continues).  Returns paths relative to
+    # config_dir (e.g. 'rules/foo.md', 'AGENTS.md').
     changed: List[str] = []
-    for name in ("AGENTS.md", "SKILL.md", "README.md"):
-        path = config_dir / name
-        if not path.is_file():
+    for path in sorted(config_dir.rglob("*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
             continue
-        text = path.read_text(encoding="utf-8")
         new_text = (
             text
             .replace("{cypilot_path}", "{cf-studio-path}")
@@ -1170,8 +1179,11 @@ def _migrate_config_markdown(config_dir: Path) -> List[str]:
             .replace("Cypilot", "Constructor Studio")
         )
         if new_text != text:
-            path.write_text(new_text, encoding="utf-8")
-            changed.append(name)
+            try:
+                path.write_text(new_text, encoding="utf-8")
+            except OSError:
+                continue
+            changed.append(path.relative_to(config_dir).as_posix())
     return changed
     # @cpt-end:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-migrate-config-markdown
 
