@@ -605,6 +605,8 @@ def test_init_migration_root_marker_write_failure_returns_json_without_update(
         "init",
         "--project-root",
         str(tmp_path),
+        "--install-dir",
+        ".cf-constructor",
         "--migrate-from-cypilot=yes",
     ])
 
@@ -909,6 +911,8 @@ def test_init_migrate_yes_migrates_without_prompt(tmp_path, capsys, monkeypatch,
         "init",
         "--project-root",
         str(tmp_path),
+        "--install-dir",
+        ".cf-constructor",
         "--migrate-from-cypilot=yes",
     ])
 
@@ -938,6 +942,8 @@ def test_supported_legacy_versions_migrate_directly(tmp_path, capsys, monkeypatc
         "init",
         "--project-root",
         str(tmp_path),
+        "--install-dir",
+        ".cf-constructor",
         "--migrate-from-cypilot=yes",
     ])
 
@@ -965,6 +971,8 @@ def test_unsupported_legacy_version_prompts_to_update_then_migrates(tmp_path, ca
         "init",
         "--project-root",
         str(tmp_path),
+        "--install-dir",
+        ".cf-constructor",
         "--migrate-from-cypilot=yes",
     ])
 
@@ -995,8 +1003,10 @@ def test_unsupported_legacy_version_update_to_supported_newer_version_migrates(
         "init",
         "--project-root",
         str(tmp_path),
+        "--install-dir",
+        ".cf-constructor",
         "--migrate-from-cypilot=yes",
-        "--update-legacy-cypilot=yes",
+        "--update-legacy-studio=yes",
     ])
 
     out = json.loads(capsys.readouterr().out)
@@ -1049,14 +1059,16 @@ def test_init_declined_migration_creates_side_by_side_constructor(tmp_path, caps
         "--yes",
         "--project-root",
         str(tmp_path),
+        "--install-dir",
+        ".cf-constructor",
         "--migrate-from-cypilot=no",
-        "--update-legacy-cypilot=yes",
+        "--update-legacy-studio=yes",
     ])
 
     out = json.loads(capsys.readouterr().out)
     assert rc == 0
     assert out["status"] == "PASS"
-    assert out["actions"]["legacy_cypilot"] == "detected"
+    assert out["actions"]["legacy_studio"] == "detected"
     assert out["actions"]["migration"] == "declined"
     assert out["actions"]["migration_decline_action"] == "side_by_side_init"
     assert (tmp_path / ".cf-constructor" / "config" / "core.toml").is_file()
@@ -1096,7 +1108,7 @@ def test_init_declined_migration_rejects_legacy_install_dir_without_modifying_it
     assert "approve migration" in message
     assert out["actions"]["migration"] == "declined"
     assert out["install_dir"] == "cypilot"
-    assert out["legacy_cypilot_dir"] == legacy_dir.as_posix()
+    assert out["legacy_studio_dir"] == legacy_dir.as_posix()
     assert _snapshot_tree(legacy_dir) == before
     assert not (legacy_dir / ".gen").exists()
     assert not (legacy_dir / ".core" / "requirements").exists()
@@ -1126,10 +1138,10 @@ def test_interactive_init_declined_migration_creates_side_by_side_constructor(tm
     assert "not directly migratable" not in captured.err
     out = json.loads(captured.out)
     assert out["status"] == "PASS"
-    assert out["actions"]["legacy_cypilot"] == "detected"
+    assert out["actions"]["legacy_studio"] == "detected"
     assert out["actions"]["migration"] == "declined"
     assert out["actions"]["migration_decline_action"] == "side_by_side_init"
-    assert (tmp_path / ".cf-constructor" / "config" / "core.toml").is_file()
+    assert (tmp_path / ".cf-studio" / "config" / "core.toml").is_file()
     assert (tmp_path / "cypilot").is_dir()
     agents_text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     assert "<!-- @cpt:root-agents -->" in agents_text
@@ -1182,8 +1194,10 @@ def test_non_interactive_unsupported_legacy_updates_with_explicit_approval(tmp_p
         "--yes",
         "--project-root",
         str(tmp_path),
+        "--install-dir",
+        ".cf-constructor",
         "--migrate-from-cypilot=yes",
-        "--update-legacy-cypilot=yes",
+        "--update-legacy-studio=yes",
     ])
 
     out = json.loads(capsys.readouterr().out)
@@ -1212,7 +1226,7 @@ def test_init_dry_run_unsupported_legacy_reports_planned_update_without_running_
         str(tmp_path),
         "--dry-run",
         "--migrate-from-cypilot=yes",
-        "--update-legacy-cypilot=yes",
+        "--update-legacy-studio=yes",
     ])
 
     out = json.loads(capsys.readouterr().out)
@@ -1246,7 +1260,7 @@ def test_failed_update_to_baseline_stops_migration(tmp_path, capsys, monkeypatch
         "--project-root",
         str(tmp_path),
         "--migrate-from-cypilot=yes",
-        "--update-legacy-cypilot=yes",
+        "--update-legacy-studio=yes",
     ])
 
     out = json.loads(capsys.readouterr().out)
@@ -1293,10 +1307,10 @@ def test_interactive_init_decline_returns_clear_result(tmp_path, capsys, monkeyp
     assert "Press N to initialize Constructor Studio side-by-side and keep Cyber Pilot unchanged." in captured.err
     out = json.loads(captured.out)
     assert out["status"] == "PASS"
-    assert out["actions"]["legacy_cypilot"] == "detected"
+    assert out["actions"]["legacy_studio"] == "detected"
     assert out["actions"]["migration"] == "declined"
     assert out["actions"]["migration_decline_action"] == "side_by_side_init"
-    assert (tmp_path / ".cf-constructor" / "config" / "core.toml").is_file()
+    assert (tmp_path / ".cf-studio" / "config" / "core.toml").is_file()
     assert (tmp_path / "cypilot").is_dir()
     agents_text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     assert "<!-- @cpt:root-agents -->" in agents_text
@@ -1319,10 +1333,10 @@ def test_init_yes_does_not_imply_migration(tmp_path, capsys, monkeypatch, follow
     out = json.loads(capsys.readouterr().out)
     assert rc == 0
     assert out["status"] == "PASS"
-    assert out["actions"]["legacy_cypilot"] == "detected"
+    assert out["actions"]["legacy_studio"] == "detected"
     assert out["actions"]["migration"] == "declined"
     assert out["actions"]["migration_decline_action"] == "side_by_side_init"
-    assert (tmp_path / ".cf-constructor" / "config" / "core.toml").is_file()
+    assert (tmp_path / ".cf-studio" / "config" / "core.toml").is_file()
     assert (tmp_path / "cypilot").is_dir()
     agents_text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     assert "<!-- @cpt:root-agents -->" in agents_text
@@ -1420,7 +1434,7 @@ def test_implicit_migration_does_not_use_generic_force_to_replace_target(tmp_pat
     from studio.cli import main
 
     _make_legacy_project(tmp_path)
-    target = tmp_path / ".cf-constructor"
+    target = tmp_path / ".cf-studio"
     target.mkdir()
     sentinel = target / "sentinel.txt"
     sentinel.write_text("keep me", encoding="utf-8")
@@ -1459,7 +1473,7 @@ def test_update_migrate_yes_on_legacy_project_migrates_without_prompt(tmp_path, 
     assert rc == 0
     assert out["status"] == "PASS"
     assert out["actions"]["update"] == "PASS"
-    assert (tmp_path / ".cf-constructor" / "config" / "core.toml").is_file()
+    assert (tmp_path / ".cf-studio" / "config" / "core.toml").is_file()
 
 
 def test_update_unsupported_legacy_version_can_update_baseline_then_migrate(tmp_path, capsys, monkeypatch, followup_update_ok):
@@ -1480,13 +1494,13 @@ def test_update_unsupported_legacy_version_can_update_baseline_then_migrate(tmp_
         "--project-root",
         str(tmp_path),
         "--migrate-from-cypilot=yes",
-        "--update-legacy-cypilot=yes",
+        "--update-legacy-studio=yes",
     ])
 
     out = json.loads(capsys.readouterr().out)
     assert rc == 0
     assert out["status"] == "PASS"
-    assert (tmp_path / ".cf-constructor" / "config" / "core.toml").is_file()
+    assert (tmp_path / ".cf-studio" / "config" / "core.toml").is_file()
 
 
 def test_e2e_cpt_update_hands_off_to_cfc_init_for_cypilot_migration(tmp_path):
@@ -1552,13 +1566,13 @@ def test_update_declining_coexisting_legacy_continues_normal_update(tmp_path, ca
 
     captured = capsys.readouterr()
     assert rc == 0
-    assert "Cyber Pilot detected alongside Constructor Studio." in captured.err
+    assert "Cyber Pilot (cypilot) detected alongside Constructor Studio." in captured.err
     assert "Migrate it into the current Constructor Studio install now?" in captured.err
     assert "Press N to continue regular Constructor Studio update." in captured.err
     out = json.loads(captured.out)
     assert out["status"] == "PASS"
     assert out["dry_run"] is True
-    assert out["actions"]["legacy_cypilot"] == "detected"
+    assert out["actions"]["legacy_studio"] == "detected"
     assert out["actions"]["migration"] == "declined"
     assert out["actions"]["migration_decline_action"] == "regular_update"
     assert (tmp_path / ".cf-constructor" / "config" / "core.toml").is_file()
@@ -1661,7 +1675,7 @@ def test_update_declined_migration_does_not_update_legacy_skill(tmp_path, capsys
         "--project-root",
         str(tmp_path),
         "--migrate-from-cypilot=no",
-        "--update-legacy-cypilot=yes",
+        "--update-legacy-studio=yes",
     ])
 
     out = json.loads(capsys.readouterr().out)
@@ -1780,7 +1794,7 @@ def test_update_dry_run_unsupported_legacy_reports_planned_update_without_runnin
         str(tmp_path),
         "--dry-run",
         "--migrate-from-cypilot=yes",
-        "--update-legacy-cypilot=yes",
+        "--update-legacy-studio=yes",
     ])
 
     out = json.loads(capsys.readouterr().out)
@@ -2716,8 +2730,8 @@ def test_run_followup_update_in_json_mode_returns_parsed_payload(tmp_path, monke
 
     assert rc == 0
     assert parsed == {"status": "PASS", "from": "fake"}
-    assert "--no-interactive" in captured["argv"]
     assert "--yes" in captured["argv"]
+    assert "--no-interactive" not in captured["argv"]
     assert "--project-root" in captured["argv"]
 
 
