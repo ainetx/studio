@@ -1129,6 +1129,29 @@ def _migrate_system_kit_refs(system: Any) -> bool:
     return changed
 
 
+def _migrate_config_toml_template_vars(config_dir: Path) -> List[str]:
+    # @cpt-begin:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-migrate-config-toml-template-vars
+    # Rewrite the single template placeholder {cypilot_path} -> {cf-studio-path}
+    # in all *.toml files under config_dir (e.g. pr-review.toml). Structured
+    # fields that do not contain the placeholder are untouched. Skip files with
+    # OSError and continue.
+    changed: List[str] = []
+    for path in sorted(config_dir.rglob("*.toml")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        new_text = text.replace("{cypilot_path}", "{cf-studio-path}")
+        if new_text != text:
+            try:
+                path.write_text(new_text, encoding="utf-8")
+            except OSError:
+                continue
+            changed.append(path.relative_to(config_dir).as_posix())
+    return changed
+    # @cpt-end:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-migrate-config-toml-template-vars
+
+
 def _migrate_config_markdown(config_dir: Path) -> List[str]:
     # @cpt-begin:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-migrate-config-markdown
     # Conservative rewriter: only rewrite well-known mechanical tokens.
