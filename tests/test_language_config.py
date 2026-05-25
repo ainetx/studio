@@ -13,14 +13,14 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.utils import (
     load_language_config,
-    build_cypilot_begin_regex,
-    build_cypilot_end_regex,
-    build_no_cypilot_begin_regex,
-    build_no_cypilot_end_regex,
+    build_studio_begin_regex,
+    build_studio_end_regex,
+    build_no_studio_begin_regex,
+    build_no_studio_end_regex,
     LanguageConfig,
     DEFAULT_FILE_EXTENSIONS,
 )
@@ -152,7 +152,7 @@ class TestRegexPatternBuilding(unittest.TestCase):
             block_comment_prefixes=[]
         )
         
-        regex = build_cypilot_begin_regex(config)
+        regex = build_studio_begin_regex(config)
         
         # Should match Python comment
         self.assertIsNotNone(regex.match("# cpt-begin cpt-test-feature-x-flow-y:p1:inst-step"))
@@ -171,7 +171,7 @@ class TestRegexPatternBuilding(unittest.TestCase):
             block_comment_prefixes=[]
         )
         
-        regex = build_cypilot_begin_regex(config)
+        regex = build_studio_begin_regex(config)
         
         # Should match JS comment
         self.assertIsNotNone(regex.match("// cpt-begin cpt-test-feature-x-flow-y:p1:inst-step"))
@@ -186,7 +186,7 @@ class TestRegexPatternBuilding(unittest.TestCase):
             block_comment_prefixes=[]
         )
         
-        regex = build_cypilot_begin_regex(config)
+        regex = build_studio_begin_regex(config)
         
         # Should match SQL comment
         self.assertIsNotNone(regex.match("-- cpt-begin cpt-test-feature-x-flow-y:p1:inst-step"))
@@ -200,7 +200,7 @@ class TestRegexPatternBuilding(unittest.TestCase):
             block_comment_prefixes=[]
         )
         
-        regex = build_cypilot_begin_regex(config)
+        regex = build_studio_begin_regex(config)
         
         # Should match HTML comment
         self.assertIsNotNone(regex.match("<!-- cpt-begin cpt-test-feature-x-flow-y:p1:inst-step"))
@@ -214,7 +214,7 @@ class TestRegexPatternBuilding(unittest.TestCase):
             block_comment_prefixes=["*"]
         )
         
-        regex = build_cypilot_begin_regex(config)
+        regex = build_studio_begin_regex(config)
         
         # Should match all styles
         self.assertIsNotNone(regex.match("# cpt-begin cpt-test-feature-x-flow-y:p1:inst-step"))
@@ -232,7 +232,7 @@ class TestRegexPatternBuilding(unittest.TestCase):
             block_comment_prefixes=[]
         )
         
-        end_regex = build_cypilot_end_regex(config)
+        end_regex = build_studio_end_regex(config)
         
         # Should match both styles
         self.assertIsNotNone(end_regex.match("# cpt-end cpt-test-feature-x-flow-y:p1:inst-step"))
@@ -247,7 +247,7 @@ class TestRegexPatternBuilding(unittest.TestCase):
             block_comment_prefixes=[]
         )
         
-        regex = build_no_cypilot_begin_regex(config)
+        regex = build_no_studio_begin_regex(config)
         
         # Should match exclusion markers
         self.assertIsNotNone(regex.match("# !no-cpt-begin"))
@@ -263,7 +263,7 @@ class TestRegexPatternBuilding(unittest.TestCase):
             block_comment_prefixes=[]
         )
         
-        regex = build_no_cypilot_end_regex(config)
+        regex = build_no_studio_end_regex(config)
         
         # Should match exclusion end markers
         self.assertIsNotNone(regex.match("# !no-cpt-end"))

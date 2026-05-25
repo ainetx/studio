@@ -13,7 +13,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.utils.document import (
     get_content_scoped,
@@ -26,7 +26,7 @@ from studio.utils.document import (
 
 from studio.utils import document as doc
 
-from cypilot import cli as cypilot_cli
+from studio import cli as studio_cli
 
 
 class TestRelativePosix(unittest.TestCase):
@@ -173,15 +173,15 @@ class TestCliCommandCoverage(unittest.TestCase):
             buf = io.StringIO()
             with patch("studio.commands.init.CACHE_DIR", fake_cache):
                 with contextlib.redirect_stdout(buf):
-                    rc = cypilot_cli.main(["init", "--project-root", str(root), "--yes", "--dry-run"])
+                    rc = studio_cli.main(["init", "--project-root", str(root), "--yes", "--dry-run"])
         self.assertEqual(rc, 0)
 
     def test_main_missing_subcommand_shows_help(self):
-        rc = cypilot_cli.main([])
+        rc = studio_cli.main([])
         self.assertEqual(rc, 0)
 
     def test_main_unknown_command_returns_error(self):
-        rc = cypilot_cli.main(["does-not-exist"])
+        rc = studio_cli.main(["does-not-exist"])
         self.assertEqual(rc, 1)
 
 

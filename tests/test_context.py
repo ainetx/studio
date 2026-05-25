@@ -1,8 +1,8 @@
 """
-Tests for CypilotContext and related functions.
+Tests for StudioContext and related functions.
 
 Tests cover:
-- CypilotContext methods: get_template, get_template_for_kind, get_known_id_kinds
+- StudioContext methods: get_template, get_template_for_kind, get_known_id_kinds
 - Global context functions: get_context, set_context, ensure_context
 """
 
@@ -12,10 +12,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.utils.context import (
-    CypilotContext,
+    StudioContext,
     LoadedKit,
     get_context,
     set_context,
@@ -42,11 +42,11 @@ def _make_mock_block(block_type: str, name: str) -> MagicMock:
     return block
 
 
-class TestCypilotContextMethods:
-    """Tests for CypilotContext instance methods."""
+class TestStudioContextMethods:
+    """Tests for StudioContext instance methods."""
 
-    def _make_context(self) -> CypilotContext:
-        """Create a mock CypilotContext with templates."""
+    def _make_context(self) -> StudioContext:
+        """Create a mock StudioContext with templates."""
         # Create mock templates
         prd_tmpl = _make_mock_template("PRD", [
             _make_mock_block("id", "fr"),
@@ -94,7 +94,7 @@ class TestCypilotContextMethods:
         meta = MagicMock(spec=ArtifactsMeta)
         meta.project_root = ".."
 
-        return CypilotContext(
+        return StudioContext(
             adapter_dir=Path("/fake/adapter"),
             project_root=Path("/fake/project"),
             meta=meta,
@@ -126,24 +126,24 @@ class TestGlobalContextFunctions:
     @patch("studio.utils.context.WorkspaceContext.load", return_value=None)
     def test_set_and_get_context(self, _mock_ws_load):
         """set_context stores context retrievable by get_context."""
-        mock_ctx = MagicMock(spec=CypilotContext)
+        mock_ctx = MagicMock(spec=StudioContext)
         set_context(mock_ctx)
         # get_context() lazily attempts workspace upgrade on first call
         assert get_context() is mock_ctx
 
     def test_set_context_to_none(self):
         """set_context(None) clears the context."""
-        mock_ctx = MagicMock(spec=CypilotContext)
+        mock_ctx = MagicMock(spec=StudioContext)
         set_context(mock_ctx)
         set_context(None)
         assert get_context() is None
 
     @patch("studio.utils.context.WorkspaceContext.load", return_value=None)
-    @patch("studio.utils.context.CypilotContext.load")
+    @patch("studio.utils.context.StudioContext.load")
     def test_ensure_context_loads_when_none(self, mock_load, _mock_ws_load):
         """ensure_context loads context when global is None."""
         set_context(None)
-        mock_ctx = MagicMock(spec=CypilotContext)
+        mock_ctx = MagicMock(spec=StudioContext)
         mock_load.return_value = mock_ctx
 
         result = ensure_context()
@@ -153,11 +153,11 @@ class TestGlobalContextFunctions:
         assert get_context() is mock_ctx
 
     @patch("studio.utils.context.WorkspaceContext.load", return_value=None)
-    @patch("studio.utils.context.CypilotContext.load")
+    @patch("studio.utils.context.StudioContext.load")
     def test_ensure_context_passes_start_path(self, mock_load, _mock_ws_load):
-        """ensure_context passes start_path to CypilotContext.load."""
+        """ensure_context passes start_path to StudioContext.load."""
         set_context(None)
-        mock_ctx = MagicMock(spec=CypilotContext)
+        mock_ctx = MagicMock(spec=StudioContext)
         mock_load.return_value = mock_ctx
         start = Path("/some/path")
 
@@ -167,32 +167,32 @@ class TestGlobalContextFunctions:
 
     def test_ensure_context_returns_existing(self):
         """ensure_context returns existing context without reloading."""
-        existing_ctx = MagicMock(spec=CypilotContext)
+        existing_ctx = MagicMock(spec=StudioContext)
         set_context(existing_ctx)
 
-        with patch("studio.utils.context.CypilotContext.load") as mock_load:
+        with patch("studio.utils.context.StudioContext.load") as mock_load:
             result = ensure_context()
             mock_load.assert_not_called()
             assert result is existing_ctx
 
 
-class TestCypilotContextLoad:
-    """Tests for CypilotContext.load() method."""
+class TestStudioContextLoad:
+    """Tests for StudioContext.load() method."""
 
     def teardown_method(self, method):
         """Reset global context after each test."""
         set_context(None)
 
-    @patch("studio.utils.files.find_cypilot_directory")
+    @patch("studio.utils.files.find_studio_directory")
     def test_load_returns_none_when_no_adapter(self, mock_find):
         """load returns None when adapter directory not found."""
         mock_find.return_value = None
-        result = CypilotContext.load()
+        result = StudioContext.load()
         assert result is None
 
     @patch("studio.utils.context.load_constraints_toml")
     @patch("studio.utils.context.load_artifacts_meta")
-    @patch("studio.utils.files.find_cypilot_directory")
+    @patch("studio.utils.files.find_studio_directory")
     def test_load_success_loads_templates_and_expands_autodetect(
         self,
         mock_find,
@@ -249,7 +249,7 @@ class TestCypilotContextLoad:
             mock_find.return_value = adapter_dir
             mock_load_meta.return_value = (meta, None)
 
-            ctx = CypilotContext.load()
+            ctx = StudioContext.load()
             assert ctx is not None
 
             # We should have:
@@ -260,7 +260,7 @@ class TestCypilotContextLoad:
             assert any("Autodetect validation error" in m for m in msgs)
 
     @patch("studio.utils.context.load_artifacts_meta")
-    @patch("studio.utils.files.find_cypilot_directory")
+    @patch("studio.utils.files.find_studio_directory")
     def test_load_autodetect_exception_is_captured(self, mock_find, mock_load_meta):
         with TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -282,17 +282,17 @@ class TestCypilotContextLoad:
             mock_find.return_value = adapter_dir
             mock_load_meta.return_value = (meta, None)
 
-            ctx = CypilotContext.load()
+            ctx = StudioContext.load()
             assert ctx is not None
             msgs = [str(e.get("message", "")) for e in (ctx._errors or [])]
             assert any("Autodetect expansion failed" in m for m in msgs)
 
     @patch("studio.utils.context.load_artifacts_meta")
-    @patch("studio.utils.files.find_cypilot_directory")
+    @patch("studio.utils.files.find_studio_directory")
     def test_load_returns_none_on_meta_error(self, mock_find, mock_load_meta):
         """load returns None when artifacts registry fails to load."""
         mock_find.return_value = Path("/fake/adapter")
         mock_load_meta.return_value = (None, "Some error")
 
-        result = CypilotContext.load()
+        result = StudioContext.load()
         assert result is None

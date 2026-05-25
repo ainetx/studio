@@ -20,7 +20,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.utils import toml_utils
 
@@ -36,7 +36,7 @@ from studio.utils.workspace import (
     VALID_ROLES,
 )
 from studio.utils.context import (
-    CypilotContext,
+    StudioContext as CypilotContext,
     WorkspaceContext,
     SourceContext,
     resolve_adapter_context,
@@ -1839,7 +1839,7 @@ class TestFindAdapterPath:
             adapter = d / "cypilot"
             adapter.mkdir()
             (adapter / "config").mkdir()
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 result = _find_adapter_path(d)
                 assert result == "cypilot"
 
@@ -1849,8 +1849,8 @@ class TestFindAdapterPath:
             d = Path(tmpdir)
             bootstrap = d / ".bootstrap"
             bootstrap.mkdir()
-            with patch("studio.utils.files._read_cypilot_var", return_value=None):
-                with patch("studio.utils.files.find_cypilot_directory", return_value=bootstrap):
+            with patch("studio.utils.files._read_studio_var", return_value=None):
+                with patch("studio.utils.files.find_studio_directory", return_value=bootstrap):
                     result = _find_adapter_path(d)
                     assert result == ".bootstrap"
 
@@ -1858,8 +1858,8 @@ class TestFindAdapterPath:
 
         with TemporaryDirectory() as tmpdir:
             d = Path(tmpdir)
-            with patch("studio.utils.files._read_cypilot_var", return_value=None):
-                with patch("studio.utils.files.find_cypilot_directory", return_value=None):
+            with patch("studio.utils.files._read_studio_var", return_value=None):
+                with patch("studio.utils.files.find_studio_directory", return_value=None):
                     result = _find_adapter_path(d)
                     assert result is None
 
@@ -1943,7 +1943,7 @@ class TestScanNestedRepos:
             adapter = repo / "cypilot"
             adapter.mkdir()
             (adapter / "config").mkdir()
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 result = _scan_nested_repos(root, root)
                 assert "my-repo" in result
                 assert result["my-repo"]["adapter"] == "cypilot"
@@ -1965,8 +1965,8 @@ class TestScanNestedRepos:
             repo = root / "bare-repo"
             repo.mkdir()
             (repo / ".git").mkdir()
-            with patch("studio.utils.files._read_cypilot_var", return_value=None):
-                with patch("studio.utils.files.find_cypilot_directory", return_value=None):
+            with patch("studio.utils.files._read_studio_var", return_value=None):
+                with patch("studio.utils.files.find_studio_directory", return_value=None):
                     result = _scan_nested_repos(root, root)
                     assert "bare-repo" not in result
 
@@ -2009,7 +2009,7 @@ class TestWriteInline:
     def test_no_cypilot_var(self):
 
         with TemporaryDirectory() as tmpdir:
-            with patch("studio.utils.files._read_cypilot_var", return_value=None):
+            with patch("studio.utils.files._read_studio_var", return_value=None):
                 exit_code, data = _write_inline(Path(tmpdir), {"sources": {}})
                 assert exit_code == 1
                 assert "cf-studio-path" in data.get("message", "")
@@ -2018,7 +2018,7 @@ class TestWriteInline:
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _setup_config_dir(root, "[project]\nname = \"test\"\n")
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 exit_code, data = _write_inline(root, {"sources": {"a": {"path": "a"}}})
                 assert exit_code == 0
                 assert data["status"] == "CREATED"
@@ -2061,7 +2061,7 @@ class TestCmdWorkspaceInit:
             root = Path(tmpdir)
             _setup_repo_with_adapter(root)
             with patch("studio.utils.files.find_project_root", return_value=root):
-                with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+                with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                     rc = cmd_workspace_init(["--root", str(root), "--dry-run"])
                     assert rc == 0
                     out = capsys.readouterr().out
@@ -2072,7 +2072,7 @@ class TestCmdWorkspaceInit:
             root = Path(tmpdir)
             _setup_repo_with_adapter(root)
             with patch("studio.utils.files.find_project_root", return_value=root):
-                with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+                with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                     rc = cmd_workspace_init(["--root", str(root)])
                     assert rc == 0
                     out = capsys.readouterr().out
@@ -2083,7 +2083,7 @@ class TestCmdWorkspaceInit:
             root = Path(tmpdir)
             _setup_repo_with_adapter(root)
             with patch("studio.utils.files.find_project_root", return_value=root):
-                with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+                with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                     with patch("studio.commands.workspace_init._write_inline", return_value=(0, {"status": "CREATED"})):
                         rc = cmd_workspace_init(["--root", str(root), "--inline"])
                         assert rc == 0
@@ -2101,7 +2101,7 @@ class TestCmdWorkspaceInit:
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _setup_config_dir(root)
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 with patch("studio.utils.toml_utils.dump", side_effect=OSError("disk full")):
                     code, data = _write_inline(root, {"version": "1.0", "sources": {}})
                     assert code == 1
@@ -2197,8 +2197,8 @@ class TestScanEdgeCases:
     def test_find_adapter_path_relative_to_valueerror(self):
 
         found = Path("/completely/different/path")
-        with patch("studio.utils.files._read_cypilot_var", return_value=None):
-            with patch("studio.utils.files.find_cypilot_directory", return_value=found):
+        with patch("studio.utils.files._read_studio_var", return_value=None):
+            with patch("studio.utils.files.find_studio_directory", return_value=found):
                 result = _find_adapter_path(Path("/some/entry"))
                 assert result == str(found)
 
@@ -2228,7 +2228,7 @@ class TestProbeSourceAdapter:
     def test_found_by_auto_discovery(self):
 
         mock_dir = Path("/fake/adapter")
-        with patch("studio.utils.files.find_cypilot_directory", return_value=mock_dir):
+        with patch("studio.utils.files.find_studio_directory", return_value=mock_dir):
             result = _probe_source_adapter(Path("/fake"), None)
             assert result == mock_dir
 
@@ -2238,13 +2238,13 @@ class TestProbeSourceAdapter:
             adapter = Path(tmpdir) / ".bootstrap"
             adapter.mkdir()
             (adapter / "config").mkdir()
-            with patch("studio.utils.files.find_cypilot_directory", return_value=None):
+            with patch("studio.utils.files.find_studio_directory", return_value=None):
                 result = _probe_source_adapter(Path(tmpdir), adapter)
                 assert result == adapter
 
     def test_none_found(self):
 
-        with patch("studio.utils.files.find_cypilot_directory", return_value=None):
+        with patch("studio.utils.files.find_studio_directory", return_value=None):
             result = _probe_source_adapter(Path("/fake"), None)
             assert result is None
 
@@ -2461,7 +2461,7 @@ class TestCmdWorkspaceAddInline:
             _setup_config_dir(root)
             with patch("studio.utils.files.find_project_root", return_value=root):
                 with patch("studio.utils.workspace.find_workspace_config", return_value=(None, None)):
-                    with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+                    with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                         rc = cmd_workspace_add(["--name", "docs", "--path", "../docs", "--inline"])
                         assert rc == 0
                         data = _parse_json(capsys)
@@ -2475,7 +2475,7 @@ class TestCmdWorkspaceAddInline:
             ws_cfg.is_inline = True
             with patch("studio.utils.files.find_project_root", return_value=root):
                 with patch("studio.utils.workspace.find_workspace_config", return_value=(ws_cfg, None)):
-                    with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+                    with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                         rc = cmd_workspace_add(["--name", "docs", "--path", "../docs"])
                         assert rc == 0
 
@@ -2508,7 +2508,7 @@ class TestAddToInline:
     def test_no_cypilot_var(self, capsys):
         args = _make_inline_args()
         with TemporaryDirectory() as tmpdir:
-            with patch("studio.utils.files._read_cypilot_var", return_value=None):
+            with patch("studio.utils.files._read_studio_var", return_value=None):
                 rc = _add_to_inline(args, Path(tmpdir))
                 assert rc == 1
                 out = capsys.readouterr().out
@@ -2520,7 +2520,7 @@ class TestAddToInline:
             root = Path(tmpdir)
             cd = _setup_config_dir(root)
             toml_utils.dump({"workspace": "../ws.toml"}, cd / "core.toml")
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 rc = _add_to_inline(args, root)
                 assert rc == 1
                 out = capsys.readouterr().out
@@ -2531,7 +2531,7 @@ class TestAddToInline:
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _setup_config_dir(root)
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 rc = _add_to_inline(args, root)
                 assert rc == 0
                 data = _parse_json(capsys)
@@ -2543,7 +2543,7 @@ class TestAddToInline:
             root = Path(tmpdir)
             cd = _setup_config_dir(root)
             toml_utils.dump({"workspace": {"version": "1.0", "sources": {"docs": {"path": "../old"}}}}, cd / "core.toml")
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 rc = _add_to_inline(args, root)
                 assert rc == 1
                 data = _parse_json(capsys)
@@ -2557,7 +2557,7 @@ class TestAddToInline:
             root = Path(tmpdir)
             cd = _setup_config_dir(root)
             toml_utils.dump({"workspace": {"version": "1.0", "sources": {"docs": {"path": "../old"}}}}, cd / "core.toml")
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 rc = _add_to_inline(args, root)
                 assert rc == 0
                 data = _parse_json(capsys)
@@ -2571,7 +2571,7 @@ class TestAddToInline:
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             (root / "cypilot").mkdir()
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 rc = _add_to_inline(args, root)
                 assert rc == 0
 
@@ -2582,7 +2582,7 @@ class TestAddToInline:
             root = Path(tmpdir)
             cd = _setup_config_dir(root)
             toml_utils.dump({"workspace": {"version": "1.0", "sources": 42}}, cd / "core.toml")
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 rc = _add_to_inline(args, root)
                 assert rc == 1
                 out = capsys.readouterr().out
@@ -2596,7 +2596,7 @@ class TestAddToInline:
             root = Path(tmpdir)
             cd = _setup_config_dir(root)
             toml_utils.dump({"workspace": 42}, cd / "core.toml")
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 rc = _add_to_inline(args, root)
                 assert rc == 1
                 out = capsys.readouterr().out
@@ -2610,7 +2610,7 @@ class TestAddToInline:
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _setup_config_dir(root)
-            with patch("studio.utils.files._read_cypilot_var", return_value="cypilot"):
+            with patch("studio.utils.files._read_studio_var", return_value="cypilot"):
                 with patch("studio.utils.toml_utils.dump", side_effect=OSError("disk full")):
                     rc = _add_to_inline(args, root)
                     assert rc == 1

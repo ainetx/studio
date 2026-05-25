@@ -12,15 +12,15 @@ import sys
 from pathlib import Path
 from contextlib import redirect_stdout, redirect_stderr
 
-# Add cypilot.py to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+# Add studio.py to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.cli import main
 from studio.utils.files import (
     find_project_root,
     load_project_config,
-    find_cypilot_directory as find_adapter_directory,
-    load_cypilot_config as load_adapter_config,
+    find_studio_directory as find_adapter_directory,
+    load_studio_config as load_adapter_config,
 )
 
 

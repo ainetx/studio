@@ -15,18 +15,18 @@ from unittest.mock import MagicMock
 from tempfile import TemporaryDirectory
 
 
-# Add skills/cypilot/scripts directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+# Add skills/studio/scripts directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.utils.files import (
-    find_cypilot_directory,
+    find_studio_directory as find_cypilot_directory,
     find_project_root,
     load_artifacts_registry,
     load_project_config,
     load_text,
 )
 
-from cypilot import cli as cypilot_cli
+from studio import cli as cypilot_cli
 
 
 def _bootstrap_registry(project_root: Path, *, entries: list) -> None:

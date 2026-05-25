@@ -14,11 +14,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.commands.where_defined import cmd_where_defined, _human_where_defined
 from studio.commands.where_used import cmd_where_used, _human_where_used
-from studio.utils.context import CypilotContext, set_context
+from studio.utils.context import StudioContext as CypilotContext, set_context
 from studio.utils.ui import set_json_mode
 from studio.cli import main
 

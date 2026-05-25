@@ -10,7 +10,7 @@ Tests cover:
 """
 
 import pytest
-from skills.cypilot.scripts.cypilot.utils.constraints import parse_cpt, ParsedCypilotId
+from skills.studio.scripts.studio.utils.constraints import parse_cpt, ParsedStudioId
 
 
 class TestSimpleIds:

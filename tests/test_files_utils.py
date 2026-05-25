@@ -9,14 +9,14 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
-from studio.utils.files import load_text, find_cypilot_directory as find_adapter_directory
+from studio.utils.files import load_text, find_studio_directory as find_adapter_directory
 from studio.utils.files import (
     cfg_get_str,
-    cypilot_root_from_project_config,
+    studio_root_from_project_config as cypilot_root_from_project_config,
     iter_registry_entries,
-    load_cypilot_config as load_adapter_config,
+    load_studio_config as load_adapter_config,
     load_artifacts_registry,
     load_project_config,
 )
