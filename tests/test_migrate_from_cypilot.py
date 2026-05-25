@@ -413,8 +413,8 @@ def test_config_markdown_rewrite_contract_covers_all_supported_files(tmp_path):
     for name in changed:
         text = (config_dir / name).read_text(encoding="utf-8")
         assert "Path {cf-studio-path}" in text
-        assert "Run `cfc validate` before using Constructor Studio." in text
-        assert "Use cfc update for prose command tokens." in text
+        assert "Run `cfs validate` before using Constructor Studio." in text
+        assert "Use cfs update for prose command tokens." in text
         assert "lowercase cypilot stays." in text
         assert "uppercase CYPILOT stays." in text
         assert "punctuated cpt. stays." in text

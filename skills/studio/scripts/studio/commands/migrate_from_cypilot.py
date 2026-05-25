@@ -654,13 +654,22 @@ def _run_followup_kit_update(*, yes: bool) -> int:
     is surfaced as a migration warning rather than a hard failure — the
     rest of the migration has already landed and the user can re-run
     ``cfs kit update`` manually.
+
+    In JSON mode the sub-command's own JSON payload is suppressed from
+    stdout so the outer migration result stays the sole JSON document on
+    the wire. Sub-stdout is discarded — its only purpose is to drive the
+    diff-engine UX, which is not part of the JSON contract.
     """
     from .kit import cmd_kit_update
 
     args: List[str] = []
     if yes:
         args.append("--yes")
-    return cmd_kit_update(args)
+    if not is_json_mode():
+        return cmd_kit_update(args)
+    sink = io.StringIO()
+    with contextlib.redirect_stdout(sink):
+        return cmd_kit_update(args)
 
 
 def _run_followup_update(project_root: Path, *, yes: bool) -> tuple[int, Optional[Any]]:
