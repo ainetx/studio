@@ -705,6 +705,7 @@ def _run_post_copy_rewrites(
         ("config_markdown", lambda: _migrate_config_markdown(target_dir / "config")),
         ("root_agents", lambda: _replace_root_block_with_warnings(project_root / "AGENTS.md", target_rel, warnings)),
         ("root_claude", lambda: _replace_root_block_with_warnings(project_root / "CLAUDE.md", target_rel, warnings)),
+        ("host_integrations", lambda: _cleanup_legacy_host_integrations(project_root, warnings)),
     ]
 
     for rewrite_step, rewrite in rewrites:
@@ -1073,6 +1074,69 @@ def _migrate_config_markdown(config_dir: Path) -> List[str]:
             changed.append(name)
     return changed
     # @cpt-end:cpt-studio-flow-core-infra-migrate-from-cypilot:p1:inst-migrate-config-markdown
+
+
+def _cleanup_legacy_host_integrations(
+    project_root: Path,
+    warnings: List[str],
+) -> Dict[str, List[str]]:
+    """Delete pre-rebrand host-integration artifacts left over from cypilot.
+
+    Sweeps every supported host (``claude``, ``windsurf``, ``cursor``,
+    ``copilot``, ``openai``) and removes:
+      * legacy ``cypilot-*`` / ``cf-constructor-*`` agent / command / workflow
+        files (e.g. ``.claude/agents/cypilot-codegen.md``);
+      * legacy per-workflow skill directories (e.g. ``.claude/skills/cypilot``,
+        ``.claude/skills/cypilot-analyze``);
+      * legacy install markers (``.codex/.cypilot-installed`` etc.).
+
+    Only files whose body is a pure generator stub (per
+    ``_is_legacy_generator_stub``) are removed; anything with user-added
+    content is preserved. Returns ``{agent: [relpath, ...]}`` of deleted
+    paths.
+    """
+    # Defer the import: agents.py owns the cleanup constants and helpers; the
+    # migrator borrows them so there is exactly one source of truth for
+    # legacy-artifact recognition.
+    try:
+        from .agents import (
+            _cleanup_studio_legacy_subagents,
+            _cleanup_studio_legacy_markers,
+            _cleanup_legacy_skill_dirs,
+            _is_legacy_generator_stub,
+            _LEGACY_TOOL_SKILL_PATHS,
+        )
+    except ImportError as exc:
+        warnings.append(f"host-integration cleanup skipped (import failed: {exc})")
+        return {}
+
+    result: Dict[str, List[str]] = {}
+    for agent in ("claude", "windsurf", "cursor", "copilot", "openai"):
+        removed: List[str] = []
+        removed.extend(_cleanup_studio_legacy_subagents(agent, project_root, dry_run=False))
+        removed.extend(_cleanup_studio_legacy_markers(agent, project_root, dry_run=False))
+        removed.extend(_cleanup_legacy_skill_dirs(agent, project_root, dry_run=False))
+        # Per-tool single-file legacy skill paths (bare `cypilot.md`,
+        # `cypilot.mdc`, etc.) — only delete when the content is a pure
+        # legacy generator stub. Files with user-added content are kept.
+        for legacy_rel in _LEGACY_TOOL_SKILL_PATHS.get(agent, []):
+            legacy_file = project_root / legacy_rel
+            if not legacy_file.is_file():
+                continue
+            try:
+                content = legacy_file.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if not _is_legacy_generator_stub(content):
+                continue
+            try:
+                legacy_file.unlink()
+                removed.append(legacy_rel)
+            except OSError:
+                pass
+        if removed:
+            result[agent] = removed
+    return result
 
 
 def _human_migrate_ok(data: Dict[str, Any]) -> None:  # pyright: ignore
