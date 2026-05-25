@@ -777,7 +777,7 @@ class TestCLIPyCoverageValidateBranches(unittest.TestCase):
             fake_ctx.project_root = tmp / "project"
 
             buf = io.StringIO()
-            with patch("studio.utils.context.CypilotContext.load", return_value=fake_ctx):
+            with patch("studio.utils.context.StudioContext.load", return_value=fake_ctx):
                 with patch("studio.utils.context.get_context", return_value=fake_ctx):
                     with redirect_stdout(buf):
                         rc = validate_cmd.cmd_validate(["--artifact", str(art)])
@@ -1957,7 +1957,7 @@ class TestCLIPyCoverageTopLevelHelp(unittest.TestCase):
             exit_code = main(["--help"])
         self.assertEqual(exit_code, 0)
         out = json.loads(stdout.getvalue())
-        self.assertIn("cfc", out["usage"])
+        self.assertIn("cfs", out["usage"])
         self.assertIn("validate", out["commands"])
         self.assertIn("Validation", out["sections"])
 
@@ -1970,7 +1970,7 @@ class TestCLIPyCoverageTopLevelHelp(unittest.TestCase):
             exit_code = main(["-h"])
         self.assertEqual(exit_code, 0)
         out = json.loads(stdout.getvalue())
-        self.assertIn("cfc", out["usage"])
+        self.assertIn("cfs", out["usage"])
 
 
 class TestCLIPyCoverageSlugValidation(unittest.TestCase):
@@ -2327,7 +2327,7 @@ class TestCLIPyCoverageListIdsBranches(unittest.TestCase):
     def test_source_filter_workspace_mode(self):
         """--source filter in workspace mode scans only matching remote source artifacts."""
         from studio.commands.list_ids import cmd_list_ids
-        from studio.utils.context import WorkspaceContext, SourceContext, CypilotContext
+        from studio.utils.context import WorkspaceContext, SourceContext, StudioContext
         from studio.utils.artifacts_meta import ArtifactsMeta, Artifact, SystemNode
 
         with TemporaryDirectory() as tmpdir:
@@ -2360,7 +2360,7 @@ class TestCLIPyCoverageListIdsBranches(unittest.TestCase):
             try:
                 os.chdir(root)
                 # Build a real primary context first
-                primary = CypilotContext.load()
+                primary = StudioContext.load()
                 self.assertIsNotNone(primary)
 
                 ws_ctx = WorkspaceContext(
@@ -2386,7 +2386,7 @@ class TestCLIPyCoverageListIdsBranches(unittest.TestCase):
     def test_source_filter_workspace_no_match(self):
         """--source filter with no matching source returns empty."""
         from studio.commands.list_ids import cmd_list_ids
-        from studio.utils.context import WorkspaceContext, SourceContext, CypilotContext
+        from studio.utils.context import WorkspaceContext, SourceContext, StudioContext
 
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -2404,7 +2404,7 @@ class TestCLIPyCoverageListIdsBranches(unittest.TestCase):
             cwd = os.getcwd()
             try:
                 os.chdir(root)
-                primary = CypilotContext.load()
+                primary = StudioContext.load()
                 self.assertIsNotNone(primary)
 
                 ws_ctx = WorkspaceContext(

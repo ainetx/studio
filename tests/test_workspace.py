@@ -708,10 +708,10 @@ class TestFindWorkspaceConfig:
             assert "Failed to parse" in err
 
     def test_standalone_file_discovered_at_project_root(self):
-        """Standalone .cf-constructor-workspace.toml at project root is discovered without core.toml reference."""
+        """Standalone .cf-workspace.toml at project root is discovered without core.toml reference."""
         with TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
-            ws_path = tmp / ".cf-constructor-workspace.toml"
+            ws_path = tmp / ".cf-workspace.toml"
             toml_utils.dump({
                 "version": "1.0",
                 "sources": {"lib": {"path": "../lib"}},
@@ -2012,7 +2012,7 @@ class TestWriteInline:
             with patch("studio.utils.files._read_studio_var", return_value=None):
                 exit_code, data = _write_inline(Path(tmpdir), {"sources": {}})
                 assert exit_code == 1
-                assert "cf-studio-path" in data.get("message", "")
+                assert "cf-path" in data.get("message", "")
 
     def test_success(self):
         with TemporaryDirectory() as tmpdir:
@@ -2512,7 +2512,7 @@ class TestAddToInline:
                 rc = _add_to_inline(args, Path(tmpdir))
                 assert rc == 1
                 out = capsys.readouterr().out
-                assert "cf-studio-path" in out
+                assert "cf-path" in out
 
     def test_workspace_as_string_reference(self, capsys):
         args = _make_inline_args()

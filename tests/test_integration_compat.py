@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.commands.agents import (
     _discover_kit_agents,
@@ -481,7 +481,7 @@ class TestPassthroughModelStrings(unittest.TestCase):
             # Mock the cypilot root structure
             mock_root = tmppath / "cpt"
             mock_root.mkdir()
-            core_skills = mock_root / ".core" / "skills" / "cypilot"
+            core_skills = mock_root / ".core" / "skills" / "studio"
             core_skills.mkdir(parents=True)
 
             # Copy our agents.toml to core skill area
@@ -516,7 +516,7 @@ class TestPassthroughModelStrings(unittest.TestCase):
 
             mock_root = tmppath / "cpt"
             mock_root.mkdir()
-            core_skills = mock_root / ".core" / "skills" / "cypilot"
+            core_skills = mock_root / ".core" / "skills" / "studio"
             core_skills.mkdir(parents=True)
 
             import shutil

@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 
 class TestEnsureFrontmatterDescriptionQuoted(unittest.TestCase):
@@ -96,7 +96,7 @@ class TestEnsureCypilotLocal(unittest.TestCase):
     """Cover lines 117-132 in agents.py."""
 
     def test_copy_when_external(self):
-        from studio.commands.agents import _ensure_cypilot_local
+        from studio.commands.agents import _ensure_studio_local
 
         with TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir) / "project"
@@ -111,13 +111,13 @@ class TestEnsureCypilotLocal(unittest.TestCase):
             (cypilot_root / "workflows").mkdir()
             (cypilot_root / "workflows" / "wf.md").write_text("# wf", encoding="utf-8")
 
-            result_path, report = _ensure_cypilot_local(cypilot_root, project_root, dry_run=False)
+            result_path, report = _ensure_studio_local(cypilot_root, project_root, dry_run=False)
             self.assertEqual(report["action"], "copied")
             self.assertGreater(report["file_count"], 0)
             self.assertTrue((result_path / ".core").is_dir())
 
     def test_copy_error_returns_error_report(self):
-        from studio.commands.agents import _ensure_cypilot_local
+        from studio.commands.agents import _ensure_studio_local
         from unittest.mock import patch
 
         with TemporaryDirectory() as tmpdir:
@@ -127,7 +127,7 @@ class TestEnsureCypilotLocal(unittest.TestCase):
             cypilot_root.mkdir()
 
             with patch("pathlib.Path.mkdir", side_effect=PermissionError("denied")):
-                result_path, report = _ensure_cypilot_local(cypilot_root, project_root, dry_run=False)
+                result_path, report = _ensure_studio_local(cypilot_root, project_root, dry_run=False)
             self.assertEqual(report["action"], "error")
             self.assertIn("denied", report["message"])
 
@@ -195,7 +195,7 @@ class TestTargetPathFromRoot(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir)
             target = project_root / "some" / "file.md"
-            result = _target_path_from_root(target, project_root, cypilot_root=None)
+            result = _target_path_from_root(target, project_root, studio_root=None)
             self.assertEqual(result, "{cf-studio-path}/some/file.md")
 
 
@@ -207,10 +207,10 @@ class TestHasNonOpenAIInstallSignal(unittest.TestCase):
 
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            skill_path = root / ".windsurf" / "skills" / "cypilot" / "SKILL.md"
+            skill_path = root / ".windsurf" / "skills" / "cf" / "SKILL.md"
             skill_path.parent.mkdir(parents=True)
             skill_path.write_text(
-                "ALWAYS open and follow `{cf-studio-path}/.core/skills/cypilot/SKILL.md`\n",
+                "ALWAYS open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md`\n",
                 encoding="utf-8",
             )
 
@@ -237,7 +237,7 @@ class TestHasNonOpenAIInstallSignal(unittest.TestCase):
             root = Path(tmpdir)
             legacy_ci = root / ".github" / "copilot-instructions.md"
             legacy_ci.parent.mkdir(parents=True)
-            legacy_ci.write_text("# Cypilot\nLegacy instructions\n", encoding="utf-8")
+            legacy_ci.write_text("# Constructor Studio\nLegacy instructions\n", encoding="utf-8")
 
             self.assertTrue(_has_non_openai_install_signal(root))
 
@@ -367,7 +367,7 @@ class TestHumanAgentsList(unittest.TestCase):
         with redirect_stderr(err):
             _human_agents_list({}, ["windsurf"], results, Path("/p"))
         output = err.getvalue()
-        self.assertIn("cfc generate-agents", output)
+        self.assertIn("cfs generate-agents", output)
 
 
 class TestHumanGenerateAgentsPreview(unittest.TestCase):
@@ -642,7 +642,7 @@ class TestProcessSingleAgentEdgeCases(unittest.TestCase):
             cfg = _default_agents_config()
             result = _process_single_agent("windsurf", root, cpt, cfg, None, dry_run=False)
             # Skill file should be generated in .agents/skills/ (shared path)
-            agents_skill = root / ".agents" / "skills" / "cf-constructor" / "SKILL.md"
+            agents_skill = root / ".agents" / "skills" / "cf" / "SKILL.md"
             self.assertTrue(agents_skill.exists(), f"Expected {agents_skill} to exist")
             content = agents_skill.read_text(encoding="utf-8")
             # The kit description from config/kits/sdlc/SKILL.md must appear in the output,
@@ -693,19 +693,19 @@ class TestProcessSingleAgentEdgeCases(unittest.TestCase):
             wf_dir = root / ".windsurf" / "workflows"
             wf_dir.mkdir(parents=True)
             # Create a stale workflow proxy pointing to a removed workflow
-            (wf_dir / "cypilot-old.md").write_text(
-                "# /cypilot-old\n\nALWAYS open and follow `{cf-studio-path}/.core/workflows/old-removed.md`\n",
+            (wf_dir / "cf-old.md").write_text(
+                "# /cf-old\n\nALWAYS open and follow `{cf-studio-path}/.core/workflows/old-removed.md`\n",
                 encoding="utf-8",
             )
             cfg = _default_agents_config()
             result = _process_single_agent("windsurf", root, cpt, cfg, None, dry_run=False)
             wf = result.get("workflows", {})
             self.assertIn(
-                (wf_dir / "cypilot-old.md").as_posix(),
+                (wf_dir / "cf-old.md").as_posix(),
                 wf.get("deleted", []),
             )
             # File should be removed
-            self.assertFalse((wf_dir / "cypilot-old.md").exists())
+            self.assertFalse((wf_dir / "cf-old.md").exists())
 
     def test_claude_generated_legacy_command_deleted(self):
         from studio.commands.agents import _process_single_agent, _default_agents_config
@@ -714,27 +714,27 @@ class TestProcessSingleAgentEdgeCases(unittest.TestCase):
             root, cpt = self._make_project(td)
             (cpt / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
             (cpt / ".core" / "workflows" / "generate.md").write_text(
-                "---\nname: cf-constructor-generate\ndescription: Generate\ntype: workflow\n---\n# Generate\n",
+                "---\nname: cf-generate\ndescription: Generate\ntype: workflow\n---\n# Generate\n",
                 encoding="utf-8",
             )
             (cpt / ".core" / "workflows" / "analyze.md").write_text(
-                "---\nname: cf-constructor-analyze\ndescription: Analyze\ntype: workflow\n---\n# Analyze\n",
+                "---\nname: cf-analyze\ndescription: Analyze\ntype: workflow\n---\n# Analyze\n",
                 encoding="utf-8",
             )
             (cpt / ".core" / "workflows" / "plan.md").write_text(
-                "---\nname: cf-constructor-plan\ndescription: Plan\ntype: workflow\n---\n# Plan\n",
+                "---\nname: cf-plan\ndescription: Plan\ntype: workflow\n---\n# Plan\n",
                 encoding="utf-8",
             )
             (cpt / ".core" / "workflows" / "workspace.md").write_text(
-                "---\nname: cf-constructor-workspace\ndescription: Workspace\ntype: workflow\n---\n# Workspace\n",
+                "---\nname: cf-workspace\ndescription: Workspace\ntype: workflow\n---\n# Workspace\n",
                 encoding="utf-8",
             )
 
             legacy_dir = root / ".claude" / "commands"
             legacy_dir.mkdir(parents=True)
-            legacy_file = legacy_dir / "cf-constructor-generate.md"
+            legacy_file = legacy_dir / "cf-generate.md"
             legacy_file.write_text(
-                "# /cf-constructor-generate\n\nALWAYS open and follow `{cf-studio-path}/.core/workflows/generate.md`\n",
+                "# /cf-generate\n\nALWAYS open and follow `{cf-studio-path}/.core/workflows/generate.md`\n",
                 encoding="utf-8",
             )
 
@@ -752,27 +752,27 @@ class TestProcessSingleAgentEdgeCases(unittest.TestCase):
             root, cpt = self._make_project(td)
             (cpt / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
             (cpt / ".core" / "workflows" / "plan.md").write_text(
-                "---\nname: cf-constructor-plan\ndescription: Plan\ntype: workflow\n---\n# Plan\n",
+                "---\nname: cf-plan\ndescription: Plan\ntype: workflow\n---\n# Plan\n",
                 encoding="utf-8",
             )
             (cpt / ".core" / "workflows" / "workspace.md").write_text(
-                "---\nname: cf-constructor-workspace\ndescription: Workspace\ntype: workflow\n---\n# Workspace\n",
+                "---\nname: cf-workspace\ndescription: Workspace\ntype: workflow\n---\n# Workspace\n",
                 encoding="utf-8",
             )
             (cpt / ".core" / "workflows" / "generate.md").write_text(
-                "---\nname: cf-constructor-generate\ndescription: Generate\ntype: workflow\n---\n# Generate\n",
+                "---\nname: cf-generate\ndescription: Generate\ntype: workflow\n---\n# Generate\n",
                 encoding="utf-8",
             )
             (cpt / ".core" / "workflows" / "analyze.md").write_text(
-                "---\nname: cf-constructor-analyze\ndescription: Analyze\ntype: workflow\n---\n# Analyze\n",
+                "---\nname: cf-analyze\ndescription: Analyze\ntype: workflow\n---\n# Analyze\n",
                 encoding="utf-8",
             )
 
             legacy_dir = root / ".claude" / "commands"
             legacy_dir.mkdir(parents=True)
-            legacy_file = legacy_dir / "cf-constructor-generate.md"
+            legacy_file = legacy_dir / "cf-generate.md"
             legacy_file.write_text(
-                "# /cf-constructor-generate\n\nALWAYS open and follow `{cf-studio-path}/.core/workflows/analyze.md`\n",
+                "# /cf-generate\n\nALWAYS open and follow `{cf-studio-path}/.core/workflows/analyze.md`\n",
                 encoding="utf-8",
             )
 
@@ -792,27 +792,27 @@ class TestProcessSingleAgentEdgeCases(unittest.TestCase):
             root, cpt = self._make_project(td)
             (cpt / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
             (cpt / ".core" / "workflows" / "plan.md").write_text(
-                "---\nname: cf-constructor-plan\ndescription: Plan\ntype: workflow\n---\n# Plan\n",
+                "---\nname: cf-plan\ndescription: Plan\ntype: workflow\n---\n# Plan\n",
                 encoding="utf-8",
             )
             (cpt / ".core" / "workflows" / "generate.md").write_text(
-                "---\nname: cf-constructor-generate\ndescription: Generate\ntype: workflow\n---\n# Generate\n",
+                "---\nname: cf-generate\ndescription: Generate\ntype: workflow\n---\n# Generate\n",
                 encoding="utf-8",
             )
             (cpt / ".core" / "workflows" / "analyze.md").write_text(
-                "---\nname: cf-constructor-analyze\ndescription: Analyze\ntype: workflow\n---\n# Analyze\n",
+                "---\nname: cf-analyze\ndescription: Analyze\ntype: workflow\n---\n# Analyze\n",
                 encoding="utf-8",
             )
             (cpt / ".core" / "workflows" / "workspace.md").write_text(
-                "---\nname: cf-constructor-workspace\ndescription: Workspace\ntype: workflow\n---\n# Workspace\n",
+                "---\nname: cf-workspace\ndescription: Workspace\ntype: workflow\n---\n# Workspace\n",
                 encoding="utf-8",
             )
 
             legacy_dir = root / ".claude" / "commands"
             legacy_dir.mkdir(parents=True)
-            legacy_file = legacy_dir / "cf-constructor-generate.md"
+            legacy_file = legacy_dir / "cf-generate.md"
             legacy_file.write_text(
-                "# /cf-constructor-generate\n\nCustom instructions stay here.\n",
+                "# /cf-generate\n\nCustom instructions stay here.\n",
                 encoding="utf-8",
             )
 
@@ -851,7 +851,7 @@ class TestEnsureCypilotLocalRootDirsAndFiles(unittest.TestCase):
     """Cover lines 123-127, 130-133 by patching _COPY_ROOT_DIRS/_COPY_FILES."""
 
     def test_copy_root_dirs_and_files(self):
-        from studio.commands.agents import _ensure_cypilot_local
+        from studio.commands.agents import _ensure_studio_local
         from unittest.mock import patch
 
         with TemporaryDirectory() as tmpdir:
@@ -871,7 +871,7 @@ class TestEnsureCypilotLocalRootDirsAndFiles(unittest.TestCase):
 
             with patch("studio.commands.agents._COPY_ROOT_DIRS", ["guides"]), \
                  patch("studio.commands.agents._COPY_FILES", ["VERSION"]):
-                result_path, report = _ensure_cypilot_local(cypilot_root, project_root, dry_run=False)
+                result_path, report = _ensure_studio_local(cypilot_root, project_root, dry_run=False)
 
             self.assertEqual(report["action"], "copied")
             # guides/ should be at local root level (not under .core/)
@@ -889,32 +889,32 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
         (root / ".git").mkdir()
         cpt = root / "cypilot"
         cpt.mkdir()
-        core_skill = cpt / ".core" / "skills" / "cypilot"
+        core_skill = cpt / ".core" / "skills" / "studio"
         core_skill.mkdir(parents=True)
         # Copy the real agents.toml
-        src_agents_toml = Path(__file__).parent.parent / "skills" / "cypilot" / "agents.toml"
+        src_agents_toml = Path(__file__).parent.parent / "skills" / "studio" / "agents.toml"
         import shutil
         shutil.copy2(src_agents_toml, core_skill / "agents.toml")
-        # Create the prompt files so validation passes (using new cf-constructor names)
+        # Create the prompt files so validation passes (using canonical cf-* names)
         agents_dir = core_skill / "agents"
         agents_dir.mkdir(parents=True)
-        (agents_dir / "cf-constructor-ralphex.md").write_text(
+        (agents_dir / "cf-ralphex.md").write_text(
             "You are a Constructor Studio ralphex delegation agent.\n",
             encoding="utf-8",
         )
-        (agents_dir / "cf-constructor-codegen.md").write_text(
+        (agents_dir / "cf-codegen.md").write_text(
             "You are a Constructor Studio code generator.\n",
             encoding="utf-8",
         )
-        (agents_dir / "cf-constructor-pr-review.md").write_text(
+        (agents_dir / "cf-pr-review.md").write_text(
             "You are a Constructor Studio PR reviewer.\n",
             encoding="utf-8",
         )
-        (agents_dir / "cf-constructor-phase-runner.md").write_text(
+        (agents_dir / "cf-phase-runner.md").write_text(
             "You are a Constructor Studio phase runner.\n",
             encoding="utf-8",
         )
-        (agents_dir / "cf-constructor-phase-compiler.md").write_text(
+        (agents_dir / "cf-phase-compiler.md").write_text(
             "You are a Constructor Studio phase compiler.\n",
             encoding="utf-8",
         )
@@ -923,43 +923,43 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
     def _make_full_project(self, tmpdir):
         """Create project with core structure needed for _process_single_agent."""
         root, cpt = self._make_project_with_agents_toml(tmpdir)
-        core_skill = cpt / ".core" / "skills" / "cypilot" / "SKILL.md"
+        core_skill = cpt / ".core" / "skills" / "studio" / "SKILL.md"
         core_skill.write_text(
-            "---\nname: cypilot\ndescription: Test skill\n---\nContent\n",
+            "---\nname: studio\ndescription: Test skill\n---\nContent\n",
             encoding="utf-8",
         )
         (cpt / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
         return root, cpt
 
     def test_ralphex_in_agents_toml(self):
-        """agents.toml contains a cf-constructor-ralphex entry."""
-        agents_toml = Path(__file__).parent.parent / "skills" / "cypilot" / "agents.toml"
+        """agents.toml contains a cf-ralphex entry."""
+        agents_toml = Path(__file__).parent.parent / "skills" / "studio" / "agents.toml"
         with open(agents_toml, "rb") as f:
             import tomllib
             data = tomllib.load(f)
         agents = data.get("agents", {})
-        self.assertIn("cf-constructor-ralphex", agents)
-        entry = agents["cf-constructor-ralphex"]
-        self.assertEqual(entry["prompt_file"], "agents/cf-constructor-ralphex.md")
+        self.assertIn("cf-ralphex", agents)
+        entry = agents["cf-ralphex"]
+        self.assertEqual(entry["prompt_file"], "agents/cf-ralphex.md")
         self.assertEqual(entry["mode"], "readwrite")
         self.assertFalse(entry.get("isolation", False))
 
     def test_ralphex_discovered_by_kit_agents(self):
-        """_discover_kit_agents finds cf-constructor-ralphex from agents.toml."""
+        """_discover_kit_agents finds cf-ralphex from agents.toml."""
         from studio.commands.agents import _discover_kit_agents
 
         with TemporaryDirectory() as td:
             root, cpt = self._make_project_with_agents_toml(td)
             agents = _discover_kit_agents(cpt, root)
             names = [a["name"] for a in agents]
-            self.assertIn("cf-constructor-ralphex", names)
-            ralphex = next(a for a in agents if a["name"] == "cf-constructor-ralphex")
+            self.assertIn("cf-ralphex", names)
+            ralphex = next(a for a in agents if a["name"] == "cf-ralphex")
             self.assertEqual(ralphex["mode"], "readwrite")
             self.assertFalse(ralphex["isolation"])
             self.assertIsNotNone(ralphex["prompt_file_abs"])
 
     def test_ralphex_generates_claude_subagent_proxy(self):
-        """Agent generation produces a claude subagent proxy for cf-constructor-ralphex."""
+        """Agent generation produces a claude subagent proxy for cf-ralphex."""
         from studio.commands.agents import _process_single_agent, _default_agents_config
 
         with TemporaryDirectory() as td:
@@ -970,22 +970,22 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
 
             subagents = result.get("subagents", {})
             all_files = subagents.get("created", []) + subagents.get("updated", [])
-            ralphex_files = [f for f in all_files if "cf-constructor-ralphex" in f]
+            ralphex_files = [f for f in all_files if "cf-ralphex" in f]
             self.assertTrue(
                 len(ralphex_files) > 0,
-                f"Expected cf-constructor-ralphex subagent proxy, got: {all_files}",
+                f"Expected cf-ralphex subagent proxy, got: {all_files}",
             )
             # Verify the generated file uses ALWAYS open and follow
             proxy_path = Path(ralphex_files[0])
             content = proxy_path.read_text(encoding="utf-8")
             self.assertIn("ALWAYS open and follow", content)
-            self.assertIn("cf-constructor-ralphex", content)
+            self.assertIn("cf-ralphex", content)
             # Verify readwrite tools (not readonly)
             self.assertIn("Write", content)
             self.assertIn("Edit", content)
 
     def test_ralphex_generates_cursor_subagent_proxy(self):
-        """Agent generation produces a cursor subagent proxy for cf-constructor-ralphex."""
+        """Agent generation produces a cursor subagent proxy for cf-ralphex."""
         from studio.commands.agents import _process_single_agent, _default_agents_config
 
         with TemporaryDirectory() as td:
@@ -996,10 +996,10 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
 
             subagents = result.get("subagents", {})
             all_files = subagents.get("created", []) + subagents.get("updated", [])
-            ralphex_files = [f for f in all_files if "cf-constructor-ralphex" in f]
+            ralphex_files = [f for f in all_files if "cf-ralphex" in f]
             self.assertTrue(
                 len(ralphex_files) > 0,
-                f"Expected cf-constructor-ralphex cursor proxy, got: {all_files}",
+                f"Expected cf-ralphex cursor proxy, got: {all_files}",
             )
             proxy_path = Path(ralphex_files[0])
             content = proxy_path.read_text(encoding="utf-8")
@@ -1008,7 +1008,7 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
             self.assertIn("edit", content)
 
     def test_ralphex_generates_copilot_subagent_proxy(self):
-        """Agent generation produces a copilot subagent proxy for cf-constructor-ralphex."""
+        """Agent generation produces a copilot subagent proxy for cf-ralphex."""
         from studio.commands.agents import _process_single_agent, _default_agents_config
 
         with TemporaryDirectory() as td:
@@ -1019,10 +1019,10 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
 
             subagents = result.get("subagents", {})
             all_files = subagents.get("created", []) + subagents.get("updated", [])
-            ralphex_files = [f for f in all_files if "cf-constructor-ralphex" in f]
+            ralphex_files = [f for f in all_files if "cf-ralphex" in f]
             self.assertTrue(
                 len(ralphex_files) > 0,
-                f"Expected cf-constructor-ralphex copilot proxy, got: {all_files}",
+                f"Expected cf-ralphex copilot proxy, got: {all_files}",
             )
             proxy_path = Path(ralphex_files[0])
             content = proxy_path.read_text(encoding="utf-8")
@@ -1031,7 +1031,7 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
             self.assertIn('"*"', content)
 
     def test_ralphex_generates_openai_toml_entry(self):
-        """Agent generation includes cf-constructor-ralphex in OpenAI TOML output."""
+        """Agent generation includes cf-ralphex in OpenAI TOML output."""
         from studio.commands.agents import _process_single_agent, _default_agents_config
 
         with TemporaryDirectory() as td:
@@ -1042,13 +1042,13 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
 
             subagents = result.get("subagents", {})
             all_files = subagents.get("created", []) + subagents.get("updated", [])
-            toml_files = [f for f in all_files if "cf-constructor-ralphex.toml" in f]
+            toml_files = [f for f in all_files if "cf-ralphex.toml" in f]
             self.assertTrue(
                 len(toml_files) > 0,
-                f"Expected cf-constructor-ralphex.toml, got: {all_files}",
+                f"Expected cf-ralphex.toml, got: {all_files}",
             )
             content = Path(toml_files[0]).read_text(encoding="utf-8")
-            self.assertIn("cf-constructor-ralphex", content)
+            self.assertIn("cf-ralphex", content)
             self.assertIn("ALWAYS open and follow", content)
 
     def test_ralphex_not_forked_per_tool(self):
@@ -1058,7 +1058,7 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
         with TemporaryDirectory() as td:
             root, cpt = self._make_full_project(td)
 
-            canonical_fragment = "skills/cypilot/agents/cypilot-ralphex.md"
+            canonical_fragment = "agents/cf-ralphex.md"
             for agent in ("claude", "cursor", "copilot", "openai"):
                 cfg = _default_agents_config()
                 result = _process_single_agent(agent, root, cpt, cfg, None, dry_run=False)
@@ -1066,7 +1066,7 @@ class TestCypilotRalphexRegistration(unittest.TestCase):
                 all_files = subagents.get("created", []) + subagents.get("updated", [])
                 for fpath in all_files:
                     content = Path(fpath).read_text(encoding="utf-8")
-                    if "cypilot-ralphex" in fpath or "cypilot_ralphex" in content:
+                    if "cf-ralphex" in fpath or "cf-ralphex" in content:
                         self.assertIn(
                             canonical_fragment,
                             content,
@@ -1123,7 +1123,7 @@ class TestReadSourceContentTrustedRoots(unittest.TestCase):
 
             result = _read_source_content(
                 "skill", "my-skill", str(src_file),
-                project_root, cypilot_root=None,
+                project_root, studio_root=None,
                 trusted_roots=[trusted],
             )
             self.assertIsNotNone(result)
@@ -1144,7 +1144,7 @@ class TestReadSourceContentTrustedRoots(unittest.TestCase):
 
             result = _read_source_content(
                 "skill", "bad-skill", str(src_file),
-                project_root, cypilot_root=None,
+                project_root, studio_root=None,
                 trusted_roots=[trusted],
             )
             self.assertIsNone(result)
@@ -1162,7 +1162,7 @@ class TestReadSourceContentTrustedRoots(unittest.TestCase):
 
             result = _read_source_content(
                 "agent", "a1", str(src_file),
-                project_root, cypilot_root=None,
+                project_root, studio_root=None,
                 trusted_roots=[],
             )
             self.assertIsNone(result)
@@ -1172,9 +1172,9 @@ class TestCopilotDetection(unittest.TestCase):
     """Copilot agent detection must use .github/.cypilot-installed marker."""
 
     def test_copilot_detected_via_marker_file(self):
-        """Shared _AGENT_MARKERS defines copilot via .github/.cf-constructor-installed."""
+        """Shared _AGENT_MARKERS defines copilot via .github/.cf-installed."""
         from studio.commands.agents import _AGENT_MARKERS
-        self.assertIn(".github/.cf-constructor-installed", _AGENT_MARKERS.get("copilot", []))
+        self.assertIn(".github/.cf-installed", _AGENT_MARKERS.get("copilot", []))
 
     def test_copilot_generates_repo_wide_instructions(self):
         """Copilot generation must produce .github/copilot-instructions.md (always-on)."""
@@ -1186,9 +1186,9 @@ class TestCopilotDetection(unittest.TestCase):
             (root / ".git").mkdir()
             cpt = root / "cypilot"
             cpt.mkdir()
-            core_skill = cpt / ".core" / "skills" / "cypilot" / "SKILL.md"
+            core_skill = cpt / ".core" / "skills" / "studio" / "SKILL.md"
             core_skill.parent.mkdir(parents=True)
-            core_skill.write_text("---\nname: cypilot\ndescription: Test\n---\nContent\n")
+            core_skill.write_text("---\nname: studio\ndescription: Test\n---\nContent\n")
             (cpt / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
             cfg = _default_agents_config()
             _process_single_agent("copilot", root, cpt, cfg, None, dry_run=False)
@@ -1197,8 +1197,8 @@ class TestCopilotDetection(unittest.TestCase):
             content = instructions.read_text(encoding="utf-8")
             self.assertNotIn("ALWAYS open and follow", content)
             # Marker file must also be created
-            marker = root / ".github" / ".cf-constructor-installed"
-            self.assertTrue(marker.exists(), ".github/.cf-constructor-installed marker must be created")
+            marker = root / ".github" / ".cf-installed"
+            self.assertTrue(marker.exists(), ".github/.cf-installed marker must be created")
 
     def test_copilot_cleanup_removes_legacy_skill_follow_line(self):
         """Regeneration must clean the old generated follow-line from copilot-instructions.md."""
@@ -1210,15 +1210,15 @@ class TestCopilotDetection(unittest.TestCase):
             (root / ".git").mkdir()
             cpt = root / "cypilot"
             cpt.mkdir()
-            core_skill = cpt / ".core" / "skills" / "cypilot" / "SKILL.md"
+            core_skill = cpt / ".core" / "skills" / "studio" / "SKILL.md"
             core_skill.parent.mkdir(parents=True)
-            core_skill.write_text("---\nname: cypilot\ndescription: Test\n---\nContent\n")
+            core_skill.write_text("---\nname: studio\ndescription: Test\n---\nContent\n")
             (cpt / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
 
             instructions = root / ".github" / "copilot-instructions.md"
             instructions.parent.mkdir(parents=True, exist_ok=True)
             instructions.write_text(
-                "# Cypilot\n\nALWAYS open and follow `{cf-studio-path}/.core/skills/cypilot/SKILL.md`\n",
+                "# Constructor Studio\n\nALWAYS open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md`\n",
                 encoding="utf-8",
             )
 
@@ -1238,9 +1238,9 @@ class TestCopilotDetection(unittest.TestCase):
             (root / ".git").mkdir()
             cpt = root / "cypilot"
             cpt.mkdir()
-            core_skill = cpt / ".core" / "skills" / "cypilot" / "SKILL.md"
+            core_skill = cpt / ".core" / "skills" / "studio" / "SKILL.md"
             core_skill.parent.mkdir(parents=True)
-            core_skill.write_text("---\nname: cypilot\ndescription: Test\n---\nContent\n")
+            core_skill.write_text("---\nname: studio\ndescription: Test\n---\nContent\n")
             (cpt / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
 
             # Pre-existing user-authored file (no "# Cypilot" header)
@@ -1262,9 +1262,9 @@ class TestCopilotDetection(unittest.TestCase):
             )
             # Marker IS created even when copilot-instructions.md is user-authored,
             # because other Copilot outputs (prompts, shared skills) are still managed.
-            marker = root / ".github" / ".cf-constructor-installed"
+            marker = root / ".github" / ".cf-installed"
             self.assertTrue(marker.exists(),
-                ".github/.cf-constructor-installed must be created even with user-authored instructions")
+                ".github/.cf-installed must be created even with user-authored instructions")
 
     def test_copilot_detected_via_prompt_file(self):
         """Copilot install detected via .github/prompts/cypilot.prompt.md when marker absent."""
@@ -1315,12 +1315,12 @@ class TestCopilotDetection(unittest.TestCase):
             self.assertFalse(_is_agent_installed("windsurf", root))
 
     def test_legacy_copilot_fallback_detection(self):
-        """Shared _is_agent_installed has legacy Copilot fallback via Cypilot-managed copilot-instructions.md."""
+        """Shared _is_agent_installed has legacy Copilot fallback via Constructor Studio-managed copilot-instructions.md."""
         import importlib
         src = importlib.util.find_spec("studio.commands.agents").origin
         source = Path(src).read_text(encoding="utf-8")
         self.assertIn("legacy_ci", source)
-        self.assertIn('startswith("# Cypilot")', source)
+        self.assertIn('startswith("# Constructor Studio")', source)
 
     def test_openai_legacy_requires_codex_agents_content(self):
         """Shared _is_agent_installed requires .codex/agents/ with content, not bare .codex/ directory."""
@@ -1376,10 +1376,10 @@ class TestMultiToolCoexistence(unittest.TestCase):
             cfg = _default_agents_config()
 
             _process_single_agent("windsurf", root, cpt, cfg, None, dry_run=False)
-            skill_after_windsurf = (root / ".agents" / "skills" / "cf-constructor" / "SKILL.md").read_text(encoding="utf-8")
+            skill_after_windsurf = (root / ".agents" / "skills" / "cf" / "SKILL.md").read_text(encoding="utf-8")
 
             _process_single_agent("cursor", root, cpt, cfg, None, dry_run=False)
-            skill_after_cursor = (root / ".agents" / "skills" / "cf-constructor" / "SKILL.md").read_text(encoding="utf-8")
+            skill_after_cursor = (root / ".agents" / "skills" / "cf" / "SKILL.md").read_text(encoding="utf-8")
 
             self.assertEqual(skill_after_windsurf, skill_after_cursor,
                              "Shared skill file must be identical across tool runs")
@@ -1405,7 +1405,7 @@ class TestMultiToolCoexistence(unittest.TestCase):
             r2 = _process_single_agent("cursor", root, cpt, cfg, None, dry_run=False)
 
             sk = r2.get("skills", {})
-            # Only tool-specific files (e.g. .cursor/commands/cf-constructor.md) may be created;
+            # Only tool-specific files (e.g. .cursor/commands/cf.md) may be created;
             # shared .agents/skills/ files must not appear in created list
             shared_created = [f for f in sk.get("created", []) if ".agents/skills/" in f]
             self.assertEqual(len(shared_created), 0,
@@ -1444,7 +1444,7 @@ class TestOpenAIDetection(unittest.TestCase):
             cfg = _default_agents_config()
             _process_single_agent("openai", root, cpt, cfg, None, dry_run=False)
             self.assertTrue((root / ".codex").is_dir(), ".codex/ must be created as OpenAI marker")
-            self.assertTrue((root / ".codex" / ".cf-constructor-installed").is_file())
+            self.assertTrue((root / ".codex" / ".cf-installed").is_file())
 
     def test_openai_generate_then_detect_regen(self):
         """After generating openai, update detects via .codex/ and regenerates on content change."""
@@ -1690,78 +1690,78 @@ class TestKitWorkflowSharedSkills(unittest.TestCase):
         return root, cpt
 
     def test_cursor_generates_shared_kit_workflow_skills(self):
-        """Cursor must generate .agents/skills/cf-constructor-generate/SKILL.md for kit workflows."""
+        """Cursor must generate .agents/skills/cf-generate/SKILL.md for kit workflows."""
         from studio.commands.agents import _process_single_agent, _default_agents_config
 
         with TemporaryDirectory() as td:
             root, cpt = self._make_project(td)
             cfg = _default_agents_config()
             _process_single_agent("cursor", root, cpt, cfg, None, dry_run=False)
-            shared_skill = root / ".agents" / "skills" / "cf-constructor-generate" / "SKILL.md"
+            shared_skill = root / ".agents" / "skills" / "cf-generate" / "SKILL.md"
             self.assertTrue(shared_skill.exists(),
-                ".agents/skills/cf-constructor-generate/SKILL.md must be generated for cursor")
+                ".agents/skills/cf-generate/SKILL.md must be generated for cursor")
 
     def test_windsurf_generates_shared_kit_workflow_skills(self):
-        """Windsurf must generate .agents/skills/cf-constructor-generate/SKILL.md for kit workflows."""
+        """Windsurf must generate .agents/skills/cf-generate/SKILL.md for kit workflows."""
         from studio.commands.agents import _process_single_agent, _default_agents_config
 
         with TemporaryDirectory() as td:
             root, cpt = self._make_project(td)
             cfg = _default_agents_config()
             _process_single_agent("windsurf", root, cpt, cfg, None, dry_run=False)
-            shared_skill = root / ".agents" / "skills" / "cf-constructor-generate" / "SKILL.md"
+            shared_skill = root / ".agents" / "skills" / "cf-generate" / "SKILL.md"
             self.assertTrue(shared_skill.exists(),
-                ".agents/skills/cf-constructor-generate/SKILL.md must be generated for windsurf")
+                ".agents/skills/cf-generate/SKILL.md must be generated for windsurf")
 
     def test_copilot_generates_shared_kit_workflow_skills(self):
-        """Copilot must generate .agents/skills/cf-constructor-generate/SKILL.md for kit workflows."""
+        """Copilot must generate .agents/skills/cf-generate/SKILL.md for kit workflows."""
         from studio.commands.agents import _process_single_agent, _default_agents_config
 
         with TemporaryDirectory() as td:
             root, cpt = self._make_project(td)
             cfg = _default_agents_config()
             _process_single_agent("copilot", root, cpt, cfg, None, dry_run=False)
-            shared_skill = root / ".agents" / "skills" / "cf-constructor-generate" / "SKILL.md"
+            shared_skill = root / ".agents" / "skills" / "cf-generate" / "SKILL.md"
             self.assertTrue(shared_skill.exists(),
-                ".agents/skills/cf-constructor-generate/SKILL.md must be generated for copilot")
+                ".agents/skills/cf-generate/SKILL.md must be generated for copilot")
 
 
 class TestIsPureCypilotGenerated(unittest.TestCase):
-    """Regression: _is_pure_cypilot_generated must distinguish pure stubs from customized files."""
+    """Regression: _is_pure_studio_generated must distinguish pure stubs from customized files."""
 
     def test_pure_stub_is_detected(self):
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         content = (
             "---\nname: cypilot\ndescription: Cypilot skill\n---\n\n"
             "ALWAYS open and follow `{cf-studio-path}/.core/workflows/generate.md`\n"
         )
-        self.assertTrue(_is_pure_cypilot_generated(content))
+        self.assertTrue(_is_pure_studio_generated(content))
 
     def test_stub_with_user_content_is_not_pure(self):
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         content = (
             "---\nname: cypilot\ndescription: Cypilot skill\n---\n\n"
             "ALWAYS open and follow `{cf-studio-path}/.core/workflows/generate.md`\n\n"
             "## My custom notes\nSome user-authored content here.\n"
         )
-        self.assertFalse(_is_pure_cypilot_generated(content))
+        self.assertFalse(_is_pure_studio_generated(content))
 
     def test_no_follow_link_is_not_pure(self):
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         content = "---\nname: test\n---\n\nJust some content.\n"
-        self.assertFalse(_is_pure_cypilot_generated(content))
+        self.assertFalse(_is_pure_studio_generated(content))
 
     def test_non_cypilot_follow_link_is_not_pure(self):
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         content = (
             "---\nname: other\n---\n\n"
             "ALWAYS open and follow `@/some/other/path.md`\n"
         )
-        self.assertFalse(_is_pure_cypilot_generated(content))
+        self.assertFalse(_is_pure_studio_generated(content))
 
 
 class TestLegacyCleanupPreservesCustomizedFiles(unittest.TestCase):
@@ -1895,13 +1895,13 @@ class TestCopilotCustomContent(unittest.TestCase):
             result = _process_single_agent("copilot", root, cpt, cfg, None, dry_run=False)
 
             # Check that the skill proxy file was created and contains custom_content
-            skill_proxy = root / ".github" / "prompts" / "cf-constructor.prompt.md"
+            skill_proxy = root / ".github" / "prompts" / "cf.prompt.md"
             self.assertTrue(skill_proxy.is_file(),
-                ".github/prompts/cf-constructor.prompt.md must be generated")
+                ".github/prompts/cf.prompt.md must be generated")
 
             content = skill_proxy.read_text(encoding="utf-8")
             self.assertIn("## Custom Copilot Instructions", content,
-                "custom_content must appear in the /cypilot skill proxy")
+                "custom_content must appear in the /cf skill proxy")
             self.assertIn("ALWAYS open and follow", content,
                 "skill proxy must contain follow-link directive")
 
@@ -2078,7 +2078,7 @@ class TestExpectedClaudeLegacyTargetsNonCypilot(unittest.TestCase):
             self.assertEqual(result, set())
 
     def test_cypilot_prefixed_skill_returns_targets(self):
-        """'cypilot-' prefix skill returns non-empty targets (line 1576)."""
+        """'cf-' prefix skill returns non-empty targets (line 1576)."""
         from studio.commands.agents import _expected_claude_legacy_targets
 
         with TemporaryDirectory() as tmpdir:
@@ -2087,8 +2087,8 @@ class TestExpectedClaudeLegacyTargetsNonCypilot(unittest.TestCase):
             cypilot_root.mkdir()
             (cypilot_root / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
 
-            # Legacy cypilot- prefix should be handled
-            result = _expected_claude_legacy_targets("cypilot-generate", project_root, cypilot_root)
+            # cf- prefix should be handled
+            result = _expected_claude_legacy_targets("cf-generate", project_root, cypilot_root)
             self.assertIsInstance(result, set)
             # Should contain the workflow path with "generate"
             self.assertTrue(any("generate" in s for s in result))
@@ -2235,7 +2235,7 @@ class TestLooksLikeGeneratedClaudeLegacyCommand(unittest.TestCase):
                 expected_targets=set(),
                 current_file=project_root / "test.md",
                 project_root=project_root,
-                cypilot_root=cypilot_root,
+                studio_root=cypilot_root,
             )
             self.assertFalse(result)
 
@@ -2253,7 +2253,7 @@ class TestLooksLikeGeneratedClaudeLegacyCommand(unittest.TestCase):
                 expected_targets=set(),
                 current_file=project_root / "test.md",
                 project_root=project_root,
-                cypilot_root=cypilot_root,
+                studio_root=cypilot_root,
             )
             self.assertFalse(result)
 
@@ -2271,7 +2271,7 @@ class TestLooksLikeGeneratedClaudeLegacyCommand(unittest.TestCase):
                 expected_targets=set(),
                 current_file=project_root / "test.md",
                 project_root=project_root,
-                cypilot_root=cypilot_root,
+                studio_root=cypilot_root,
             )
             self.assertFalse(result)
 
@@ -2303,61 +2303,61 @@ class TestParsingEdgeCases(unittest.TestCase):
 
 
 class TestExtractCypilotFollowTarget(unittest.TestCase):
-    """Cover _extract_cypilot_follow_target utility."""
+    """Cover _extract_studio_follow_target utility."""
 
     def test_extracts_cypilot_path_target(self):
-        from studio.commands.agents import _extract_cypilot_follow_target
+        from studio.commands.agents import _extract_studio_follow_target
 
         content = "Some text\nALWAYS open and follow `{cf-studio-path}/test.md`\n"
-        result = _extract_cypilot_follow_target(content)
+        result = _extract_studio_follow_target(content)
         self.assertEqual(result, "{cf-studio-path}/test.md")
 
     def test_rejects_non_cypilot_path(self):
-        from studio.commands.agents import _extract_cypilot_follow_target
+        from studio.commands.agents import _extract_studio_follow_target
 
         content = "ALWAYS open and follow `@/test.md`\n"
-        result = _extract_cypilot_follow_target(content)
+        result = _extract_studio_follow_target(content)
         self.assertIsNone(result)
 
     def test_no_follow_link_returns_none(self):
-        from studio.commands.agents import _extract_cypilot_follow_target
+        from studio.commands.agents import _extract_studio_follow_target
 
         content = "Some text without follow link\n"
-        result = _extract_cypilot_follow_target(content)
+        result = _extract_studio_follow_target(content)
         self.assertIsNone(result)
 
 
 class TestIsPureCypilotGeneratedV2(unittest.TestCase):
-    """Cover _is_pure_cypilot_generated checks."""
+    """Cover _is_pure_studio_generated checks."""
 
     def test_pure_generated_with_frontmatter(self):
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         # Canonical frontmatter (only name + description) → pure
         content = "---\nname: test\ndescription: A skill\n---\nALWAYS open and follow `{cf-studio-path}/test.md`\n"
-        result = _is_pure_cypilot_generated(content)
+        result = _is_pure_studio_generated(content)
         self.assertTrue(result)
 
     def test_custom_frontmatter_key_not_pure(self):
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         # Non-canonical key (type) means user-customised frontmatter → not pure
         content = "---\ntype: command\n---\nALWAYS open and follow `{cf-studio-path}/test.md`\n"
-        result = _is_pure_cypilot_generated(content)
+        result = _is_pure_studio_generated(content)
         self.assertFalse(result)
 
     def test_with_user_content_not_pure(self):
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         content = "---\nname: test\ndescription: A skill\n---\nALWAYS open and follow `{cf-studio-path}/test.md`\n\nUser added content here\n"
-        result = _is_pure_cypilot_generated(content)
+        result = _is_pure_studio_generated(content)
         self.assertFalse(result)
 
     def test_no_follow_link_not_pure(self):
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         content = "---\ntype: command\n---\nSome content\n"
-        result = _is_pure_cypilot_generated(content)
+        result = _is_pure_studio_generated(content)
         self.assertFalse(result)
 
 
@@ -2446,16 +2446,16 @@ class TestValidateAgentEntry(unittest.TestCase):
 
 
 class TestFileHasCypilotFollowLink(unittest.TestCase):
-    """Cover _file_has_cypilot_follow_link checks."""
+    """Cover _file_has_studio_follow_link checks."""
 
     def test_file_does_not_exist(self):
-        from studio.commands.agents import _file_has_cypilot_follow_link
+        from studio.commands.agents import _file_has_studio_follow_link
 
-        result = _file_has_cypilot_follow_link(Path("/nonexistent/file.md"))
+        result = _file_has_studio_follow_link(Path("/nonexistent/file.md"))
         self.assertFalse(result)
 
     def test_file_exists_with_follow_link(self):
-        from studio.commands.agents import _file_has_cypilot_follow_link
+        from studio.commands.agents import _file_has_studio_follow_link
 
         with TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "test.md"
@@ -2463,20 +2463,20 @@ class TestFileHasCypilotFollowLink(unittest.TestCase):
                 "# /test\n\nALWAYS open and follow `{cf-studio-path}/test.md`\n",
                 encoding="utf-8",
             )
-            result = _file_has_cypilot_follow_link(path)
+            result = _file_has_studio_follow_link(path)
             self.assertTrue(result)
 
     def test_file_exists_without_follow_link(self):
-        from studio.commands.agents import _file_has_cypilot_follow_link
+        from studio.commands.agents import _file_has_studio_follow_link
 
         with TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "test.md"
             path.write_text("# /test\n\nSome content\n", encoding="utf-8")
-            result = _file_has_cypilot_follow_link(path)
+            result = _file_has_studio_follow_link(path)
             self.assertFalse(result)
 
     def test_read_error_returns_false(self):
-        from studio.commands.agents import _file_has_cypilot_follow_link
+        from studio.commands.agents import _file_has_studio_follow_link
         from unittest.mock import patch
 
         with TemporaryDirectory() as tmpdir:
@@ -2485,7 +2485,7 @@ class TestFileHasCypilotFollowLink(unittest.TestCase):
 
             # Mock read_text to raise OSError
             with patch.object(Path, "read_text", side_effect=OSError("denied")):
-                result = _file_has_cypilot_follow_link(path)
+                result = _file_has_studio_follow_link(path)
             self.assertFalse(result)
 
 
@@ -2575,43 +2575,43 @@ class TestCleanupCypilotLegacySubagents(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             f"---\nname: {name}\ndescription: legacy cypilot subagent\n---\n"
-            "ALWAYS open and follow `{cf-studio-path}/.core/skills/cypilot/agents/"
+            "ALWAYS open and follow `{cypilot_path}/.core/skills/cypilot/agents/"
             f"{name}.md`\n",
             encoding="utf-8",
         )
 
     def test_claude_legacy_subagent_deleted(self):
-        from studio.commands.agents import _cleanup_cypilot_legacy_subagents
+        from studio.commands.agents import _cleanup_studio_legacy_subagents
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             target = root / ".claude" / "agents" / "cypilot-codegen.md"
             self._make_pure_subagent(target, "cypilot-codegen")
-            deleted = _cleanup_cypilot_legacy_subagents("claude", root, dry_run=False)
+            deleted = _cleanup_studio_legacy_subagents("claude", root, dry_run=False)
             self.assertIn(".claude/agents/cypilot-codegen.md", deleted)
             self.assertFalse(target.exists())
 
     def test_cursor_legacy_subagent_deleted(self):
-        from studio.commands.agents import _cleanup_cypilot_legacy_subagents
+        from studio.commands.agents import _cleanup_studio_legacy_subagents
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             target = root / ".cursor" / "agents" / "cypilot-pr-review.md"
             self._make_pure_subagent(target, "cypilot-pr-review")
-            deleted = _cleanup_cypilot_legacy_subagents("cursor", root, dry_run=False)
+            deleted = _cleanup_studio_legacy_subagents("cursor", root, dry_run=False)
             self.assertIn(".cursor/agents/cypilot-pr-review.md", deleted)
             self.assertFalse(target.exists())
 
     def test_copilot_legacy_subagent_deleted(self):
-        from studio.commands.agents import _cleanup_cypilot_legacy_subagents
+        from studio.commands.agents import _cleanup_studio_legacy_subagents
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             target = root / ".github" / "agents" / "cypilot-phase-runner.agent.md"
             self._make_pure_subagent(target, "cypilot-phase-runner")
-            deleted = _cleanup_cypilot_legacy_subagents("copilot", root, dry_run=False)
+            deleted = _cleanup_studio_legacy_subagents("copilot", root, dry_run=False)
             self.assertIn(".github/agents/cypilot-phase-runner.agent.md", deleted)
             self.assertFalse(target.exists())
 
     def test_openai_legacy_subagent_deleted(self):
-        from studio.commands.agents import _cleanup_cypilot_legacy_subagents
+        from studio.commands.agents import _cleanup_studio_legacy_subagents
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             target = root / ".codex" / "agents" / "cypilot-ralphex.toml"
@@ -2624,12 +2624,12 @@ class TestCleanupCypilotLegacySubagents(unittest.TestCase):
                 '"""\n',
                 encoding="utf-8",
             )
-            # Note: this toml may not pass _is_pure_cypilot_generated since
+            # Note: this toml may not pass _is_pure_studio_generated since
             # that helper expects markdown-style frontmatter. If the test
             # fails because of that, simplify to a markdown subagent file
             # at .codex/agents/cypilot-ralphex.md instead, or skip openai
             # in this test and document it.
-            deleted = _cleanup_cypilot_legacy_subagents("openai", root, dry_run=False)
+            deleted = _cleanup_studio_legacy_subagents("openai", root, dry_run=False)
             # Whichever outcome the content check produces, the test verifies
             # that the function runs without error. If the TOML format is
             # accepted, the file is deleted; if not, it's preserved. Either
@@ -2639,7 +2639,7 @@ class TestCleanupCypilotLegacySubagents(unittest.TestCase):
             self.assertIsInstance(deleted, list)
 
     def test_user_modified_subagent_preserved(self):
-        from studio.commands.agents import _cleanup_cypilot_legacy_subagents
+        from studio.commands.agents import _cleanup_studio_legacy_subagents
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             target = root / ".claude" / "agents" / "cypilot-codegen.md"
@@ -2651,17 +2651,17 @@ class TestCleanupCypilotLegacySubagents(unittest.TestCase):
                 "Some extra content I added.\n",
                 encoding="utf-8",
             )
-            deleted = _cleanup_cypilot_legacy_subagents("claude", root, dry_run=False)
+            deleted = _cleanup_studio_legacy_subagents("claude", root, dry_run=False)
             self.assertEqual(deleted, [])
             self.assertTrue(target.exists())  # user content preserved
 
     def test_dry_run_reports_without_deleting(self):
-        from studio.commands.agents import _cleanup_cypilot_legacy_subagents
+        from studio.commands.agents import _cleanup_studio_legacy_subagents
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             target = root / ".claude" / "agents" / "cypilot-codegen.md"
             self._make_pure_subagent(target, "cypilot-codegen")
-            deleted = _cleanup_cypilot_legacy_subagents("claude", root, dry_run=True)
+            deleted = _cleanup_studio_legacy_subagents("claude", root, dry_run=True)
             self.assertIn(".claude/agents/cypilot-codegen.md", deleted)
             self.assertTrue(target.exists())  # dry-run preserved on disk
 
@@ -2672,35 +2672,35 @@ class TestCleanupCypilotLegacyMarkers(unittest.TestCase):
     same path are preserved."""
 
     def test_copilot_marker_deleted(self):
-        from studio.commands.agents import _cleanup_cypilot_legacy_markers
+        from studio.commands.agents import _cleanup_studio_legacy_markers
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             marker = root / ".github" / ".cypilot-installed"
             marker.parent.mkdir(parents=True)
             marker.write_text("# Cypilot Copilot integration marker\n", encoding="utf-8")
-            deleted = _cleanup_cypilot_legacy_markers("copilot", root, dry_run=False)
+            deleted = _cleanup_studio_legacy_markers("copilot", root, dry_run=False)
             self.assertIn(".github/.cypilot-installed", deleted)
             self.assertFalse(marker.exists())
 
     def test_openai_marker_deleted(self):
-        from studio.commands.agents import _cleanup_cypilot_legacy_markers
+        from studio.commands.agents import _cleanup_studio_legacy_markers
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             marker = root / ".codex" / ".cypilot-installed"
             marker.parent.mkdir(parents=True)
             marker.write_text("# Cypilot OpenAI/Codex integration marker\n", encoding="utf-8")
-            deleted = _cleanup_cypilot_legacy_markers("openai", root, dry_run=False)
+            deleted = _cleanup_studio_legacy_markers("openai", root, dry_run=False)
             self.assertIn(".codex/.cypilot-installed", deleted)
             self.assertFalse(marker.exists())
 
     def test_non_cypilot_marker_preserved(self):
-        from studio.commands.agents import _cleanup_cypilot_legacy_markers
+        from studio.commands.agents import _cleanup_studio_legacy_markers
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             marker = root / ".github" / ".cypilot-installed"
             marker.parent.mkdir(parents=True)
             marker.write_text("# Something else entirely\n", encoding="utf-8")
-            deleted = _cleanup_cypilot_legacy_markers("copilot", root, dry_run=False)
+            deleted = _cleanup_studio_legacy_markers("copilot", root, dry_run=False)
             self.assertEqual(deleted, [])
             self.assertTrue(marker.exists())
 
@@ -2709,7 +2709,7 @@ class TestIsPureCypilotGeneratedNameDescMismatch(unittest.TestCase):
     """Cover lines 156 and 158 in agents.py: expected_name / expected_description mismatch."""
 
     def _make_content(self, name: str, description: str) -> str:
-        marker = "<!-- Generated by cf-constructor agents -- do not edit -->"
+        marker = "<!-- Generated by cf agents -- do not edit -->"
         return (
             f"---\n"
             f"name: {name}\n"
@@ -2721,35 +2721,35 @@ class TestIsPureCypilotGeneratedNameDescMismatch(unittest.TestCase):
 
     def test_expected_name_mismatch_returns_false(self):
         """When expected_name doesn't match frontmatter name, return False (line 156)."""
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         content = self._make_content("my-agent", "Some description")
-        result = _is_pure_cypilot_generated(content, expected_name="different-agent")
+        result = _is_pure_studio_generated(content, expected_name="different-agent")
         self.assertFalse(result)
 
     def test_expected_description_mismatch_returns_false(self):
         """When expected_description doesn't match frontmatter description, return False (line 158)."""
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         content = self._make_content("my-agent", "Actual description")
-        result = _is_pure_cypilot_generated(content, expected_description="Different description")
+        result = _is_pure_studio_generated(content, expected_description="Different description")
         self.assertFalse(result)
 
     def test_matching_name_and_description_returns_true(self):
         """When both match, function returns True."""
-        from studio.commands.agents import _is_pure_cypilot_generated
+        from studio.commands.agents import _is_pure_studio_generated
 
         content = self._make_content("my-agent", "Actual description")
-        result = _is_pure_cypilot_generated(
+        result = _is_pure_studio_generated(
             content, expected_name="my-agent", expected_description="Actual description"
         )
         self.assertTrue(result)
 
 
 class TestIsPureCypilotGeneratedToml(unittest.TestCase):
-    """Cover _is_pure_cypilot_generated_toml branch paths (lines 180, 184-212)."""
+    """Cover _is_pure_studio_generated_toml branch paths (lines 180, 184-212)."""
 
-    _MARKER = "# Generated by cf-constructor agents -- do not edit"
+    _MARKER = "# Generated by cf agents -- do not edit"
 
     def _make_toml(self, name: str = "my-agent", description: str = "Test agent") -> str:
         return (
@@ -2763,35 +2763,35 @@ class TestIsPureCypilotGeneratedToml(unittest.TestCase):
 
     def test_returns_false_when_expected_lacks_marker(self):
         """expected_content without marker → return False (line 180)."""
-        from studio.commands.agents import _is_pure_cypilot_generated_toml
+        from studio.commands.agents import _is_pure_studio_generated_toml
 
         content = self._make_toml()
         expected = 'name = "my-agent"\ndescription = "no marker here"\n'
-        result = _is_pure_cypilot_generated_toml(content, expected)
+        result = _is_pure_studio_generated_toml(content, expected)
         self.assertFalse(result)
 
     def test_returns_false_for_invalid_toml_content(self):
         """Invalid TOML in content → TOMLDecodeError → return False (lines 184-185)."""
-        from studio.commands.agents import _is_pure_cypilot_generated_toml
+        from studio.commands.agents import _is_pure_studio_generated_toml
 
         bad_content = f"{self._MARKER}\nBAD TOML @@@ invalid =\n"
         expected = self._make_toml()
-        result = _is_pure_cypilot_generated_toml(bad_content, expected)
+        result = _is_pure_studio_generated_toml(bad_content, expected)
         self.assertFalse(result)
 
     def test_returns_false_when_required_keys_missing(self):
         """Missing required_keys → return False (line 202)."""
-        from studio.commands.agents import _is_pure_cypilot_generated_toml
+        from studio.commands.agents import _is_pure_studio_generated_toml
 
         # Only has name and description, missing developer_instructions
         content = f'{self._MARKER}\nname = "x"\ndescription = "y"\n'
         expected = content
-        result = _is_pure_cypilot_generated_toml(content, expected)
+        result = _is_pure_studio_generated_toml(content, expected)
         self.assertFalse(result)
 
     def test_returns_false_when_extra_unknown_key(self):
         """Unknown extra key not in allowed_keys → return False (line 204)."""
-        from studio.commands.agents import _is_pure_cypilot_generated_toml
+        from studio.commands.agents import _is_pure_studio_generated_toml
 
         content = (
             f"{self._MARKER}\n"
@@ -2801,12 +2801,12 @@ class TestIsPureCypilotGeneratedToml(unittest.TestCase):
             f'unknown_extra_key = "bad"\n'
         )
         expected = content
-        result = _is_pure_cypilot_generated_toml(content, expected)
+        result = _is_pure_studio_generated_toml(content, expected)
         self.assertFalse(result)
 
     def test_returns_false_when_no_follow_target(self):
         """developer_instructions without a valid follow-link → return False (line 212)."""
-        from studio.commands.agents import _is_pure_cypilot_generated_toml
+        from studio.commands.agents import _is_pure_studio_generated_toml
 
         content = (
             f"{self._MARKER}\n"
@@ -2815,7 +2815,7 @@ class TestIsPureCypilotGeneratedToml(unittest.TestCase):
             f'developer_instructions = "no follow link here"\n'
         )
         expected = content
-        result = _is_pure_cypilot_generated_toml(content, expected)
+        result = _is_pure_studio_generated_toml(content, expected)
         self.assertFalse(result)
 
     def test_returns_false_when_name_not_string(self):
@@ -2824,7 +2824,7 @@ class TestIsPureCypilotGeneratedToml(unittest.TestCase):
         TOML spec guarantees root is a dict, so non-str name requires crafting
         TOML where name is an integer: name = 42.
         """
-        from studio.commands.agents import _is_pure_cypilot_generated_toml
+        from studio.commands.agents import _is_pure_studio_generated_toml
 
         # Build TOML where name is an integer (valid TOML, but violates our schema)
         content = (
@@ -2834,7 +2834,7 @@ class TestIsPureCypilotGeneratedToml(unittest.TestCase):
             f'developer_instructions = "ALWAYS open and follow `{{cf-studio-path}}/agents/x.md`"\n'
         )
         expected = content
-        result = _is_pure_cypilot_generated_toml(content, expected)
+        result = _is_pure_studio_generated_toml(content, expected)
         self.assertFalse(result)
 
     def test_returns_false_when_instructions_not_string(self):
@@ -2842,7 +2842,7 @@ class TestIsPureCypilotGeneratedToml(unittest.TestCase):
 
         Build TOML where developer_instructions is an integer.
         """
-        from studio.commands.agents import _is_pure_cypilot_generated_toml
+        from studio.commands.agents import _is_pure_studio_generated_toml
 
         content = (
             f"{self._MARKER}\n"
@@ -2851,46 +2851,46 @@ class TestIsPureCypilotGeneratedToml(unittest.TestCase):
             f"developer_instructions = 99\n"  # integer, not string
         )
         expected = content
-        result = _is_pure_cypilot_generated_toml(content, expected)
+        result = _is_pure_studio_generated_toml(content, expected)
         self.assertFalse(result)
 
     def test_returns_true_for_matching_content(self):
         """Valid matching content → returns True."""
-        from studio.commands.agents import _is_pure_cypilot_generated_toml
+        from studio.commands.agents import _is_pure_studio_generated_toml
 
         content = self._make_toml()
-        result = _is_pure_cypilot_generated_toml(content, content)
+        result = _is_pure_studio_generated_toml(content, content)
         self.assertTrue(result)
 
     def test_returns_false_when_content_differs_from_expected(self):
         """Content differs from expected → return False (data != expected_data)."""
-        from studio.commands.agents import _is_pure_cypilot_generated_toml
+        from studio.commands.agents import _is_pure_studio_generated_toml
 
         content = self._make_toml("agent-a", "Description A")
         expected = self._make_toml("agent-a", "Description B")
-        result = _is_pure_cypilot_generated_toml(content, expected)
+        result = _is_pure_studio_generated_toml(content, expected)
         self.assertFalse(result)
 
 
 class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
-    """Cover _expected_stale_cypilot_generated_toml branch paths."""
+    """Cover _expected_stale_studio_generated_toml branch paths."""
 
-    _MARKER = "# Generated by cf-constructor agents -- do not edit"
+    _MARKER = "# Generated by cf agents -- do not edit"
 
     def test_returns_none_when_marker_absent(self):
         """No marker in content → return None."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             toml_file = Path(td) / "my-agent.toml"
-            result = _expected_stale_cypilot_generated_toml(
+            result = _expected_stale_studio_generated_toml(
                 toml_file, 'name = "x"\n', Path(td)
             )
             self.assertIsNone(result)
 
     def test_returns_none_when_extra_keys_unknown(self):
         """extra_keys not subset of permitted_extra_keys → return None (line 242)."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             toml_file = Path(td) / "my-agent.toml"
@@ -2901,12 +2901,12 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'developer_instructions = "ALWAYS open and follow `{{cf-studio-path}}/agents/my-agent.md`"\n'
                 f'totally_unknown_key = "bad"\n'
             )
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, Path(td))
+            result = _expected_stale_studio_generated_toml(toml_file, content, Path(td))
             self.assertIsNone(result)
 
     def test_returns_none_when_required_keys_missing_in_stale(self):
         """Missing required_keys in stale TOML → return None (line 244)."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             toml_file = Path(td) / "my-agent.toml"
@@ -2916,7 +2916,7 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'name = "my-agent"\n'
                 f'description = "desc"\n'
             )
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, Path(td))
+            result = _expected_stale_studio_generated_toml(toml_file, content, Path(td))
             self.assertIsNone(result)
 
     def test_returns_none_when_name_not_str_in_stale(self):
@@ -2924,7 +2924,7 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
 
         Build TOML where name is an integer to trigger the isinstance guard.
         """
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             toml_file = Path(td) / "42.toml"
@@ -2934,22 +2934,22 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'description = "desc"\n'
                 f'developer_instructions = "ALWAYS open and follow `{{cf-studio-path}}/agents/42.md`"\n'
             )
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, Path(td))
+            result = _expected_stale_studio_generated_toml(toml_file, content, Path(td))
             self.assertIsNone(result)
 
     def test_returns_none_for_invalid_toml(self):
         """TOMLDecodeError → return None (lines 233-234)."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             toml_file = Path(td) / "my-agent.toml"
             bad = f"{self._MARKER}\nBAD @@@ = =\n"
-            result = _expected_stale_cypilot_generated_toml(toml_file, bad, Path(td))
+            result = _expected_stale_studio_generated_toml(toml_file, bad, Path(td))
             self.assertIsNone(result)
 
     def test_returns_none_when_stem_name_mismatch(self):
         """File stem doesn't match name field → return None (line 250-251)."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             toml_file = Path(td) / "different-stem.toml"
@@ -2959,12 +2959,12 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'description = "desc"\n'
                 f'developer_instructions = "ALWAYS open and follow `{{cf-studio-path}}/agents/my-agent.md`"\n'
             )
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, Path(td))
+            result = _expected_stale_studio_generated_toml(toml_file, content, Path(td))
             self.assertIsNone(result)
 
     def test_returns_none_when_dotdot_in_follow_target(self):
         """'..' in follow target suffix parts → return None (line 261)."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             toml_file = Path(td) / "my-agent.toml"
@@ -2974,12 +2974,12 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'description = "desc"\n'
                 f'developer_instructions = "ALWAYS open and follow `{{cf-studio-path}}/../../etc/passwd`"\n'
             )
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, Path(td))
+            result = _expected_stale_studio_generated_toml(toml_file, content, Path(td))
             self.assertIsNone(result)
 
     def test_returns_none_when_prompt_file_missing(self):
         """Follow target exists but prompt file not on disk → return None."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             toml_file = Path(td) / "my-agent.toml"
@@ -2990,12 +2990,12 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'developer_instructions = "ALWAYS open and follow `{{cf-studio-path}}/agents/my-agent.md`"\n'
             )
             # Note: the agent file doesn't actually exist under td
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, Path(td))
+            result = _expected_stale_studio_generated_toml(toml_file, content, Path(td))
             self.assertIsNone(result)
 
     def test_returns_none_when_extra_keys_invalid_type(self):
         """Extra key with unsupported type → return None (line 290)."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             cypilot_root = Path(td) / "cpt"
@@ -3016,12 +3016,12 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'developer_instructions = "ALWAYS open and follow `{{cf-studio-path}}/agents/my-agent.md`"\n'
                 f'model_context_window = 3.14\n'  # float is invalid (expects int)
             )
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, cypilot_root)
+            result = _expected_stale_studio_generated_toml(toml_file, content, cypilot_root)
             self.assertIsNone(result)
 
     def test_returns_none_when_no_follow_target_in_instructions(self):
         """instructions without follow-link → follow_target is None → return None (line 255)."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             toml_file = Path(td) / "my-agent.toml"
@@ -3031,12 +3031,12 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'description = "desc"\n'
                 f'developer_instructions = "no follow link here"\n'
             )
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, Path(td))
+            result = _expected_stale_studio_generated_toml(toml_file, content, Path(td))
             self.assertIsNone(result)
 
     def test_returns_none_when_prompt_file_no_description(self):
         """Prompt file exists but has no frontmatter description → return None (line 272)."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             cypilot_root = Path(td) / "cpt"
@@ -3055,12 +3055,12 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'description = "desc"\n'
                 f'developer_instructions = "ALWAYS open and follow `{{cf-studio-path}}/agents/my-agent.md`"\n'
             )
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, cypilot_root)
+            result = _expected_stale_studio_generated_toml(toml_file, content, cypilot_root)
             self.assertIsNone(result)
 
     def test_returns_rendered_with_model_context_window_int(self):
         """model_context_window (int) → appended to rendered TOML (line 288)."""
-        from studio.commands.agents import _expected_stale_cypilot_generated_toml
+        from studio.commands.agents import _expected_stale_studio_generated_toml
 
         with TemporaryDirectory() as td:
             cypilot_root = Path(td) / "cpt"
@@ -3079,7 +3079,7 @@ class TestExpectedStaleCypilotGeneratedToml(unittest.TestCase):
                 f'developer_instructions = "ALWAYS open and follow `{{cf-studio-path}}/agents/my-agent.md`"\n'
                 f'model_context_window = 200000\n'
             )
-            result = _expected_stale_cypilot_generated_toml(toml_file, content, cypilot_root)
+            result = _expected_stale_studio_generated_toml(toml_file, content, cypilot_root)
             # Either None (if rendered doesn't match) or a non-None string
             # The key thing is that line 288 executes (model_context_window int path)
             # Result may be None if rendered != content, which is acceptable
@@ -3120,7 +3120,7 @@ class TestPreserveUnverifiableGeneratedFile(unittest.TestCase):
         """File with marker → appends warning and returns True."""
         from studio.commands.agents import _preserve_unverifiable_generated_file
 
-        marker = "<!-- Generated by cf-constructor agents -- do not edit -->"
+        marker = "<!-- Generated by cf agents -- do not edit -->"
         with TemporaryDirectory() as td:
             project_root = Path(td)
             out_path = project_root / "generated_file.md"
@@ -3216,7 +3216,7 @@ class TestProcessWorkflowsRelativeContainment(unittest.TestCase):
             # Create a file with a follow-link so the rename code inspects it
             existing_md = wf_dir / "cf-constructor-old.md"
             follow_content = (
-                "<!-- Generated by cf-constructor agents -- do not edit -->\n"
+                "<!-- Generated by cf agents -- do not edit -->\n"
                 "ALWAYS open and follow `{cf-studio-path}/.core/workflows/old.md`\n"
             )
             existing_md.write_text(follow_content, encoding="utf-8")
@@ -3230,7 +3230,7 @@ class TestProcessWorkflowsRelativeContainment(unittest.TestCase):
                             "workflow_filename_format": "{command}.md",
                             "workflow_command_prefix": "cf-constructor-",
                             "template": [
-                                "<!-- Generated by cf-constructor agents -- do not edit -->",
+                                "<!-- Generated by cf agents -- do not edit -->",
                                 "ALWAYS open and follow `{target_rel}`",
                             ],
                         }

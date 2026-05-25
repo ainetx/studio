@@ -105,11 +105,12 @@ def test_flatten_vars_with_nested_kits(tmp_path):
 
 
 def test_flatten_vars_legacy_cypilot_path_alias(tmp_path):
-    """`cypilot_path` alias is auto-populated from `cf-studio-path`."""
+    """All path aliases (cf-studio-path, cf-path, studio_path, studio-path) are auto-populated."""
     data = {"system": {"cf-studio-path": str(tmp_path / ".bootstrap")}}
     flat = map_cli._flatten_vars(data, tmp_path)
     assert flat["cf-studio-path"] == ".bootstrap"
-    assert flat["cypilot_path"] == ".bootstrap"
+    assert flat["cf-path"] == ".bootstrap"
+    assert flat["studio_path"] == ".bootstrap"
 
 
 def test_count_systems_no_artifacts_toml(tmp_path):
@@ -126,9 +127,9 @@ def test_count_systems_invalid_toml(tmp_path):
 
 
 def test_skip_dirs_for_meta_includes_adapter(tmp_path):
-    """When CLAUDE.md declares cf-studio-path, that adapter is in skip_dirs."""
+    """When CLAUDE.md declares cf-path, that adapter is in skip_dirs."""
     (tmp_path / "CLAUDE.md").write_text(
-        'cf-studio-path = ".bootstrap"\n', encoding="utf-8"
+        'cf-path = ".bootstrap"\n', encoding="utf-8"
     )
     skips = map_cli.skip_dirs_for_meta(tmp_path)
     assert ".git" in skips

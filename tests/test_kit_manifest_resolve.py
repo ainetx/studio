@@ -15,7 +15,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from _test_helpers import bootstrap_test_project
 from studio.utils.manifest import resolve_resource_bindings
@@ -384,8 +384,8 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
         self.assertIsNone(lk.resource_bindings)
 
     def test_context_load_populates_resource_bindings(self):
-        """CypilotContext.load() populates resource_bindings for manifest-driven kit."""
-        from studio.utils.context import CypilotContext
+        """StudioContext.load() populates resource_bindings for manifest-driven kit."""
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -425,7 +425,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             kit_dir.mkdir(parents=True)
             (kit_dir / "constraints.toml").write_text("[artifacts]\n", encoding="utf-8")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
             lk = ctx.kits["sdlc"]
@@ -433,8 +433,8 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             self.assertIn("adr_artifacts", lk.resource_bindings)
 
     def test_context_load_preserves_same_os_absolute_kit_path(self):
-        """CypilotContext.load() keeps same-OS absolute kits.{slug}.path absolute."""
-        from studio.utils.context import CypilotContext
+        """StudioContext.load() keeps same-OS absolute kits.{slug}.path absolute."""
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -468,7 +468,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
 
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
@@ -477,8 +477,8 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             self.assertIsNotNone(ctx.kits["sdlc"].constraints)
 
     def test_context_load_preserves_same_os_absolute_binding(self):
-        """CypilotContext.load() keeps same-OS absolute resource bindings absolute."""
-        from studio.utils.context import CypilotContext
+        """StudioContext.load() keeps same-OS absolute resource bindings absolute."""
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -517,7 +517,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             kit_dir = config / "kits" / "sdlc"
             kit_dir.mkdir(parents=True)
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
 
             self.assertIsNotNone(ctx)
             self.assertEqual(
@@ -526,8 +526,8 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             )
 
     def test_context_load_no_resources_is_none(self):
-        """CypilotContext.load() leaves resource_bindings as None for legacy kit."""
-        from studio.utils.context import CypilotContext
+        """StudioContext.load() leaves resource_bindings as None for legacy kit."""
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -561,13 +561,13 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             kit_dir.mkdir(parents=True)
             (kit_dir / "constraints.toml").write_text("[artifacts]\n", encoding="utf-8")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
             self.assertIsNone(ctx.kits["sdlc"].resource_bindings)
 
     def test_context_load_surfaces_invalid_binding_as_structured_error(self):
-        from studio.utils.context import CypilotContext
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -605,7 +605,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             kit_dir.mkdir(parents=True)
             (kit_dir / "constraints.toml").write_text("[artifacts]\n", encoding="utf-8")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
 
             self.assertIsNotNone(ctx)
             self.assertIsNone(ctx.kits["sdlc"].resource_bindings)

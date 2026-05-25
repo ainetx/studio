@@ -992,20 +992,20 @@ class TestHumanAgentsOk(_HumanModeBase):
 
 
 class TestEnsureCypilotLocal(unittest.TestCase):
-    """Test _ensure_cypilot_local copy paths."""
+    """Test _ensure_studio_local copy paths."""
 
     def test_already_local(self):
-        from studio.commands.agents import _ensure_cypilot_local
+        from studio.commands.agents import _ensure_studio_local
         with TemporaryDirectory() as td:
             root = Path(td)
             cypilot = root / "cypilot"
             cypilot.mkdir()
-            result_path, report = _ensure_cypilot_local(cypilot, root, dry_run=False)
+            result_path, report = _ensure_studio_local(cypilot, root, dry_run=False)
             self.assertEqual(result_path, cypilot)
             self.assertEqual(report["action"], "none")
 
     def test_copy_into_project(self):
-        from studio.commands.agents import _ensure_cypilot_local
+        from studio.commands.agents import _ensure_studio_local
         with TemporaryDirectory() as td:
             root = Path(td) / "project"
             root.mkdir()
@@ -1014,7 +1014,7 @@ class TestEnsureCypilotLocal(unittest.TestCase):
             # Create minimal structure so _is_cypilot_root passes
             (ext_cypilot / ".core").mkdir()
             (ext_cypilot / ".core" / "requirements").mkdir(parents=True)
-            result_path, report = _ensure_cypilot_local(ext_cypilot, root, dry_run=False)
+            result_path, report = _ensure_studio_local(ext_cypilot, root, dry_run=False)
             self.assertIn(report["action"], ("copied", "error"))
 
 
@@ -1095,7 +1095,7 @@ class TestBrandContractPinned(unittest.TestCase):
 
     def test_workspace_filename_canonical(self):
         from studio.constants import WORKSPACE_CONFIG_FILENAME
-        self.assertEqual(WORKSPACE_CONFIG_FILENAME, ".cf-constructor-workspace.toml")
+        self.assertEqual(WORKSPACE_CONFIG_FILENAME, ".cf-workspace.toml")
 
     def test_init_inject_writes_new_marker_and_key(self):
         """Fresh _inject_root_agents writes @cf:root-agents + cf-studio-path (no legacy)."""

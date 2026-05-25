@@ -125,7 +125,8 @@ class TestCollectAllVariables(unittest.TestCase):
             })
             self.assertEqual(len(result["kits"]), 0)
             self.assertIn("cf-studio-path", result["variables"])
-            self.assertEqual(len(result["variables"]), 2)  # cypilot_path + project_root
+            # System variables: cf-studio-path, cf-path, studio_path, studio-path, project_root
+            self.assertEqual(len(result["variables"]), 5)
 
     def test_kit_without_resources_skipped(self):
         """Kit without resources section produces no kit variables."""
@@ -574,8 +575,8 @@ class TestInfoVariablesIntegration(unittest.TestCase):
                 variables = out.get("variables", {})
                 self.assertIn("cf-studio-path", variables)
                 self.assertIn("project_root", variables)
-                # System vars only (cypilot_path + project_root)
-                self.assertEqual(len(variables), 2)
+                # System variables: cf-studio-path, cf-path, studio_path, studio-path, project_root
+                self.assertEqual(len(variables), 5)
             finally:
                 os.chdir(cwd)
 

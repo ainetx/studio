@@ -89,7 +89,7 @@ SCHEMA_PATH = REPO_ROOT / "schemas" / "map.schema.json"
 
 def test_schema_parses_and_has_expected_keys():
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-    assert schema["title"] == "cfc map output"
+    assert schema["title"] == "cfs map output"
     required = set(schema["required"])
     assert required == {"version", "generated_at", "workspace", "scan", "nodes", "edges",
                         "dangling_cpt_uses", "categories"}

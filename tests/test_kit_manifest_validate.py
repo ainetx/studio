@@ -16,7 +16,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from _test_helpers import bootstrap_test_project, write_registered_sdlc_config
 
@@ -68,12 +68,12 @@ def _write_manifest_toml(kit_dir: Path, resources: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 
 class TestContextConstraintsResourceBinding(unittest.TestCase):
-    """Test that CypilotContext.load() uses resource binding for constraints path."""
+    """Test that StudioContext.load() uses resource binding for constraints path."""
 
     def test_constraints_loaded_from_binding_path(self):
         """When a 'constraints' resource binding exists and the file is present,
         context loads constraints from the binding path (not default kit root)."""
-        from studio.utils.context import CypilotContext
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -119,7 +119,7 @@ class TestContextConstraintsResourceBinding(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
             # Constraints should be loaded (from custom path), not None
@@ -127,7 +127,7 @@ class TestContextConstraintsResourceBinding(unittest.TestCase):
 
     def test_constraints_fallback_to_kit_root(self):
         """When no 'constraints' resource binding exists, constraints loaded from kit root."""
-        from studio.utils.context import CypilotContext
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -164,14 +164,14 @@ class TestContextConstraintsResourceBinding(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
             self.assertIsNotNone(ctx.kits["sdlc"].constraints)
 
     def test_binding_path_missing_file_surfaces_error(self):
         """When constraints binding path does not exist on disk, surface an error."""
-        from studio.utils.context import CypilotContext
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -209,7 +209,7 @@ class TestContextConstraintsResourceBinding(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
             self.assertIsNone(ctx.kits["sdlc"].constraints)
@@ -227,7 +227,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
 
     def test_missing_resource_path_produces_error(self):
         """Registered kit with resource binding pointing to missing path → FAIL."""
-        from studio.utils.context import CypilotContext, set_context
+        from studio.utils.context import StudioContext, set_context
         from studio.commands.validate_kits import run_validate_kits
 
         with TemporaryDirectory() as td:
@@ -250,7 +250,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
             # constraints.toml exists but ADR dir does NOT
             # (constraints path exists because _write_minimal_constraints created it)
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             set_context(ctx)
 
@@ -272,7 +272,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 set_context(None)
 
     def test_missing_resource_path_marks_failed_kit_in_report(self):
-        from studio.utils.context import CypilotContext, set_context
+        from studio.utils.context import StudioContext, set_context
         from studio.commands.validate_kits import run_validate_kits
 
         with TemporaryDirectory() as td:
@@ -310,7 +310,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             set_context(ctx)
 
@@ -329,7 +329,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 set_context(None)
 
     def test_invalid_binding_resolution_produces_resource_error(self):
-        from studio.utils.context import CypilotContext, set_context
+        from studio.utils.context import StudioContext, set_context
         from studio.commands.validate_kits import run_validate_kits
 
         with TemporaryDirectory() as td:
@@ -368,7 +368,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
             self.assertIsNone(ctx.kits["sdlc"].resource_bindings)
@@ -393,7 +393,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 set_context(None)
 
     def test_inaccessible_absolute_kit_path_fails_and_reports_configured_path(self):
-        from studio.utils.context import CypilotContext, set_context
+        from studio.utils.context import StudioContext, set_context
         from studio.commands.validate_kits import run_validate_kits
 
         with TemporaryDirectory() as td:
@@ -426,7 +426,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
             self.assertIsNone(ctx.kits["sdlc"].kit_root)
@@ -459,7 +459,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
 
     def test_all_resource_paths_exist_passes(self):
         """Registered kit with all resource bindings pointing to existing paths → PASS."""
-        from studio.utils.context import CypilotContext, set_context
+        from studio.utils.context import StudioContext, set_context
         from studio.commands.validate_kits import run_validate_kits
 
         with TemporaryDirectory() as td:
@@ -483,7 +483,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 },
             )
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             set_context(ctx)
 
@@ -499,7 +499,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
 
     def test_legacy_kit_no_resource_check(self):
         """Legacy kit without resource bindings skips resource path verification."""
-        from studio.utils.context import CypilotContext, set_context
+        from studio.utils.context import StudioContext, set_context
         from studio.commands.validate_kits import run_validate_kits
 
         with TemporaryDirectory() as td:
@@ -533,7 +533,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             set_context(ctx)
 
@@ -548,7 +548,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 set_context(None)
 
     def test_verbose_report_uses_authoritative_adapter_relative_custom_root(self):
-        from studio.utils.context import CypilotContext, set_context
+        from studio.utils.context import StudioContext, set_context
         from studio.commands.validate_kits import run_validate_kits
 
         with TemporaryDirectory() as td:
@@ -582,7 +582,7 @@ class TestValidateKitsResourcePaths(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             set_context(ctx)
 
@@ -720,7 +720,7 @@ class TestValidateKitsFilterWithResources(unittest.TestCase):
 
     def test_filter_skips_other_kit_resources(self):
         """With kit_filter, only the filtered kit's resources are verified."""
-        from studio.utils.context import CypilotContext, set_context
+        from studio.utils.context import StudioContext, set_context
         from studio.commands.validate_kits import run_validate_kits
 
         with TemporaryDirectory() as td:
@@ -772,7 +772,7 @@ class TestValidateKitsFilterWithResources(unittest.TestCase):
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             set_context(ctx)
 
@@ -801,7 +801,7 @@ class TestValidateCustomKitRootMetadata(unittest.TestCase):
     def test_cmd_validate_uses_authoritative_constraints_path_for_custom_root(self):
         from _test_helpers import write_constraints_toml
         from studio.commands.validate import cmd_validate
-        from studio.utils.context import CypilotContext, set_context
+        from studio.utils.context import StudioContext, set_context
         from studio.utils import toml_utils
 
         with TemporaryDirectory() as td:
@@ -857,7 +857,7 @@ class TestValidateCustomKitRootMetadata(unittest.TestCase):
                 }],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             set_context(ctx)
 

@@ -27,6 +27,6 @@ def test_sidecar_mode_returns_separate_js():
 
 
 def test_viewer_assets_present():
-    base = Path(__file__).resolve().parents[1] / "skills" / "cypilot" / "scripts" / "cypilot" / "commands" / "map" / "assets"
+    base = Path(__file__).resolve().parents[1] / "skills" / "studio" / "scripts" / "studio" / "commands" / "map" / "assets"
     assert (base / "viewer.js").stat().st_size > 100
     assert (base / "viewer.css").stat().st_size > 50

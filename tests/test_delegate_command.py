@@ -18,7 +18,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.commands.delegate import cmd_delegate
 from studio.ralphex_export import run_delegation
@@ -350,15 +350,15 @@ class TestCLIWiring:
 
     def test_delegate_in_all_commands_list(self):
         """delegate appears in the all_commands list used by cli.main."""
-        from cypilot import cli as cli_mod
+        from studio import cli as cli_mod
         # Verify delegate is routable by checking the dispatch succeeds
         assert hasattr(cli_mod, "_cmd_delegate"), "cli module must expose _cmd_delegate"
 
     def test_delegate_dispatches_to_handler(self):
         """cli.main routes 'delegate' to _cmd_delegate."""
-        from cypilot import cli as cli_mod
+        from studio import cli as cli_mod
         with patch.object(cli_mod, "_cmd_delegate", return_value=0) as mock_handler, \
-             patch("studio.utils.context.CypilotContext.load", return_value=None):
+             patch("studio.utils.context.StudioContext.load", return_value=None):
             rc = cli_mod.main(["delegate", "/some/plan"])
         mock_handler.assert_called_once_with(["/some/plan"])
 

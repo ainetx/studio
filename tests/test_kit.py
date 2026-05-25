@@ -1706,7 +1706,7 @@ class TestGithubHeaders(unittest.TestCase):
         from studio.commands.kit import _github_headers
         with patch.dict("os.environ", {}, clear=True):
             h = _github_headers()
-            self.assertEqual(h["User-Agent"], "cypilot-kit-installer")
+            self.assertEqual(h["User-Agent"], "studio-kit-installer")
             self.assertNotIn("Authorization", h)
 
     def test_with_token(self):

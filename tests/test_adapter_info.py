@@ -87,7 +87,7 @@ class TestAdapterInfoCommand(unittest.TestCase):
             self.assertIn("domain-model", output["rules"])
             self.assertIn("tech-stack", output["rules"])
             self.assertTrue(output["has_config"])
-            self.assertIn(".cypilot-adapter", output["cypilot_dir"])
+            self.assertIn(".cypilot-adapter", output["relative_path"])
             self.assertIn("artifacts_registry_path", output)
             self.assertIn("artifacts_registry", output)
             self.assertIsNone(output.get("artifacts_registry_error"))
@@ -304,8 +304,8 @@ class TestAdapterInfoCommand(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertEqual(output["status"], "FOUND")
             self.assertEqual(output["project_name"], "RealProject")
-            self.assertIn(".cypilot-adapter", output["cypilot_dir"])
-            self.assertNotIn("Cypilot", output["cypilot_dir"])
+            self.assertIn(".cypilot-adapter", output["relative_path"])
+            self.assertNotIn("Cypilot", output["relative_path"])
 
 
 class TestAdapterHelperFunctions(unittest.TestCase):

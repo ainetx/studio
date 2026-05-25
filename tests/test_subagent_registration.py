@@ -14,7 +14,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.commands.agents import (
     _agent_template_claude,
@@ -85,14 +85,14 @@ class TestDiscoverKitAgents(unittest.TestCase):
     """Tests for _discover_kit_agents() — core skill + kit discovery."""
 
     def _make_core_tree(self, root: Path) -> Path:
-        """Build cypilot tree with agents in core skill area."""
+        """Build studio tree with agents in core skill area."""
         cypilot = root / "cypilot_src"
-        skill_dir = cypilot / "skills" / "cypilot"
+        skill_dir = cypilot / "skills" / "studio"
         _make_kit(skill_dir)
         return cypilot
 
     def _make_kit_tree(self, root: Path, kit_name: str = "sdlc") -> Path:
-        """Build cypilot tree with agents in a kit."""
+        """Build studio tree with agents in a kit."""
         cypilot = root / "cypilot_src"
         kit_dir = cypilot / "config" / "kits" / kit_name
         _make_kit(kit_dir)
@@ -144,7 +144,7 @@ class TestDiscoverKitAgents(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             cypilot = root / "cypilot_src"
-            (cypilot / "skills" / "cypilot").mkdir(parents=True)
+            (cypilot / "skills" / "studio").mkdir(parents=True)
             (cypilot / "config" / "kits").mkdir(parents=True)
             agents = _discover_kit_agents(cypilot, root)
             self.assertEqual(agents, [])
@@ -227,7 +227,7 @@ class TestDiscoverKitAgents(unittest.TestCase):
             root = Path(tmpdir)
             cypilot = root / "cypilot_src"
             # Core agent
-            skill_dir = cypilot / "skills" / "cypilot"
+            skill_dir = cypilot / "skills" / "studio"
             skill_dir.mkdir(parents=True)
             (skill_dir / "x.md").write_text("core prompt", encoding="utf-8")
             (skill_dir / "agents.toml").write_text(
@@ -400,13 +400,13 @@ class TestSubagentIntegration(unittest.TestCase):
     """Integration tests for subagent generation via _process_single_agent()."""
 
     def _setup_cypilot_tree(self, root: Path) -> Path:
-        """Create minimal cypilot structure with core skill agents."""
+        """Create minimal studio structure with core skill agents."""
         (root / ".git").mkdir(exist_ok=True)
         cypilot = root / "cypilot_src"
-        skill_dir = cypilot / "skills" / "cypilot"
+        skill_dir = cypilot / "skills" / "studio"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
-            "---\nname: cypilot\ndescription: Cypilot core skill\n---\n\nSkill content.\n",
+            "---\nname: studio\ndescription: Constructor Studio core skill\n---\n\nSkill content.\n",
             encoding="utf-8",
         )
         # Core agents in skills/cypilot/

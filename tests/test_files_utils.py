@@ -189,7 +189,7 @@ class TestFindAdapterDirectory(unittest.TestCase):
             adapter_dir.mkdir()
             (adapter_dir / "AGENTS.md").write_text("# Constructor Studio Adapter: P\n\n**Extends**: `../Cypilot/AGENTS.md`\n", encoding="utf-8")
 
-            found = find_adapter_directory(root, cypilot_root=cypilot_root)
+            found = find_adapter_directory(root, studio_root=cypilot_root)
             self.assertIsNotNone(found)
             self.assertEqual(found.resolve(), adapter_dir.resolve())
 

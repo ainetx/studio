@@ -15,7 +15,7 @@ from tempfile import TemporaryDirectory
 from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.cli import main
 
@@ -340,9 +340,9 @@ class TestCLIInitCommand(unittest.TestCase):
             self.assertEqual(out.get("status"), "PASS")
             # Init now creates root AGENTS.md and cypilot/ directory with config/
             self.assertTrue((project / "AGENTS.md").exists())
-            cypilot_dir_path = Path(out.get("cypilot_dir", ""))
-            self.assertTrue(cypilot_dir_path.is_dir())
-            self.assertTrue((cypilot_dir_path / "config" / "AGENTS.md").exists())
+            studio_dir_path = Path(out.get("studio_dir", ""))
+            self.assertTrue(studio_dir_path.is_dir())
+            self.assertTrue((studio_dir_path / "config" / "AGENTS.md").exists())
 
             stdout = io.StringIO()
             with redirect_stdout(stdout):
@@ -401,8 +401,8 @@ class TestCLIInitCommand(unittest.TestCase):
                 out = json.loads(stdout.getvalue())
                 self.assertEqual(out.get("status"), "PASS")
                 self.assertTrue((project / "AGENTS.md").exists())
-                cypilot_dir_path = Path(out.get("cypilot_dir", ""))
-                self.assertTrue(cypilot_dir_path.is_dir())
+                studio_dir_path = Path(out.get("studio_dir", ""))
+                self.assertTrue(studio_dir_path.is_dir())
             finally:
                 os.chdir(orig_cwd)
 
@@ -463,7 +463,7 @@ class TestCLIAgentsCommand(unittest.TestCase):
             self.assertGreater(agent_r.get("workflows", {}).get("counts", {}).get("created", 0), 0)
 
             # Ensure description is always double-quoted in generated skill frontmatter
-            skill_file = root / ".agents" / "skills" / "cf-constructor" / "SKILL.md"
+            skill_file = root / ".agents" / "skills" / "cf" / "SKILL.md"
             self.assertTrue(skill_file.exists())
             content = skill_file.read_text(encoding="utf-8")
             self.assertRegex(content, r"(?m)^description:\s+\".*\"\s*$", msg="description not quoted in .agents skill output")
@@ -478,15 +478,15 @@ class TestCLIAgentsCommand(unittest.TestCase):
             legacy_commands = root / ".claude" / "commands"
             legacy_commands.mkdir(parents=True)
             (legacy_commands / "cf-constructor-plan.md").write_text(
-                "# /cf-constructor-plan\n\nALWAYS open and follow `{cf-studio-path}/.core/workflows/plan.md`\n",
+                "# /cf-constructor-plan\n\nALWAYS open and follow `{cf-constructor-path}/.core/workflows/plan.md`\n",
                 encoding="utf-8",
             )
             (legacy_commands / "cf-constructor-workspace.md").write_text(
-                "# /cf-constructor-workspace\n\nALWAYS open and follow `{cf-studio-path}/.core/workflows/workspace.md`\n",
+                "# /cf-constructor-workspace\n\nALWAYS open and follow `{cf-constructor-path}/.core/workflows/workspace.md`\n",
                 encoding="utf-8",
             )
             (legacy_commands / "cf-constructor-generate.md").write_text(
-                "# /cf-constructor-generate\n\nALWAYS open and follow `{cf-studio-path}/.core/workflows/generate.md`\n",
+                "# /cf-constructor-generate\n\nALWAYS open and follow `{cf-constructor-path}/.core/workflows/generate.md`\n",
                 encoding="utf-8",
             )
 
@@ -497,12 +497,12 @@ class TestCLIAgentsCommand(unittest.TestCase):
             out = json.loads(stdout.getvalue())
 
             # One of the generated skill files should contain quoted description
-            skill = root / ".claude" / "skills" / "cf-constructor-generate" / "SKILL.md"
+            skill = root / ".claude" / "skills" / "cf-generate" / "SKILL.md"
             self.assertTrue(skill.exists())
             txt = skill.read_text(encoding="utf-8")
             self.assertRegex(txt, r"(?m)^description:\s+\".*\"\s*$", msg="description not quoted in claude skill file")
 
-            plan_skill = root / ".claude" / "skills" / "cf-constructor-plan" / "SKILL.md"
+            plan_skill = root / ".claude" / "skills" / "cf-plan" / "SKILL.md"
             self.assertTrue(plan_skill.exists())
             self.assertRegex(
                 plan_skill.read_text(encoding="utf-8"),
@@ -510,7 +510,7 @@ class TestCLIAgentsCommand(unittest.TestCase):
                 msg="description not quoted in claude plan skill file",
             )
 
-            workspace_skill = root / ".claude" / "skills" / "cf-constructor-workspace" / "SKILL.md"
+            workspace_skill = root / ".claude" / "skills" / "cf-workspace" / "SKILL.md"
             self.assertTrue(workspace_skill.exists())
             self.assertRegex(
                 workspace_skill.read_text(encoding="utf-8"),
@@ -864,11 +864,11 @@ class TestCLIAgentsCommand(unittest.TestCase):
             self.assertEqual(openai_result.get("status"), "PASS")
 
             expected_skills = [
-                root / ".agents" / "skills" / "cf-constructor" / "SKILL.md",
-                root / ".agents" / "skills" / "cf-constructor-generate" / "SKILL.md",
-                root / ".agents" / "skills" / "cf-constructor-analyze" / "SKILL.md",
-                root / ".agents" / "skills" / "cf-constructor-plan" / "SKILL.md",
-                root / ".agents" / "skills" / "cf-constructor-workspace" / "SKILL.md",
+                root / ".agents" / "skills" / "cf" / "SKILL.md",
+                root / ".agents" / "skills" / "cf-generate" / "SKILL.md",
+                root / ".agents" / "skills" / "cf-analyze" / "SKILL.md",
+                root / ".agents" / "skills" / "cf-plan" / "SKILL.md",
+                root / ".agents" / "skills" / "cf-workspace" / "SKILL.md",
             ]
             for skill_file in expected_skills:
                 self.assertTrue(
@@ -888,7 +888,7 @@ class TestCLIAgentsCommand(unittest.TestCase):
 
             from studio.commands.agents import _parse_frontmatter
 
-            for skill_name in ("cf-constructor", "cf-constructor-generate", "cf-constructor-analyze", "cf-constructor-plan", "cf-constructor-workspace"):
+            for skill_name in ("cf", "cf-generate", "cf-analyze", "cf-plan", "cf-workspace"):
                 skill_file = root / ".agents" / "skills" / skill_name / "SKILL.md"
                 fm = _parse_frontmatter(skill_file)
                 self.assertTrue(fm.get("name", "").strip(),
@@ -1427,7 +1427,7 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
 
             self._run_agents("windsurf", root, root)
 
-            proxy = root / ".windsurf" / "workflows" / "cf-constructor-generate.md"
+            proxy = root / ".windsurf" / "workflows" / "cf-generate.md"
             self.assertTrue(proxy.exists())
             content = proxy.read_text(encoding="utf-8")
             self.assertIn("{cf-studio-path}/", content, "Workflow proxy must use {cf-studio-path}/ path prefix")
@@ -1443,7 +1443,7 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
 
             self._run_agents("windsurf", root, root)
 
-            skill = root / ".agents" / "skills" / "cf-constructor" / "SKILL.md"
+            skill = root / ".agents" / "skills" / "cf" / "SKILL.md"
             self.assertTrue(skill.exists())
             content = skill.read_text(encoding="utf-8")
             self.assertIn("{cf-studio-path}/", content, "Skill output must use {cf-studio-path}/ path prefix")
@@ -1453,27 +1453,25 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
         """All supported agents must generate files with {cf-studio-path}/ paths, not relative traversal."""
         agents_and_files = {
             "windsurf": [
-                ".windsurf/workflows/cf-constructor-generate.md",
-                ".agents/skills/cf-constructor/SKILL.md",
-                ".windsurf/workflows/cf-constructor.md",
+                ".windsurf/workflows/cf-generate.md",
+                ".agents/skills/cf/SKILL.md",
             ],
             "claude": [
-                ".claude/skills/cf-constructor/SKILL.md",
-                ".claude/skills/cf-constructor-generate/SKILL.md",
+                ".claude/skills/cf/SKILL.md",
+                ".claude/skills/cf-generate/SKILL.md",
             ],
             "copilot": [
-                ".agents/skills/cf-constructor/SKILL.md",
+                ".agents/skills/cf/SKILL.md",
                 ".github/copilot-instructions.md",
-                ".github/prompts/cf-constructor.prompt.md",
-                ".github/prompts/cf-constructor-generate.prompt.md",
+                ".github/prompts/cf.prompt.md",
             ],
             "cursor": [
-                ".cursor/commands/cf-constructor-generate.md",
-                ".agents/skills/cf-constructor/SKILL.md",
-                ".cursor/commands/cf-constructor.md",
+                ".cursor/commands/cf-generate.md",
+                ".agents/skills/cf/SKILL.md",
+                ".cursor/commands/cf.md",
             ],
             "openai": [
-                ".agents/skills/cf-constructor/SKILL.md",
+                ".agents/skills/cf/SKILL.md",
             ],
         }
 
@@ -1531,17 +1529,17 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
                 exit_code = main(["generate-agents", "--agent", "windsurf", "--root", str(root), "--cf-constructor-root", str(cypilot_root)])
             self.assertEqual(exit_code, 0)
 
-            # cypilot/ must have been created inside the project (default name)
-            local_dot = root / "cypilot"
-            self.assertTrue(local_dot.is_dir(), "cypilot/ must exist")
-            self.assertTrue((local_dot / ".core" / "workflows").is_dir(), "cypilot/.core/workflows/ must exist")
+            # studio/ must have been created inside the project (default name)
+            local_dot = root / "studio"
+            self.assertTrue(local_dot.is_dir(), "studio/ must exist")
+            self.assertTrue((local_dot / ".core" / "workflows").is_dir(), "studio/.core/workflows/ must exist")
 
             # JSON output must report the copy
             out = json.loads(stdout.getvalue())
-            self.assertEqual(out.get("cypilot_copy", {}).get("action"), "copied")
+            self.assertEqual(out.get("studio_copy", {}).get("action"), "copied")
 
             # Proxy must use {cf-studio-path}/... paths, not absolute paths
-            proxy = root / ".windsurf" / "workflows" / "cf-constructor-generate.md"
+            proxy = root / ".windsurf" / "workflows" / "cf-generate.md"
             self.assertTrue(proxy.exists())
             content = proxy.read_text(encoding="utf-8")
             self.assertIn("{cf-studio-path}/", content, "Proxy must use {cf-studio-path}/ path")
@@ -1550,26 +1548,26 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
             self.assertNotRegex(content, r"`/[a-zA-Z/]", "Must not contain absolute paths in backticks")
 
     def test_cypilot_outside_no_copy_when_existing(self):
-        """When cypilot/ already has valid markers, skip copy."""
+        """When studio/ already has valid markers, skip copy."""
         with TemporaryDirectory() as project_tmpdir, TemporaryDirectory() as cypilot_tmpdir:
             root = Path(project_tmpdir)
             cypilot_root = Path(cypilot_tmpdir)
             (root / ".git").mkdir()
             self._setup_external_cypilot(cypilot_root)
 
-            # Pre-populate cypilot/ with valid markers (needs AGENTS.md + requirements/ + workflows/ for _is_cypilot_root)
-            local_dot = root / "cypilot"
+            # Pre-populate studio/ with valid markers (needs AGENTS.md + requirements/ + workflows/ for _is_studio_root)
+            local_dot = root / "studio"
             (local_dot / "workflows").mkdir(parents=True, exist_ok=True)
             (local_dot / "requirements").mkdir(parents=True, exist_ok=True)
             (local_dot / "AGENTS.md").write_text("# Existing\n", encoding="utf-8")
             # Also need skills for the agents command to work
-            (local_dot / "skills" / "cypilot").mkdir(parents=True, exist_ok=True)
-            (local_dot / "skills" / "cypilot" / "SKILL.md").write_text(
-                "---\nname: cypilot\ndescription: Local cypilot\n---\n# Cypilot\n",
+            (local_dot / "skills" / "studio").mkdir(parents=True, exist_ok=True)
+            (local_dot / "skills" / "studio" / "SKILL.md").write_text(
+                "---\nname: studio\ndescription: Local studio\n---\n# Studio\n",
                 encoding="utf-8",
             )
             (local_dot / "workflows" / "generate.md").write_text(
-                "---\ncypilot: true\ntype: workflow\nname: cypilot-generate\ndescription: Generate\n---\n# Generate\n",
+                "---\ntype: workflow\nname: cf-generate\ndescription: Generate\n---\n# Generate\n",
                 encoding="utf-8",
             )
 
@@ -1580,8 +1578,8 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
 
             out = json.loads(stdout.getvalue())
             # Copy should be skipped — action "none" with reason
-            self.assertEqual(out["cypilot_copy"]["action"], "none")
-            self.assertEqual(out["cypilot_copy"]["reason"], "existing_installation")
+            self.assertEqual(out["studio_copy"]["action"], "none")
+            self.assertEqual(out["studio_copy"]["reason"], "existing_installation")
 
             # Original file must be unchanged
             self.assertEqual(
@@ -1604,10 +1602,10 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
             self.assertEqual(exit_code, 0)
 
             out = json.loads(stdout.getvalue())
-            self.assertEqual(out.get("cypilot_copy", {}).get("action"), "would_copy")
+            self.assertEqual(out.get("studio_copy", {}).get("action"), "would_copy")
 
             # No files should have been written
-            self.assertFalse((root / "cypilot").exists(), "cypilot/ must not be created in dry-run")
+            self.assertFalse((root / "studio").exists(), "studio/ must not be created in dry-run")
 
     def test_cypilot_outside_submodule_not_overwritten(self):
         """When cypilot/.git exists (submodule), do not overwrite."""
@@ -1617,19 +1615,19 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
             (root / ".git").mkdir()
             self._setup_external_cypilot(cypilot_root)
 
-            # Simulate submodule: cypilot/.git exists
-            local_dot = root / "cypilot"
+            # Simulate submodule: studio/.git exists
+            local_dot = root / "studio"
             local_dot.mkdir(parents=True, exist_ok=True)
-            (local_dot / ".git").write_text("gitdir: ../.git/modules/cypilot\n", encoding="utf-8")
+            (local_dot / ".git").write_text("gitdir: ../.git/modules/studio\n", encoding="utf-8")
             # Also need skills for the agents command to work
-            (local_dot / "skills" / "cypilot").mkdir(parents=True, exist_ok=True)
-            (local_dot / "skills" / "cypilot" / "SKILL.md").write_text(
-                "---\nname: cypilot\ndescription: Submodule cypilot\n---\n# Cypilot\n",
+            (local_dot / "skills" / "studio").mkdir(parents=True, exist_ok=True)
+            (local_dot / "skills" / "studio" / "SKILL.md").write_text(
+                "---\nname: studio\ndescription: Submodule studio\n---\n# Studio\n",
                 encoding="utf-8",
             )
             (local_dot / "workflows").mkdir(parents=True, exist_ok=True)
             (local_dot / "workflows" / "generate.md").write_text(
-                "---\ncypilot: true\ntype: workflow\nname: cypilot-generate\ndescription: Generate\n---\n# Generate\n",
+                "---\ntype: workflow\nname: cf-generate\ndescription: Generate\n---\n# Generate\n",
                 encoding="utf-8",
             )
 
@@ -1640,8 +1638,8 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
 
             out = json.loads(stdout.getvalue())
             # Copy should be skipped — action "none" with reason
-            self.assertEqual(out["cypilot_copy"]["action"], "none")
-            self.assertEqual(out["cypilot_copy"]["reason"], "existing_submodule")
+            self.assertEqual(out["studio_copy"]["action"], "none")
+            self.assertEqual(out["studio_copy"]["reason"], "existing_submodule")
 
     def test_cypilot_inside_project_no_copy(self):
         """When cypilot_root is anywhere inside project_root, no copy must happen."""
@@ -1672,13 +1670,13 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
                     self.assertEqual(exit_code, 0, f"Failed for {rel}: {stdout.getvalue()}")
 
                     out = json.loads(stdout.getvalue())
-                    # cypilot_copy action must be "none" — no copy needed for internal path
+                    # studio_copy action must be "none" — no copy needed for internal path
                     self.assertEqual(
-                        out["cypilot_copy"]["action"], "none",
+                        out["studio_copy"]["action"], "none",
                         f"No copy should happen when cypilot is at {rel} inside project",
                     )
                     # Proxies must use {cf-studio-path}/... paths, not absolute
-                    proxy = root / ".windsurf" / "workflows" / "cf-constructor-generate.md"
+                    proxy = root / ".windsurf" / "workflows" / "cf-generate.md"
                     self.assertTrue(proxy.exists(), f"Proxy not created for {rel}")
                     content = proxy.read_text(encoding="utf-8")
                     self.assertIn(
@@ -1906,7 +1904,7 @@ class TestCLIErrorHandling(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         out = json.loads(stdout.getvalue())
-        self.assertIn("cfc", out["usage"])
+        self.assertIn("cfs", out["usage"])
         self.assertIn("validate", out["commands"])
 
 
@@ -5463,9 +5461,9 @@ class TestCLIAgentsBugFixes(unittest.TestCase):
         Uses an external cypilot-root (separate from project root) to exercise the
         original mutation path where _ensure_cypilot_local would have triggered a copy.
         """
-        with TemporaryDirectory() as project_dir, TemporaryDirectory() as cypilot_dir:
+        with TemporaryDirectory() as project_dir, TemporaryDirectory() as studio_dir:
             root = Path(project_dir)
-            cypilot_ext = Path(cypilot_dir)
+            cypilot_ext = Path(studio_dir)
             (root / ".git").mkdir()
             self._write_minimal_cypilot_skill(root)
             # Make cypilot_ext a recognisable cypilot root (needs skills/cypilot/SKILL.md)
@@ -5580,7 +5578,7 @@ class TestCLIAgentsBugFixes(unittest.TestCase):
             self._write_minimal_cypilot_skill(root)
             self._write_workflows_with_frontmatter(root)
 
-            agents_toml_dir = root / "skills" / "cypilot"
+            agents_toml_dir = root / "skills" / "studio"
             agents_toml_dir.mkdir(parents=True, exist_ok=True)
             # TOML list value for prompt_file — this would crash path ops if not type-guarded
             (agents_toml_dir / "agents.toml").write_text(

@@ -473,7 +473,7 @@ def test_skip_dirs_for_meta_with_adapter(tmp_path):
     from studio.commands.map.cli import skip_dirs_for_meta
     # Write a CLAUDE.md with cypilot_path
     claude_md = tmp_path / "CLAUDE.md"
-    claude_md.write_text('cypilot_path = ".mybootstrap"\n', encoding="utf-8")
+    claude_md.write_text('cf-path = ".mybootstrap"\n', encoding="utf-8")
     skips = skip_dirs_for_meta(tmp_path)
     assert ".mybootstrap" in skips
 

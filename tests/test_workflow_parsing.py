@@ -47,6 +47,9 @@ def test_validate_all_workflows_have_required_structure():
     workflow_files = [f for f in all_files if f.name not in exclude_files]
     assert len(workflow_files) > 0, "No workflow files found"
 
+    # Thin pass-through workflows have no numbered steps structure
+    no_steps_allowed = {'explain.md', 'auto-config.md', 'brainstorm.md'}
+
     errors = []
 
     for workflow_path in workflow_files:
@@ -57,13 +60,14 @@ def test_validate_all_workflows_have_required_structure():
             errors.append(f"{workflow_path.name}: Missing type: workflow frontmatter")
 
         # All workflows must have some form of steps/phases
-        has_steps = any(s in content for s in ['## Steps', '## Step', '## Phase'])
-        if not has_steps:
-            errors.append(f"{workflow_path.name}: Missing Steps/Phase section")
+        if workflow_path.name not in no_steps_allowed:
+            has_steps = any(s in content for s in ['## Steps', '## Step', '## Phase'])
+            if not has_steps:
+                errors.append(f"{workflow_path.name}: Missing Steps/Phase section")
 
-        # All workflows must have cf-constructor: true frontmatter
-        if 'cf-constructor: true' not in content:
-            errors.append(f"{workflow_path.name}: Missing cypilot: true frontmatter")
+        # All workflows must have cf: true frontmatter (or legacy cf-constructor: true)
+        if 'cf: true' not in content and 'cf-constructor: true' not in content:
+            errors.append(f"{workflow_path.name}: Missing cf: true frontmatter")
 
     if errors:
         pytest.fail(f"Workflow structure validation failed:\n" + "\n".join(errors))

@@ -1,7 +1,7 @@
 """Tests for cypilot.utils.fixing — validation output enrichment.
 
 Covers:
-- enrich_issues: cypilot: prefix, path stripping, fixing_prompt generation
+- enrich_issues: studio:prefix, path stripping, fixing_prompt generation
 - enrich_issues strip_path=False: path key preserved after enrichment
 - _rel_loc: absolute → relative path conversion
 - _headings_hint: heading context in prompts
@@ -57,7 +57,7 @@ class TestEnrichIssuesBasic:
     def test_adds_cypilot_prefix(self):
         issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
         enrich_issues(issues, project_root=PROJECT_ROOT)
-        assert issues[0]["fixing_prompt"].startswith("cypilot: ")
+        assert issues[0]["fixing_prompt"].startswith("studio:")
 
     def test_strips_path_key(self):
         issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
@@ -89,7 +89,7 @@ class TestEnrichIssuesBasic:
         ]
         enrich_issues(issues, project_root=PROJECT_ROOT)
         assert all("fixing_prompt" in i for i in issues)
-        assert all(i["fixing_prompt"].startswith("cypilot: ") for i in issues)
+        assert all(i["fixing_prompt"].startswith("studio:") for i in issues)
 
     def test_without_project_root_uses_absolute_path(self):
         issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
@@ -679,7 +679,7 @@ class TestStripPath:
         issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
         enrich_issues(issues, project_root=PROJECT_ROOT, strip_path=False)
         assert "fixing_prompt" in issues[0]
-        assert issues[0]["fixing_prompt"].startswith("cypilot: ")
+        assert issues[0]["fixing_prompt"].startswith("studio:")
 
     def test_strip_path_default_is_true(self):
         """Calling without strip_path kwarg strips the path (backward compat)."""

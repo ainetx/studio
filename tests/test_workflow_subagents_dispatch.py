@@ -24,43 +24,43 @@ import pytest
 # ---------------------------------------------------------------------------
 # The sub-agents the thin-orchestrator workflows dispatch.
 #
-# Source of truth: skills/cypilot/agents.toml. We deliberately pin the
+# Source of truth: skills/studio/agents.toml. We deliberately pin the
 # canonical names so a rename in agents.toml without an accompanying workflow
 # update breaks this test.
 # ---------------------------------------------------------------------------
 WORKFLOW_SUBAGENTS: tuple[str, ...] = (
-    "cf-constructor-diff-scope-resolver",
-    "cf-constructor-deterministic-validator",
-    "cf-constructor-semantic-reviewer-artifact",
-    "cf-constructor-semantic-reviewer-code",
-    "cf-constructor-code-bug-finder",
-    "cf-constructor-semantic-reviewer-prompt",
-    "cf-constructor-prompt-bug-finder",
-    "cf-constructor-semantic-reviewer-consistency",
-    "cf-constructor-brainstorm-facilitator",
-    "cf-constructor-brainstorm-expert",
-    "cf-constructor-generate-collector",
-    "cf-constructor-analyze-planner",
-    "cf-constructor-generate-planner",
-    "cf-constructor-generate-author",
-    "cf-constructor-generate-author-junior",
-    "cf-constructor-generate-author-middle",
-    "cf-constructor-generate-author-senior",
-    "cf-constructor-generate-author-lead",
-    "cf-constructor-generate-coder-casual",
-    "cf-constructor-generate-coder-smart",
-    "cf-constructor-generate-prompt-engineer-casual",
-    "cf-constructor-generate-prompt-engineer-smart",
+    "cf-diff-scope-resolver",
+    "cf-deterministic-validator",
+    "cf-semantic-reviewer-artifact",
+    "cf-semantic-reviewer-code",
+    "cf-code-bug-finder",
+    "cf-semantic-reviewer-prompt",
+    "cf-prompt-bug-finder",
+    "cf-semantic-reviewer-consistency",
+    "cf-brainstorm-facilitator",
+    "cf-brainstorm-expert",
+    "cf-generate-collector",
+    "cf-analyze-planner",
+    "cf-generate-planner",
+    "cf-generate-author",
+    "cf-generate-author-junior",
+    "cf-generate-author-middle",
+    "cf-generate-author-senior",
+    "cf-generate-author-lead",
+    "cf-generate-coder-casual",
+    "cf-generate-coder-smart",
+    "cf-generate-prompt-engineer-casual",
+    "cf-generate-prompt-engineer-smart",
 )
 
 FINDING_EMITTING_SUBAGENTS = {
-    "cf-constructor-deterministic-validator",
-    "cf-constructor-semantic-reviewer-artifact",
-    "cf-constructor-semantic-reviewer-code",
-    "cf-constructor-code-bug-finder",
-    "cf-constructor-semantic-reviewer-prompt",
-    "cf-constructor-prompt-bug-finder",
-    "cf-constructor-semantic-reviewer-consistency",
+    "cf-deterministic-validator",
+    "cf-semantic-reviewer-artifact",
+    "cf-semantic-reviewer-code",
+    "cf-code-bug-finder",
+    "cf-semantic-reviewer-prompt",
+    "cf-prompt-bug-finder",
+    "cf-semantic-reviewer-consistency",
 }
 
 
@@ -73,7 +73,7 @@ FINDING_EMITTING_SUBAGENTS = {
 #   * workflows/generate/phase-1-collect.md            (collector)
 #   * workflows/generate/phase-4-write.md              (author)
 DISPATCH_PAYLOADS: dict[str, dict] = {
-    "cf-constructor-diff-scope-resolver": {
+    "cf-diff-scope-resolver": {
         "worktree_path": "/repo/worktrees/feature",
         "commit_sha": "abc123",
         "base_ref": "abc123^",
@@ -81,13 +81,13 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "direct_targets": [],
         "review_intent": "review commit abc123 and worktree changes",
     },
-    "cf-constructor-deterministic-validator": {
+    "cf-deterministic-validator": {
         "target_paths": ["fixture/path.md"],
         "target_kinds": {"fixture/path.md": "artifact"},
         "rules_mode": "STRICT",
         "language_check_configured": True,
     },
-    "cf-constructor-semantic-reviewer-artifact": {
+    "cf-semantic-reviewer-artifact": {
         "target_paths": ["fixture/path.md"],
         "kit_rules_path": None,
         "checklist_path": None,
@@ -97,7 +97,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "rules_mode": "STRICT",
         "traceability_mode": "FULL",
     },
-    "cf-constructor-semantic-reviewer-code": {
+    "cf-semantic-reviewer-code": {
         "design_artifact_path": "fixture/design.md",
         "code_paths": ["fixture/mod.py"],
         "cross_ref_paths": [],
@@ -111,7 +111,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
             "risk_hotspots": [],
         },
     },
-    "cf-constructor-code-bug-finder": {
+    "cf-code-bug-finder": {
         "design_artifact_path": "fixture/design.md",
         "code_paths": ["fixture/mod.py"],
         # diff_scope intentionally None: code-bug-finder does not consume hunk-level scope
@@ -120,19 +120,19 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "rules_mode": "STRICT",
         "kit_rules_path": None,
     },
-    "cf-constructor-semantic-reviewer-prompt": {
+    "cf-semantic-reviewer-prompt": {
         "target_paths": ["fixture/prompt.md"],
         "kit_rules_path": None,
         "rules_mode": "STRICT",
         "cross_ref_paths": [],
     },
-    "cf-constructor-prompt-bug-finder": {
+    "cf-prompt-bug-finder": {
         "target_paths": ["fixture/prompt.md"],
         "kit_rules_path": None,
         "rules_mode": "STRICT",
         "cross_ref_paths": [],
     },
-    "cf-constructor-semantic-reviewer-consistency": {
+    "cf-semantic-reviewer-consistency": {
         # len(target_paths) >= 2 — see Consistency precondition in
         # workflows/generate/phase-5/phase-5.2-semantic.md
         "target_paths": ["fixture/a.md", "fixture/b.md"],
@@ -140,7 +140,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "kit_rules_path": None,
         "rules_mode": "STRICT",
     },
-    "cf-constructor-brainstorm-facilitator": {
+    "cf-brainstorm-facilitator": {
         "initial_topic": "fixture request summary",
         "kind": "artifact-kind",
         "rules_loaded": False,
@@ -149,7 +149,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "example_path": None,
         "project_ctx": "fixture project context (2-3 sentences in production).",
     },
-    "cf-constructor-brainstorm-expert": {
+    "cf-brainstorm-expert": {
         "persona": {
             "id": "E1",
             "persona": "Fixture Reviewer",
@@ -173,7 +173,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
             "topic_history": [],
         },
     },
-    "cf-constructor-generate-collector": {
+    "cf-generate-collector": {
         "kind": "artifact-kind",
         "name": "fixture-name",
         "rules_mode": "STRICT",
@@ -181,17 +181,17 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "pre_resolved_inputs": {},
         "open_questions": [],
     },
-    "cf-constructor-analyze-planner": {
+    "cf-analyze-planner": {
         "plan_mode": "memory",
         "target_type": "code",
         "mode": "change_review",
         "rules_mode": "STRICT",
         "target_paths": ["fixture/path.md"],
         "methodology_flags": {"PROMPT_REVIEW": True},
-        "available_reviewers": ["cf-constructor-semantic-reviewer-prompt"],
+        "available_reviewers": ["cf-semantic-reviewer-prompt"],
         "size_estimate_lines": 42,
     },
-    "cf-constructor-generate-planner": {
+    "cf-generate-planner": {
         "plan_mode": "memory",
         "kind": "artifact-kind",
         "name": "fixture-name",
@@ -199,9 +199,9 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "system": "fixture-system",
         "target_paths": ["fixture/out.md"],
         "inputs": {"Section": "value"},
-        "available_authors": ["cf-constructor-generate-author-middle"],
+        "available_authors": ["cf-generate-author-middle"],
     },
-    "cf-constructor-generate-author": {
+    "cf-generate-author": {
         "mode": "create",
         "kind": "artifact-kind",
         "name": "fixture-name",
@@ -216,7 +216,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
         "contributing_guide": None,
     },
-    "cf-constructor-generate-author-junior": {
+    "cf-generate-author-junior": {
         "mode": "fix",
         "kind": "artifact-kind",
         "name": "fixture-name",
@@ -231,7 +231,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
         "contributing_guide": None,
     },
-    "cf-constructor-generate-author-middle": {
+    "cf-generate-author-middle": {
         "mode": "fix",
         "kind": "artifact-kind",
         "name": "fixture-name",
@@ -246,7 +246,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
         "contributing_guide": None,
     },
-    "cf-constructor-generate-author-senior": {
+    "cf-generate-author-senior": {
         "mode": "fix",
         "kind": "artifact-kind",
         "name": "fixture-name",
@@ -261,7 +261,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
         "contributing_guide": None,
     },
-    "cf-constructor-generate-author-lead": {
+    "cf-generate-author-lead": {
         "mode": "fix",
         "kind": "artifact-kind",
         "name": "fixture-name",
@@ -276,7 +276,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
         "contributing_guide": None,
     },
-    "cf-constructor-generate-coder-casual": {
+    "cf-generate-coder-casual": {
         "mode": "fix",
         "kind": "code",
         "name": "fixture-name",
@@ -289,7 +289,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
         "contributing_guide": None,
     },
-    "cf-constructor-generate-coder-smart": {
+    "cf-generate-coder-smart": {
         "mode": "fix",
         "kind": "code",
         "name": "fixture-name",
@@ -302,7 +302,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
         "contributing_guide": None,
     },
-    "cf-constructor-generate-prompt-engineer-casual": {
+    "cf-generate-prompt-engineer-casual": {
         "mode": "fix",
         "kind": "prompt",
         "name": "fixture-name",
@@ -314,7 +314,7 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
         "git_constraint": "Do not invoke any git tool. Do not run git commit, git add, or git stage. Edit in place only.",
         "contributing_guide": None,
     },
-    "cf-constructor-generate-prompt-engineer-smart": {
+    "cf-generate-prompt-engineer-smart": {
         "mode": "fix",
         "kind": "prompt",
         "name": "fixture-name",
@@ -329,14 +329,14 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
 }
 
 AUTHOR_WORKER_SUBAGENTS = {
-    "cf-constructor-generate-author-junior",
-    "cf-constructor-generate-author-middle",
-    "cf-constructor-generate-author-senior",
-    "cf-constructor-generate-author-lead",
-    "cf-constructor-generate-coder-casual",
-    "cf-constructor-generate-coder-smart",
-    "cf-constructor-generate-prompt-engineer-casual",
-    "cf-constructor-generate-prompt-engineer-smart",
+    "cf-generate-author-junior",
+    "cf-generate-author-middle",
+    "cf-generate-author-senior",
+    "cf-generate-author-lead",
+    "cf-generate-coder-casual",
+    "cf-generate-coder-smart",
+    "cf-generate-prompt-engineer-casual",
+    "cf-generate-prompt-engineer-smart",
 }
 
 
@@ -384,15 +384,15 @@ def _fake_invoke(agent_id: str, payload: dict) -> dict:
             "suggested_fix": "fixture fix",
             "mechanical_rationale": "fixture rationale",
         }]
-    elif agent_id == "cf-constructor-diff-scope-resolver":
+    elif agent_id == "cf-diff-scope-resolver":
         response["result"]["diff_scope"] = {
             "changed_files": payload.get("direct_targets", []),
             "review_targets": payload.get("direct_targets", []),
         }
-    elif agent_id == "cf-constructor-generate-collector":
+    elif agent_id == "cf-generate-collector":
         response["result"]["proposed_inputs"] = {"Section": "fixture answer"}
         response["result"]["open_questions"] = []
-    elif agent_id == "cf-constructor-brainstorm-facilitator":
+    elif agent_id == "cf-brainstorm-facilitator":
         response["result"]["proposed_panel"] = [
             {
                 "id": "E1",
@@ -419,7 +419,7 @@ def _fake_invoke(agent_id: str, payload: dict) -> dict:
             "section": "Fixture Section",
             "why_first": "fixture first topic rationale",
         }
-    elif agent_id == "cf-constructor-brainstorm-expert":
+    elif agent_id == "cf-brainstorm-expert":
         response["result"]["relevant"] = True
         if payload.get("fixture_result") == "sit_out":
             response["result"] = {
@@ -456,30 +456,30 @@ def _fake_invoke(agent_id: str, payload: dict) -> dict:
                 "text": "fixture next topic",
                 "why": "fixture follow-up rationale",
             }
-    elif agent_id == "cf-constructor-analyze-planner":
+    elif agent_id == "cf-analyze-planner":
         response["result"]["reviewer_plan_marker"] = "<!-- reviewer_plan -->"
         response["result"]["reviewer_plan"] = {
             "tasks": [{
                 "id": "RTASK-001",
-                "reviewer": "cf-constructor-semantic-reviewer-prompt",
+                "reviewer": "cf-semantic-reviewer-prompt",
                 "methodology": "prompt",
                 "path_partition": payload["target_paths"],
             }],
             "parallel_groups": [{"id": "G1", "task_ids": ["RTASK-001"], "depends_on": []}],
         }
-    elif agent_id == "cf-constructor-generate-planner":
+    elif agent_id == "cf-generate-planner":
         response["result"]["author_plan_marker"] = "<!-- author_plan -->"
         response["result"]["author_plan"] = {
             "tasks": [{
                 "id": "ATASK-001",
-                "author": "cf-constructor-generate-author-middle",
+                "author": "cf-generate-author-middle",
                 "target_paths": payload["target_paths"],
             }],
             "parallel_groups": [{"id": "G1", "task_ids": ["ATASK-001"], "depends_on": []}],
         }
-    elif agent_id == "cf-constructor-generate-author":
+    elif agent_id == "cf-generate-author":
         response["result"]["author_selection"] = {
-            "selected_author": "cf-constructor-generate-author-middle",
+            "selected_author": "cf-generate-author-middle",
             "author_domain": "artifact",
             "author_level": "middle",
             "dispatch_payload": {k: v for k, v in payload.items() if k != "inputs"},
@@ -525,22 +525,22 @@ def test_dispatch_round_trip(agent_id: str) -> None:
                 "finding-emitting workflow sub-agent findings must carry "
                 "per-finding mechanical_rationale for findings display"
             )
-        if agent_id == "cf-constructor-semantic-reviewer-code":
+        if agent_id == "cf-semantic-reviewer-code":
             assert "diff_scope" in payload, (
-                "cf-constructor-semantic-reviewer-code dispatch payload must include diff_scope"
+                "cf-semantic-reviewer-code dispatch payload must include diff_scope"
             )
             assert payload["diff_scope"] is not None, (
-                "diff_scope must be non-None for cf-constructor-semantic-reviewer-code"
+                "diff_scope must be non-None for cf-semantic-reviewer-code"
             )
-        elif agent_id == "cf-constructor-code-bug-finder":
+        elif agent_id == "cf-code-bug-finder":
             assert payload["diff_scope"] is None
     else:
         assert "findings" not in response["result"]
-        if agent_id == "cf-constructor-diff-scope-resolver":
+        if agent_id == "cf-diff-scope-resolver":
             assert "diff_scope" in response["result"]
-        elif agent_id == "cf-constructor-generate-collector":
+        elif agent_id == "cf-generate-collector":
             assert isinstance(response["result"].get("proposed_inputs"), dict)
-        elif agent_id == "cf-constructor-brainstorm-facilitator":
+        elif agent_id == "cf-brainstorm-facilitator":
             proposed_panel = response["result"].get("proposed_panel")
             seed_topic = response["result"].get("seed_topic")
             assert isinstance(proposed_panel, list)
@@ -553,7 +553,7 @@ def test_dispatch_round_trip(agent_id: str) -> None:
             assert seed_topic.get("text")
             assert seed_topic.get("section")
             assert "section" in seed_topic
-        elif agent_id == "cf-constructor-brainstorm-expert":
+        elif agent_id == "cf-brainstorm-expert":
             assert response["result"].get("relevant") is True
             questions = response["result"].get("questions")
             assert isinstance(questions, list) and questions
@@ -564,17 +564,17 @@ def test_dispatch_round_trip(agent_id: str) -> None:
             assert questions[0].get("decision_key")
             next_topic = response["result"].get("next_topic_proposal")
             assert isinstance(next_topic, dict) and next_topic.get("why")
-        elif agent_id == "cf-constructor-analyze-planner":
+        elif agent_id == "cf-analyze-planner":
             assert response["result"].get("reviewer_plan_marker") == "<!-- reviewer_plan -->"
             assert response["result"].get("reviewer_plan", {}).get("tasks")
             assert response["result"]["reviewer_plan"]["parallel_groups"], \
                 "analyze-planner must emit non-empty parallel_groups"
             assert response["result"]["reviewer_plan"]["parallel_groups"][0]["task_ids"], \
                 "parallel_groups[0] must reference at least one task_id"
-        elif agent_id == "cf-constructor-generate-planner":
+        elif agent_id == "cf-generate-planner":
             assert response["result"].get("author_plan_marker") == "<!-- author_plan -->"
             assert response["result"].get("author_plan", {}).get("tasks")
-        elif agent_id == "cf-constructor-generate-author":
+        elif agent_id == "cf-generate-author":
             selection = response["result"].get("author_selection")
             assert selection and selection.get("dispatch_payload")
             assert "author_selection" in response["result"]
@@ -599,16 +599,16 @@ def test_dispatch_round_trip(agent_id: str) -> None:
 def test_brainstorm_expert_challenge_mode_result_shape() -> None:
     """Challenge-mode experts must target only challenged decisions."""
     payload = {
-        **DISPATCH_PAYLOADS["cf-constructor-brainstorm-expert"],
+        **DISPATCH_PAYLOADS["cf-brainstorm-expert"],
         "mode": "challenge",
         "challenged_decisions": {
             "Fixture Section:E1:auth-choice": "fixture current auth choice",
             "Fixture Section:E1:data-retention": "fixture current retention",
         },
     }
-    response = _fake_invoke("cf-constructor-brainstorm-expert", payload)
+    response = _fake_invoke("cf-brainstorm-expert", payload)
 
-    assert response["agent_id"] == "cf-constructor-brainstorm-expert"
+    assert response["agent_id"] == "cf-brainstorm-expert"
     assert response["result"].get("relevant") is True
     assert response["result"].get("critique", "").strip()
     assert response["result"].get("next_topic_proposal") is None
@@ -624,12 +624,12 @@ def test_brainstorm_expert_challenge_mode_result_shape() -> None:
 def test_brainstorm_expert_can_sit_out_with_reason() -> None:
     """Brainstorm experts may explicitly sit out irrelevant topics."""
     payload = {
-        **DISPATCH_PAYLOADS["cf-constructor-brainstorm-expert"],
+        **DISPATCH_PAYLOADS["cf-brainstorm-expert"],
         "fixture_result": "sit_out",
     }
-    response = _fake_invoke("cf-constructor-brainstorm-expert", payload)
+    response = _fake_invoke("cf-brainstorm-expert", payload)
 
-    assert response["agent_id"] == "cf-constructor-brainstorm-expert"
+    assert response["agent_id"] == "cf-brainstorm-expert"
     assert response["result"].get("relevant") is False
     assert response["result"].get("reason", "").strip()
     assert "questions" not in response["result"]
@@ -640,16 +640,16 @@ def test_brainstorm_expert_can_sit_out_with_reason() -> None:
 def test_brainstorm_expert_challenge_mode_allows_critique_only() -> None:
     """Challenge-mode experts may critique without proposing an override."""
     payload = {
-        **DISPATCH_PAYLOADS["cf-constructor-brainstorm-expert"],
+        **DISPATCH_PAYLOADS["cf-brainstorm-expert"],
         "mode": "challenge",
         "fixture_result": "critique_only_challenge",
         "challenged_decisions": {
             "Fixture Section:E1:data-retention": "fixture current retention",
         },
     }
-    response = _fake_invoke("cf-constructor-brainstorm-expert", payload)
+    response = _fake_invoke("cf-brainstorm-expert", payload)
 
-    assert response["agent_id"] == "cf-constructor-brainstorm-expert"
+    assert response["agent_id"] == "cf-brainstorm-expert"
     assert response["result"].get("relevant") is True
     assert response["result"].get("questions") == []
     assert response["result"].get("critique", "").strip()
@@ -667,7 +667,7 @@ class TestSubagentDispatch:
         """
         # Build a fake checkpoint response by hand (simulates what a sub-agent
         # would return when it has only partially reviewed the target files).
-        agent_id = "cf-constructor-semantic-reviewer-artifact"
+        agent_id = "cf-semantic-reviewer-artifact"
         assert agent_id in FINDING_EMITTING_SUBAGENTS
 
         fake_response = {
@@ -743,8 +743,8 @@ def test_review_finding_workflow_contract_regressions() -> None:
         repo_root / "workflows" / "analyze" / "phase-4-output" / "remediation-handoff.md"
     ).read_text(encoding="utf-8")
 
-    assert "`{cfc_cmd} update`" in error_handling
-    assert "`{cfc_cmd} --json update`" not in error_handling
+    assert "`{cfs_cmd} update`" in error_handling
+    assert "`{cfs_cmd} --json update`" not in error_handling
 
     assert "Raw-input overflow remains higher precedence" in shared_plan_gate
     assert "Raw-input overflow remains higher precedence" in analyze_plan_gate
@@ -929,12 +929,12 @@ def test_skill_completion_invariants_match_handoff_workflows() -> None:
     response.
     """
     repo_root = Path(__file__).resolve().parents[1]
-    skill = (repo_root / "skills" / "cypilot" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (repo_root / "skills" / "studio" / "SKILL.md").read_text(encoding="utf-8")
     codegen = (
-        repo_root / "skills" / "cypilot" / "agents" / "cf-constructor-codegen.md"
+        repo_root / "skills" / "studio" / "agents" / "cf-codegen.md"
     ).read_text(encoding="utf-8")
     pr_review = (
-        repo_root / "skills" / "cypilot" / "agents" / "cf-constructor-pr-review.md"
+        repo_root / "skills" / "studio" / "agents" / "cf-pr-review.md"
     ).read_text(encoding="utf-8")
     analyze_overview = (
         repo_root / "workflows" / "analyze" / "overview.md"
@@ -963,10 +963,10 @@ def test_skill_completion_invariants_match_handoff_workflows() -> None:
     assert "MUST trigger the `Remediation Handoff` menu" in analyze_overview
     assert "MUST trigger both remediation prompts in the same response" not in analyze_overview
 
-    assert "load skill `cf-constructor` and route to `/cf-constructor-generate`" in analyze_handoff
-    assert "starts with `Invoke skill cf-constructor` and routes to `/cf-constructor-generate`" in analyze_handoff
-    assert "load skill `cf-constructor` and route to `/cf-constructor-analyze`" in post_write_handoff
-    assert "starts with `Invoke skill cf-constructor` and routes to `/cf-constructor-analyze`" in post_write_handoff
+    assert "load skill `cf` and route to `/cf-generate`" in analyze_handoff
+    assert "starts with `Invoke skill cf` and routes to `/cf-generate`" in analyze_handoff
+    assert "load skill `cf` and route to `/cf-analyze`" in post_write_handoff
+    assert "starts with `Invoke skill cf` and routes to `/cf-analyze`" in post_write_handoff
 
 
 def test_skill_requires_session_approval_before_native_subagent_dispatch() -> None:
@@ -976,7 +976,7 @@ def test_skill_requires_session_approval_before_native_subagent_dispatch() -> No
     ask before first use and remember approval for the rest of the session.
     """
     repo_root = Path(__file__).resolve().parents[1]
-    skill = (repo_root / "skills" / "cypilot" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (repo_root / "skills" / "studio" / "SKILL.md").read_text(encoding="utf-8")
 
     assert "### Session Sub-Agent Approval Gate" in skill
     assert "SUB_AGENT_SESSION_APPROVED=true" in skill
@@ -1037,13 +1037,13 @@ def test_analyze_change_review_dispatches_diff_scope_resolver() -> None:
     code_reviewer = (
         repo_root
         / "skills"
-        / "cypilot"
+        / "studio"
         / "agents"
-        / "cf-constructor-semantic-reviewer-code.md"
+        / "cf-semantic-reviewer-code.md"
     ).read_text(encoding="utf-8")
 
     assert "CHANGE_REVIEW=true" in overview
-    assert "cf-constructor-diff-scope-resolver" in phase0
+    assert "cf-diff-scope-resolver" in phase0
     assert "MUST NOT run `git diff`" in phase0
     assert "diff_scope" in phase3
     assert "`diff_scope` from Phase 0" in phase3
@@ -1059,13 +1059,13 @@ def test_diff_scope_resolver_agent_registered_and_prompt_contract() -> None:
     import tomllib
 
     repo_root = Path(__file__).resolve().parents[1]
-    agents_toml = repo_root / "skills" / "cypilot" / "agents.toml"
+    agents_toml = repo_root / "skills" / "studio" / "agents.toml"
     with open(agents_toml, "rb") as fh:
         agents = tomllib.load(fh)["agents"]
 
-    agent = agents["cf-constructor-diff-scope-resolver"]
+    agent = agents["cf-diff-scope-resolver"]
     prompt = (
-        repo_root / "skills" / "cypilot" / agent["prompt_file"]
+        repo_root / "skills" / "studio" / agent["prompt_file"]
     ).read_text(encoding="utf-8")
 
     assert agent["mode"] == "readonly"
@@ -1141,7 +1141,7 @@ def test_phase_6_chat_only_suppression_does_not_hide_remaining_findings() -> Non
 def test_protocol_references_use_existing_thin_protocol_file() -> None:
     """Thin orchestrator workflows must not reference removed execution-protocol paths."""
     repo_root = Path(__file__).resolve().parents[1]
-    protocol = repo_root / "skills" / "cypilot" / "protocol.md"
+    protocol = repo_root / "skills" / "studio" / "protocol.md"
     assert protocol.is_file()
 
     checked_files = [
@@ -1154,7 +1154,7 @@ def test_protocol_references_use_existing_thin_protocol_file() -> None:
     for rel_path in checked_files:
         content = (repo_root / rel_path).read_text(encoding="utf-8")
         assert "execution-protocol.md" not in content, rel_path
-        assert "skills/cypilot/protocol.md" in content, rel_path
+        assert "skills/studio/protocol.md" in content, rel_path
 
 
 def test_bootstrap_sdlc_resources_resolve_to_installed_config_kit() -> None:
@@ -1198,7 +1198,7 @@ def test_generate_prompt_review_detects_cypilot_instruction_docs() -> None:
         repo_root / "workflows" / "generate" / "phase-5" / "phase-5.2-semantic.md"
     ).read_text(encoding="utf-8")
 
-    assert "`skills/cypilot/**/*.md`" in phase52
+    assert "`skills/studio/**/*.md`" in phase52
 
 
 def test_max_iter_zero_has_single_external_entry_semantics() -> None:
@@ -1239,7 +1239,7 @@ def test_deterministic_validator_uses_resolved_validator_command() -> None:
     checked_files = [
         "workflows/analyze/phase-2-det-gate.md",
         "workflows/generate/phase-5/index.md",
-        "skills/cypilot/agents/cf-constructor-deterministic-validator.md",
+        "skills/studio/agents/cf-deterministic-validator.md",
     ]
 
     for rel_path in checked_files:
@@ -1316,9 +1316,9 @@ def test_prompt_reviewer_methodology_only_wording_preserves_compliance_invariant
     prompt_reviewer = (
         repo_root
         / "skills"
-        / "cypilot"
+        / "studio"
         / "agents"
-        / "cf-constructor-semantic-reviewer-prompt.md"
+        / "cf-semantic-reviewer-prompt.md"
     ).read_text(encoding="utf-8")
 
     assert "Load only `prompt-engineering.md` as the review methodology" in prompt_reviewer
@@ -1386,24 +1386,24 @@ def test_analyze_methodologies_are_lazy_and_one_per_subagent() -> None:
     assert "Do NOT open code methodology files in the orchestrator" in phase0
     assert "Do NOT open prompt methodology files in the orchestrator" in phase0
     assert "Each sub-agent owns exactly one review methodology" in phase3
-    assert "cf-constructor-code-bug-finder" in phase3
-    assert "cf-constructor-prompt-bug-finder" in phase3
+    assert "cf-code-bug-finder" in phase3
+    assert "cf-prompt-bug-finder" in phase3
 
 
 def test_reviewer_agent_prompts_do_not_mix_methodologies() -> None:
     """Code/prompt checklist reviewers and bug finders each load one methodology."""
     repo_root = Path(__file__).resolve().parents[1]
-    agents_dir = repo_root / "skills" / "cypilot" / "agents"
-    code_review = (agents_dir / "cf-constructor-semantic-reviewer-code.md").read_text(
+    agents_dir = repo_root / "skills" / "studio" / "agents"
+    code_review = (agents_dir / "cf-semantic-reviewer-code.md").read_text(
         encoding="utf-8"
     )
-    code_bug = (agents_dir / "cf-constructor-code-bug-finder.md").read_text(
+    code_bug = (agents_dir / "cf-code-bug-finder.md").read_text(
         encoding="utf-8"
     )
     prompt_review = (
-        agents_dir / "cf-constructor-semantic-reviewer-prompt.md"
+        agents_dir / "cf-semantic-reviewer-prompt.md"
     ).read_text(encoding="utf-8")
-    prompt_bug = (agents_dir / "cf-constructor-prompt-bug-finder.md").read_text(
+    prompt_bug = (agents_dir / "cf-prompt-bug-finder.md").read_text(
         encoding="utf-8"
     )
 
@@ -1444,7 +1444,7 @@ def test_subagent_dispatch_sites_have_pre_dispatch_gate() -> None:
         content = (repo_root / rel_path).read_text(encoding="utf-8")
         assert "Requires: `workflows/shared/inline-fallback-probe.md`" in content, rel_path
         assert "workflows/shared/inline-fallback-probe.md" in content, rel_path
-        assert "before dispatching any `cf-constructor-*` sub-agent from this sub-file" not in content, rel_path
+        assert "before dispatching any `cf-*` sub-agent from this sub-file" not in content, rel_path
 
 
 def test_artifact_review_dispatch_uses_registered_example_path_shape() -> None:
@@ -1523,7 +1523,7 @@ def test_analyze_standard_output_does_not_own_prompt_templates() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Wiring sanity: every WORKFLOW_SUBAGENT must be declared in skills/cypilot/
+# Wiring sanity: every WORKFLOW_SUBAGENT must be declared in skills/studio/
 # agents.toml. Catches accidental rename drift between the workflow router
 # and the registry.
 # ---------------------------------------------------------------------------
@@ -1531,7 +1531,7 @@ def test_workflow_subagents_are_registered() -> None:
     import tomllib
 
     repo_root = Path(__file__).resolve().parents[1]
-    agents_toml = repo_root / "skills" / "cypilot" / "agents.toml"
+    agents_toml = repo_root / "skills" / "studio" / "agents.toml"
     with open(agents_toml, "rb") as fh:
         data = tomllib.load(fh)
     registered = set(data.get("agents", {}).keys())
@@ -1553,10 +1553,10 @@ def test_instruction_references_are_follow_directives() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     search_roots = [
         repo_root / "workflows",
-        repo_root / "skills" / "cypilot" / "agents",
+        repo_root / "skills" / "studio" / "agents",
     ]
     standalone_files = [
-        repo_root / "skills" / "cypilot" / "SKILL.md",
+        repo_root / "skills" / "studio" / "SKILL.md",
     ]
     bad_patterns = (
         re.compile(r"\b[Ll]oad\s+[`{]"),
@@ -1599,11 +1599,11 @@ def test_brainstorm_expert_is_context_isolated() -> None:
     import tomllib
 
     repo_root = Path(__file__).resolve().parents[1]
-    agents_toml = repo_root / "skills" / "cypilot" / "agents.toml"
+    agents_toml = repo_root / "skills" / "studio" / "agents.toml"
     with open(agents_toml, "rb") as fh:
         agents = tomllib.load(fh)["agents"]
 
-    assert agents["cf-constructor-brainstorm-expert"]["isolation"] is True
+    assert agents["cf-brainstorm-expert"]["isolation"] is True
 
 
 def test_brainstorm_challenge_flow_matches_user_facing_contract() -> None:
@@ -1634,9 +1634,9 @@ def test_brainstorm_challenge_questions_target_decision_keys() -> None:
     expert = (
         repo_root
         / "skills"
-        / "cypilot"
+        / "studio"
         / "agents"
-        / "cf-constructor-brainstorm-expert.md"
+        / "cf-brainstorm-expert.md"
     ).read_text(encoding="utf-8")
     round_loop = (
         repo_root / "workflows" / "generate" / "phase-0.7" / "round-loop.md"
@@ -1699,9 +1699,9 @@ def test_brainstorm_challenge_critique_only_is_not_rendered_as_skipped() -> None
     expert = (
         repo_root
         / "skills"
-        / "cypilot"
+        / "studio"
         / "agents"
-        / "cf-constructor-brainstorm-expert.md"
+        / "cf-brainstorm-expert.md"
     ).read_text(encoding="utf-8")
     round_loop = (
         repo_root / "workflows" / "generate" / "phase-0.7" / "round-loop.md"
@@ -1719,16 +1719,16 @@ def test_brainstorm_prompts_handle_nullable_rules_and_template_paths() -> None:
     facilitator = (
         repo_root
         / "skills"
-        / "cypilot"
+        / "studio"
         / "agents"
-        / "cf-constructor-brainstorm-facilitator.md"
+        / "cf-brainstorm-facilitator.md"
     ).read_text(encoding="utf-8")
     expert = (
         repo_root
         / "skills"
-        / "cypilot"
+        / "studio"
         / "agents"
-        / "cf-constructor-brainstorm-expert.md"
+        / "cf-brainstorm-expert.md"
     ).read_text(encoding="utf-8")
 
     for prompt in (facilitator, expert):
@@ -1743,9 +1743,9 @@ def test_brainstorm_facilitator_seed_topic_gate_requires_identity_and_text() -> 
     facilitator = (
         repo_root
         / "skills"
-        / "cypilot"
+        / "studio"
         / "agents"
-        / "cf-constructor-brainstorm-facilitator.md"
+        / "cf-brainstorm-facilitator.md"
     ).read_text(encoding="utf-8")
 
     assert "the seed topic has a non-empty `id`" in facilitator
@@ -1757,7 +1757,7 @@ def test_brainstorm_facilitator_seed_topic_gate_requires_identity_and_text() -> 
 def test_brainstorm_expert_registry_documents_challenge_shape() -> None:
     """Registry text must match the challenge-mode expert response contract."""
     repo_root = Path(__file__).resolve().parents[1]
-    agents_toml = (repo_root / "skills" / "cypilot" / "agents.toml").read_text(
+    agents_toml = (repo_root / "skills" / "studio" / "agents.toml").read_text(
         encoding="utf-8"
     )
 
@@ -1784,7 +1784,7 @@ def test_brainstorm_saved_discard_and_retention_are_explicit() -> None:
 def test_subagent_fallback_never_defaults_from_unapproved_native_support() -> None:
     """Approval-unset + native-capable hosts must ask, not silently inline."""
     repo_root = Path(__file__).resolve().parents[1]
-    skill = (repo_root / "skills" / "cypilot" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (repo_root / "skills" / "studio" / "SKILL.md").read_text(encoding="utf-8")
 
     assert "Do not collapse the remaining states into a generic `otherwise` branch." in skill
     assert "Otherwise set `INLINE_FALLBACK=true`" not in skill
@@ -1822,7 +1822,7 @@ def test_analyze_prompt_review_uses_paths_for_direct_multi_target_scope() -> Non
 
     assert "target_paths = prompt_targets" in phase3
     assert "filters `diff_scope.review_targets`" in phase3
-    assert "`workflows/**`, `skills/cypilot/**/*.md`, `requirements/**/*.md`" in phase3
+    assert "`workflows/**`, `skills/studio/**/*.md`, `requirements/**/*.md`" in phase3
     assert 'otherwise ["{PATH}"]' not in phase3
 
 
@@ -1848,11 +1848,11 @@ def test_prompt_bug_finder_runs_in_place_like_other_read_only_reviewers() -> Non
     import tomllib
 
     repo_root = Path(__file__).resolve().parents[1]
-    agents_toml = repo_root / "skills" / "cypilot" / "agents.toml"
+    agents_toml = repo_root / "skills" / "studio" / "agents.toml"
     with open(agents_toml, "rb") as fh:
         agents = tomllib.load(fh)["agents"]
 
-    assert agents["cf-constructor-prompt-bug-finder"]["isolation"] is False
+    assert agents["cf-prompt-bug-finder"]["isolation"] is False
 
 
 def test_analyze_handoff_preserves_analyzed_paths_separate_from_written_manifest() -> None:
@@ -1878,7 +1878,7 @@ def test_change_review_derives_prompt_flags_after_diff_scope() -> None:
     assert "derive prompt_targets" in change_scope
     assert "PROMPT_REVIEW=true" in change_scope
     assert "PROMPT_BUG_REVIEW=true" in change_scope
-    assert "`workflows/**`, `skills/cypilot/**/*.md`, `requirements/**/*.md`" in change_scope
+    assert "`workflows/**`, `skills/studio/**/*.md`, `requirements/**/*.md`" in change_scope
 
 
 def test_analyze_planner_prompt_includes_requirements_as_prompt_targets() -> None:
@@ -1887,9 +1887,9 @@ def test_analyze_planner_prompt_includes_requirements_as_prompt_targets() -> Non
     planner = (
         repo_root
         / "skills"
-        / "cypilot"
+        / "studio"
         / "agents"
-        / "cf-constructor-analyze-planner.md"
+        / "cf-analyze-planner.md"
     ).read_text(encoding="utf-8")
 
     assert "`requirements/**/*.md`" in planner
@@ -1935,7 +1935,7 @@ def _fake_invoke_escalation(agent_id: str, payload: dict) -> dict:
         "agent_id": agent_id,
         "result": {
             "AUTHOR_ESCALATION_REQUIRED": True,
-            "recommended_author": "cf-constructor-generate-author-lead",
+            "recommended_author": "cf-generate-author-lead",
             "reason": "task exceeds AUTHOR_TIER=coder-smart (10 files > 5)",
             "paths_written": [],
         },
@@ -1951,7 +1951,7 @@ def test_author_worker_escalation_required_response_shape() -> None:
     Exercises CR-T8-005 coverage gap: previous tests only checked nominal
     author-worker responses; the escalation branch was untested.
     """
-    agent_id = "cf-constructor-generate-coder-smart"
+    agent_id = "cf-generate-coder-smart"
     # A coder-smart payload with 10 target_paths triggers the tier guard
     # (coder-smart ceiling is 5 files per the Tier Guard contract).
     payload = {
@@ -1993,7 +1993,7 @@ def test_author_worker_escalation_required_response_shape() -> None:
 def test_skill_entrypoint_has_context_budget_fail_safe() -> None:
     """The root skill entrypoint should bound mandatory loads before opening files."""
     repo_root = Path(__file__).resolve().parents[1]
-    skill = (repo_root / "skills" / "cypilot" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (repo_root / "skills" / "studio" / "SKILL.md").read_text(encoding="utf-8")
 
     budget_idx = skill.index("Context Budget & Fail-Safe")
     first_load_idx = skill.index("Open, load, and follow")
@@ -2023,14 +2023,14 @@ def test_legacy_analyze_dispatch_keeps_code_and_prompt_review_independent() -> N
     ).read_text(encoding="utf-8")
 
     assert "`TARGET_TYPE == code` or `CODE_REVIEW=true`" in phase3
-    assert "| `CODE_BUG_REVIEW=true` |" in phase3 and "cf-constructor-code-bug-finder" in phase3
+    assert "| `CODE_BUG_REVIEW=true` |" in phase3 and "cf-code-bug-finder" in phase3
     assert "not `PROMPT_REVIEW` and not `PROMPT_BUG_REVIEW`" not in phase3
 
 
 def test_analyze_routing_includes_storytelling_and_bug_hunt_intents() -> None:
     """Routing must reach analyze for branches owned by the analyze preamble."""
     repo_root = Path(__file__).resolve().parents[1]
-    routing = (repo_root / "skills" / "cypilot" / "routing.md").read_text(
+    routing = (repo_root / "skills" / "studio" / "routing.md").read_text(
         encoding="utf-8"
     )
 
@@ -2044,9 +2044,9 @@ def test_diff_scope_binary_omission_probe_is_allowed() -> None:
     resolver = (
         repo_root
         / "skills"
-        / "cypilot"
+        / "studio"
         / "agents"
-        / "cf-constructor-diff-scope-resolver.md"
+        / "cf-diff-scope-resolver.md"
     ).read_text(encoding="utf-8")
 
     assert "git -C <worktree> diff --numstat <base>..<head>" in resolver
@@ -2131,10 +2131,10 @@ def test_runtime_instruction_modules_stay_compact() -> None:
     """High-traffic instruction resources should stay below the compact budget."""
     repo_root = Path(__file__).resolve().parents[1]
     compact_files = [
-        repo_root / "skills" / "cypilot" / "SKILL.md",
+        repo_root / "skills" / "studio" / "SKILL.md",
         repo_root / "workflows" / "analyze" / "phase-0-dependencies.md",
         repo_root / "workflows" / "analyze" / "phase-4-output" / "remediation-handoff.md",
-        repo_root / "skills" / "cypilot" / "agents" / "cf-constructor-semantic-reviewer-code.md",
+        repo_root / "skills" / "studio" / "agents" / "cf-semantic-reviewer-code.md",
     ]
 
     for path in compact_files:

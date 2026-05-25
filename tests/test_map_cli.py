@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def _run_map(*args, cwd: Path) -> tuple:
     env = os.environ.copy()
     env["PYTHONPATH"] = (
-        str(REPO_ROOT / "skills" / "cypilot" / "scripts")
+        str(REPO_ROOT / "skills" / "studio" / "scripts")
         + ":"
         + env.get("PYTHONPATH", "")
     )

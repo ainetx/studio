@@ -30,7 +30,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from studio.ralphex_discover import discover, validate, persist_path, INSTALL_GUIDANCE
 from studio.ralphex_export import (
@@ -293,12 +293,12 @@ class TestAC03MissingRalphexDiagnostic:
         assert result["name"] == "inst-check-ralphex"
 
     def test_doctor_reads_install_config(self):
-        """Doctor discovers ralphex via .cf-constructor/config/core.toml."""
+        """Doctor discovers ralphex via .cf/config/core.toml."""
         from studio.commands._core_config import load_core_config as _load_core_config
 
         with TemporaryDirectory() as tmp:
             project_root = Path(tmp)
-            config_dir = project_root / ".cf-constructor" / "config"
+            config_dir = project_root / ".cf" / "config"
             config_dir.mkdir(parents=True)
             (config_dir / "core.toml").write_text(
                 '[ralphex]\npath = "/usr/local/bin/ralphex"\n',
@@ -308,12 +308,12 @@ class TestAC03MissingRalphexDiagnostic:
         assert config.get("ralphex", {}).get("path") == "/usr/local/bin/ralphex"
 
     def test_doctor_check_finds_ralphex_from_install_config(self):
-        """Doctor _check_ralphex finds ralphex when path is only in .cf-constructor/config/core.toml."""
+        """Doctor _check_ralphex finds ralphex when path is only in .cf/config/core.toml."""
         from studio.commands.doctor import _check_ralphex
 
         with TemporaryDirectory() as tmp:
             project_root = Path(tmp)
-            config_dir = project_root / ".cf-constructor" / "config"
+            config_dir = project_root / ".cf" / "config"
             config_dir.mkdir(parents=True)
             # Write a config with the correct key structure for discover()
             fake_bin = project_root / "fake-ralphex"
@@ -1216,7 +1216,7 @@ class TestReviewModeOrchestration:
             assert result["review_artifacts"]["relative_paths"] == list(REVIEW_PROMPT_RELATIVES)
             for relative_path in REVIEW_PROMPT_RELATIVES:
                 prompt_content = (Path(repo_root) / relative_path).read_text(encoding="utf-8")
-                assert "<!-- @cpt-begin:cypilot-review-override -->" in prompt_content
+                assert "<!-- @cpt-begin:studio-review-override -->" in prompt_content
                 assert "Final review step: load and follow" in prompt_content
 
     def test_review_mode_override_contains_methodology_routing(self):
@@ -1242,8 +1242,8 @@ class TestReviewModeOrchestration:
             content = prompt_path.read_text(encoding="utf-8")
             assert "standard ralphex review flow" in content
             assert "final analyze step" in content
-            assert "CYPILOT_ANALYZE_START:" in content
-            assert "CYPILOT_ANALYZE_DONE: no_findings" in content
+            assert "STUDIO_ANALYZE_START:" in content
+            assert "STUDIO_ANALYZE_DONE: no_findings" in content
             assert "REVIEW_DONE" in content
 
     def test_execute_mode_does_not_generate_review_artifacts(self):
@@ -1265,7 +1265,7 @@ class TestReviewModeOrchestration:
             assert "review_artifacts" not in result
             for relative_path in REVIEW_PROMPT_RELATIVES:
                 prompt_content = (Path(repo_root) / relative_path).read_text(encoding="utf-8")
-                assert "<!-- @cpt-begin:cypilot-review-override -->" not in prompt_content
+                assert "<!-- @cpt-begin:studio-review-override -->" not in prompt_content
 
     def test_review_mode_command_includes_review_flag(self):
         """Review-mode delegation command has --review flag."""
@@ -1309,7 +1309,7 @@ class TestReviewModeOrchestration:
             assert "### Task 1:" in plan_content
             for relative_path in REVIEW_PROMPT_RELATIVES:
                 prompt_content = (Path(repo_root) / relative_path).read_text(encoding="utf-8")
-                assert "<!-- @cpt-begin:cypilot-review-override -->" not in prompt_content
+                assert "<!-- @cpt-begin:studio-review-override -->" not in prompt_content
             assert "review_artifacts" not in result
 
 
@@ -1420,11 +1420,11 @@ class TestEndToEndCapabilitySurface:
         from studio.ralphex_discover import discover, validate
         import tomllib
 
-        # Verify routing: agents.toml registers cypilot-ralphex
-        agents_toml = Path(__file__).parent.parent / "skills" / "cypilot" / "agents.toml"
+        # Verify routing: agents.toml registers cf-ralphex
+        agents_toml = Path(__file__).parent.parent / "skills" / "studio" / "agents.toml"
         with open(agents_toml, "rb") as f:
             agents_data = tomllib.load(f)
-        assert "cf-constructor-ralphex" in agents_data["agents"]
+        assert "cf-ralphex" in agents_data["agents"]
 
         # Verify orchestration: discover → validate → run_delegation
         with TemporaryDirectory() as tmp:
@@ -1463,22 +1463,22 @@ class TestEndToEndCapabilitySurface:
             root = (Path(td) / "proj").resolve()
             root.mkdir()
             (root / ".git").mkdir()
-            cpt = root / "cypilot"
+            cpt = root / "studio"
             cpt.mkdir()
-            core_skill = cpt / ".core" / "skills" / "cypilot"
+            core_skill = cpt / ".core" / "skills" / "studio"
             core_skill.mkdir(parents=True)
             core_skill_md = core_skill / "SKILL.md"
             core_skill_md.write_text(
-                "---\nname: cypilot\ndescription: Test skill\n---\nContent\n",
+                "---\nname: studio\ndescription: Test skill\n---\nContent\n",
                 encoding="utf-8",
             )
             # Copy real agents.toml
-            src_agents_toml = Path(__file__).parent.parent / "skills" / "cypilot" / "agents.toml"
+            src_agents_toml = Path(__file__).parent.parent / "skills" / "studio" / "agents.toml"
             shutil.copy2(src_agents_toml, core_skill / "agents.toml")
             # Create prompt files
             agents_dir = core_skill / "agents"
             agents_dir.mkdir(parents=True)
-            for name in ("cf-constructor-ralphex", "cf-constructor-codegen", "cf-constructor-pr-review"):
+            for name in ("cf-ralphex", "cf-codegen", "cf-pr-review"):
                 (agents_dir / f"{name}.md").write_text(
                     f"You are {name}.\n", encoding="utf-8"
                 )
@@ -1486,7 +1486,7 @@ class TestEndToEndCapabilitySurface:
 
             # Verify ralphex is discoverable
             agents = _discover_kit_agents(cpt, root)
-            ralphex_agents = [a for a in agents if a["name"] == "cf-constructor-ralphex"]
+            ralphex_agents = [a for a in agents if a["name"] == "cf-ralphex"]
             assert len(ralphex_agents) == 1
 
             # Generate windsurf output
@@ -1518,26 +1518,26 @@ class TestEndToEndCapabilitySurface:
             root = (Path(td) / "proj").resolve()
             root.mkdir()
             (root / ".git").mkdir()
-            cpt = root / "cypilot"
+            cpt = root / "studio"
             cpt.mkdir()
-            core_skill = cpt / ".core" / "skills" / "cypilot"
+            core_skill = cpt / ".core" / "skills" / "studio"
             core_skill.mkdir(parents=True)
             core_skill_md = core_skill / "SKILL.md"
             core_skill_md.write_text(
-                "---\nname: cypilot\ndescription: Test skill\n---\nContent\n",
+                "---\nname: studio\ndescription: Test skill\n---\nContent\n",
                 encoding="utf-8",
             )
-            src_agents_toml = Path(__file__).parent.parent / "skills" / "cypilot" / "agents.toml"
+            src_agents_toml = Path(__file__).parent.parent / "skills" / "studio" / "agents.toml"
             shutil.copy2(src_agents_toml, core_skill / "agents.toml")
             agents_dir = core_skill / "agents"
             agents_dir.mkdir(parents=True)
-            for name in ("cf-constructor-ralphex", "cf-constructor-codegen", "cf-constructor-pr-review"):
+            for name in ("cf-ralphex", "cf-codegen", "cf-pr-review"):
                 (agents_dir / f"{name}.md").write_text(
                     f"You are {name}.\n", encoding="utf-8"
                 )
             (cpt / ".core" / "workflows").mkdir(parents=True, exist_ok=True)
 
-            canonical_fragment = "skills/cypilot/agents/cf-constructor-ralphex.md"
+            canonical_fragment = "skills/studio/agents/cf-ralphex.md"
             for agent in ("claude", "cursor", "copilot", "openai"):
                 cfg = _default_agents_config()
                 result = _process_single_agent(agent, root, cpt, cfg, None, dry_run=False)
@@ -1546,9 +1546,9 @@ class TestEndToEndCapabilitySurface:
                 ralphex_found = False
                 for fpath in all_files:
                     content = Path(fpath).read_text(encoding="utf-8")
-                    if "cf-constructor-ralphex" in fpath or "cf_constructor_ralphex" in content:
+                    if "cf-ralphex" in fpath or "cf_ralphex" in content:
                         assert canonical_fragment in content, (
                             f"{agent} proxy must point to canonical prompt"
                         )
                         ralphex_found = True
-                assert ralphex_found, f"{agent} must generate a cf-constructor-ralphex proxy"
+                assert ralphex_found, f"{agent} must generate a cf-ralphex proxy"

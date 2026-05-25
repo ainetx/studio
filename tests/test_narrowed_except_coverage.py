@@ -14,7 +14,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 
 def _write_toml(path: Path, data: dict) -> None:
@@ -77,13 +77,13 @@ class TestDeduplicateLegacyKitsErrors(unittest.TestCase):
             config = Path(td)
             _write_toml(config / "core.toml", {
                 "kits": {
-                    "cypilot-sdlc": {"path": "config/kits/sdlc"},
+                    "studio-sdlc": {"path": "config/kits/sdlc"},
                     "sdlc": {"path": "config/kits/sdlc"},
                 },
             })
             with patch("studio.utils.toml_utils.dump", side_effect=OSError("read-only")):
                 result = _deduplicate_legacy_kits(config)
-            self.assertIn("cypilot-sdlc", result)
+            self.assertIn("studio-sdlc", result)
 
     def test_artifacts_toml_write_failure_swallowed(self):
         """OSError writing artifacts.toml is swallowed."""
@@ -92,12 +92,12 @@ class TestDeduplicateLegacyKitsErrors(unittest.TestCase):
             config = Path(td)
             _write_toml(config / "core.toml", {
                 "kits": {
-                    "cypilot-sdlc": {"path": "config/kits/sdlc"},
+                    "studio-sdlc": {"path": "config/kits/sdlc"},
                     "sdlc": {"path": "config/kits/sdlc"},
                 },
             })
             _write_toml(config / "artifacts.toml", {
-                "systems": [{"kit": "cypilot-sdlc", "name": "test"}],
+                "systems": [{"kit": "studio-sdlc", "name": "test"}],
             })
             call_count = [0]
             orig_dump = None
@@ -113,7 +113,7 @@ class TestDeduplicateLegacyKitsErrors(unittest.TestCase):
             orig_dump = toml_utils.dump
             with patch("studio.utils.toml_utils.dump", side_effect=_selective_fail):
                 result = _deduplicate_legacy_kits(config)
-            self.assertIn("cypilot-sdlc", result)
+            self.assertIn("studio-sdlc", result)
 
 
 class TestMigrateKitSourcesErrors(unittest.TestCase):
@@ -315,14 +315,14 @@ class TestFilesUnicodeDecodeError(unittest.TestCase):
             # Should not crash; AGENTS.md is unreadable so root won't match
             self.assertNotEqual(result, root)
 
-    def test_read_cypilot_var_unicode_error(self):
+    def test_read_studio_var_unicode_error(self):
         """files.py:101 — AGENTS.md with invalid UTF-8 → returns None."""
-        from studio.utils.files import _read_cypilot_var
+        from studio.utils.files import _read_studio_var
         with TemporaryDirectory() as td:
             root = Path(td)
             agents = root / "AGENTS.md"
             agents.write_bytes(b"\x80\x81\x82invalid")
-            result = _read_cypilot_var(root)
+            result = _read_studio_var(root)
             self.assertIsNone(result)
 
 
@@ -331,10 +331,10 @@ class TestFilesUnicodeDecodeError(unittest.TestCase):
 # =========================================================================
 
 class TestContextAdapterLoadFailure(unittest.TestCase):
-    """Cover context.py:601 — CypilotContext.load_from_dir raises."""
+    """Cover context.py:601 — StudioContext.load_from_dir raises."""
 
     def test_adapter_load_raises_oserror(self):
-        from studio.utils.context import SourceContext, resolve_adapter_context, CypilotContext
+        from studio.utils.context import SourceContext, resolve_adapter_context, StudioContext
         with TemporaryDirectory() as td:
             adapter = Path(td) / "adapter"
             adapter.mkdir()
@@ -345,7 +345,7 @@ class TestContextAdapterLoadFailure(unittest.TestCase):
             sc.adapter_context = None
             err = io.StringIO()
             with redirect_stderr(err), \
-                 patch.object(CypilotContext, "load_from_dir", side_effect=OSError("broken")):
+                 patch.object(StudioContext, "load_from_dir", side_effect=OSError("broken")):
                 result = resolve_adapter_context(sc)
             self.assertIsNone(result)
             self.assertTrue(sc._adapter_resolved)
@@ -429,8 +429,8 @@ class TestCliAgentsInjectionError(unittest.TestCase):
 
     def test_inject_agents_oserror_swallowed(self):
         from studio.cli import main
-        from studio.utils.context import CypilotContext
-        dummy_ctx = CypilotContext.__new__(CypilotContext)
+        from studio.utils.context import StudioContext
+        dummy_ctx = StudioContext.__new__(StudioContext)
         with TemporaryDirectory() as td:
             root = Path(td)
             (root / ".git").mkdir()
@@ -446,7 +446,7 @@ class TestCliAgentsInjectionError(unittest.TestCase):
                 buf = io.StringIO()
                 err = io.StringIO()
                 with redirect_stdout(buf), redirect_stderr(err), \
-                     patch("studio.utils.context.CypilotContext.load", return_value=dummy_ctx), \
+                     patch("studio.utils.context.StudioContext.load", return_value=dummy_ctx), \
                      patch("studio.commands.init._inject_root_agents", side_effect=OSError("broken")):
                     rc = main(["info"])
                 # info may return non-zero if project isn't fully set up,
