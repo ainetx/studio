@@ -22,7 +22,7 @@ purpose: Phase-by-phase protocol for the storytelling methodology
   - [Portion shape](#portion-shape)
   - [Proactive sub-portion decomposition](#proactive-sub-portion-decomposition)
   - [First-portion special shape (portion 1)](#first-portion-special-shape-portion-1)
-  - [Navigation block (always 6 slots, Next-first)](#navigation-block-always-6-slots-next-first)
+  - [Navigation block (6 fixed slots, Next-first; conditional 7th)](#navigation-block-6-fixed-slots-next-first-conditional-7th)
   - [User input handling](#user-input-handling)
   - [Periodic gates](#periodic-gates)
   - [Glossary buffer](#glossary-buffer)
@@ -166,7 +166,7 @@ Each portion has, in order:
 - **Source references** — clickable Markdown links per Phase E3
 - **`🎨 visualization: {text-only | text+diagram} — {reason}`** decision marker (mandatory for all non-socratic portions; counts toward page-size budget)
 - **Per-portion progress marker**: `📍 {X}/{N} • {K} open questions • topic: "{plan-item}"` (review mode adds `phase: presentation | challenge`)
-- **Navigation block** (always 6 slots, Next-first)
+- **Navigation block** (6 fixed slots, Next-first; conditional 7th)
 
 Hard-cap recovery (fallback only — primary tool is proactive decomposition): **auto-trim with ack** when removing connective / framing sentences brings under cap while preserving substance; **split** only when the body itself genuinely exceeds the cap. Split shares the plan-item index with letter suffixes (`📍 3a/{N}`, `📍 3b/{N}`); `{N}` does NOT grow.
 
@@ -192,7 +192,9 @@ Anchors the session — different shape:
 
 By end of portion 1, the listener knows what they're learning, why, and the route ahead.
 
-### Navigation block (always 6 slots, Next-first)
+### Navigation block (6 fixed slots, Next-first; conditional 7th)
+
+The 6 fixed slots are Next / Deeper / Lateral / Recap / Ask / Wrap. When the cfc-routing queue has ≥ 1 active item, methodology MUST append slot `7. Send comments — preview (K queued)` to the nav block. Slot 7 emits the structured preview only (per `storytelling.md` AP-#40); dispatch remains gated by `send comments now` / `Y`. The slot is omitted only when the queue is empty.
 
 ```text
 Next:
