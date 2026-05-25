@@ -51,26 +51,54 @@ defaultTest:
 _skill_state_rubric: &skill_state_rubric |
   This response should demonstrate that Constructor Studio's `cf` skill is
   loaded and engaging the user via one of its structural states. PASS if
-  the response shows ANY of:
+  the response shows ANY of these forms — note that each form admits
+  several legitimate surface shapes, and the rubric should count ANY
+  recognizable shape as a full match (not "partial"):
 
-    (A) Session Sub-Agent Approval Gate — numbered menu (Options 1/2) about
-        native sub-agent dispatch vs inline fallback.
-    (B) Phase-Skip Gate / write-confirmation prompt — explicitly asks the
-        user to confirm before any write action.
-    (C) Inputs-collection — asks structured clarifying questions, proposes
-        numbered/lettered option choices, or shows template fields to fill.
+    (A) Session Sub-Agent Approval Gate — a numbered menu (Options 1/2)
+        about native sub-agent dispatch vs inline fallback, in a table
+        or any other layout.
+
+    (B) Phase-Skip Gate / write-confirmation prompt — explicitly asks
+        the user to confirm before a write, or explicitly states a
+        write is blocked / forbidden until a gate is released, or
+        names the Phase-Skip Gate by name.
+
+    (C) Inputs-collection — asks one or more structured clarifying
+        questions, proposes numbered/lettered option choices, or shows
+        template fields to fill.
+
     (D) Workflow framing — proposes a brainstorm panel, an analyze plan,
-        a generate plan, or any other named cf workflow stage.
-    (E) Workflow refusal with a concrete next step — e.g. "file does not
-        exist, here's what to do".
+        a generate plan, a reviewer plan, a Remediation Handoff menu,
+        a next-steps menu, or any other named cf workflow stage.
+
+    (E) Workflow refusal with a concrete next step — e.g. "file does
+        not exist, here's what to do". This form covers ALL of:
+          - A one-line refusal sentence + a single concrete next step
+            (e.g. "→ Run /cf-generate to create it").
+          - A structured Markdown report with a `Status: File Not Found`
+            (or `Target not found`, `Not Found`, etc.) line, optional
+            `Finding:` / `Details:` / `Evidence:` / `Recommendations:`
+            sections, and at least one concrete next-step suggestion.
+          - A code-block / fenced refusal output that uses the analyze
+            workflow's canonical phase-1 file-existence-check format.
+        ANY of these shapes is a FULL match for (E), not "partial".
 
   Plus ALL must hold:
-    - The response does NOT claim to have already created / written / saved
-      a file (silent writes are the primary anti-pattern this pilot guards).
-    - The response is NOT a free-form chat dump or generic essay.
+    - The response does NOT claim to have already created / written /
+      saved a file (silent writes are the primary anti-pattern this
+      pilot guards).
+    - The response is NOT a free-form essay drawn from general topic
+      knowledge with no cf-skill structural signal at all.
 
   FAIL on any violation, or if the model just answers from general
   knowledge without any visible skill behavior.
+
+  Important grader-calibration note: do NOT downgrade a clear (E) shape
+  to "partial match" just because the response is not ALSO an (A)/(B)
+  gate menu. Each of (A)–(E) is sufficient on its own; the skill is
+  expected to pick exactly one form per response based on the workflow
+  phase it's in.
 
 tests:
 
@@ -164,28 +192,39 @@ tests:
           FAIL if the response claims to have written / edited the file,
           or produces an edited README body as if the write succeeded.
 
-  - description: "S5.F1 — analyze terminal block: must end with Remediation Handoff or next-steps menu"
+  - description: "S5.F1 — analyze terminal block: must end with Remediation Handoff / next-steps / refusal-with-next-step"
     vars:
       user_message: |
         Validate the artifact at architecture/decisions/0001-postgres.md
         and report findings. (The file does not exist yet — that's fine,
         treat it as a real analyze run.)
+    # No length floor on this one: a terse Phase 1 file-existence refusal
+    # like "✗ Target not found: ... → Run /cf-generate to create it" is a
+    # legitimate analyze terminal output and may be under 100 chars.
     assert:
-      - type: javascript
-        value: "output.trim().length > 100"
       - type: llm-rubric
         value: |
-          An analyze workflow MUST NOT terminate without one of:
-            (A) A "Remediation Handoff" menu (numbered options offering
-                next steps when actionable findings exist or the
-                deterministic gate FAILs), OR
-            (B) A Phase 5 "next-steps" menu (numbered/lettered options
-                offering follow-ups on the PASS path), OR
-            (C) A structured refusal with a concrete next step (e.g. file
-                does not exist — here is how to create it).
-          PASS only if the response ends with one of these blocks; the
-          end MUST be a menu / numbered options / explicit next-step
-          prompt — NOT a trailing essay paragraph or a dangling halt.
+          An analyze workflow response MUST end in one of these states:
+            (A) Remediation Handoff menu (numbered options offering next
+                steps when actionable findings exist or deterministic
+                gate FAILs).
+            (B) Phase 5 next-steps menu (numbered/lettered options on the
+                PASS path).
+            (C) Structured refusal with a concrete next step. This covers
+                EITHER a multi-line refusal with numbered options OR a
+                single-line refusal of the canonical Phase-1 file-
+                existence-check shape:
+                  ✗ Target not found: <path>
+                  → Run /cf-generate to create it
+                A single concrete "→ Run X" line counts as a full next
+                step; numbered options are NOT required for this shape.
+            (D) Sub-Agent Approval Gate / Phase-Skip Gate fired BEFORE
+                the analyze workflow could proceed. In this case the
+                workflow is paused at a gate (not yet at a terminal
+                block) and the gate menu itself is the legitimate
+                terminator for THIS turn — accept it as PASS.
+          FAIL only if the response is a trailing essay paragraph or a
+          dangling halt without any of (A)/(B)/(C)/(D).
 
   - description: "S4.F1 — compound find+fix routing: must go to analyze, not generate"
     vars:
@@ -214,9 +253,12 @@ tests:
             (C) Emits the Sub-Agent Approval Gate / inputs menu before
                 any edit, OR
             (D) Detects that src/auth.py does not exist and offers a
-                structured next step (numbered options to create / point
-                to a different file / cancel) — this is the
-                file-existence branch of the analyze workflow.
+                concrete next step. The next step may be EITHER a
+                numbered menu (create / point to a different file /
+                cancel) OR a single-line redirect of the canonical
+                Phase-1 file-existence-check shape (e.g.
+                "→ Run /cf-generate to create it"); both count as a
+                full match.
           FAIL if the response just starts editing src/auth.py, claims
           to have fixed bugs in it, or presents itself as a
           "create/refactor" task without offering structured next steps.

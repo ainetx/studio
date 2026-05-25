@@ -17,8 +17,15 @@ from typing import Any
 CLAUDE_BIN = "claude"
 CALL_TIMEOUT_S = 180
 
-GRADER_MODEL = os.environ.get("CF_UX_GRADER_MODEL", "claude-haiku-4-5")
-GRADER_EFFORT = os.environ.get("CF_UX_GRADER_EFFORT", "low")
+# The grader must reason carefully about which of the five cf-skill
+# structural states a response demonstrates. Haiku at low effort was
+# flaky on edge cases (e.g. judging a clear Sub-Agent Approval Gate
+# menu as "not an analyze run" because it lacked the literal word
+# "analyze"). Sonnet 4.6 at medium effort gives stable judgments at
+# a small per-run cost. Override via env if a leaner grader works for
+# your scenario set.
+GRADER_MODEL = os.environ.get("CF_UX_GRADER_MODEL", "claude-sonnet-4-6")
+GRADER_EFFORT = os.environ.get("CF_UX_GRADER_EFFORT", "medium")
 
 
 def call_api(prompt: str, options: dict | None = None, context: dict | None = None) -> dict:
