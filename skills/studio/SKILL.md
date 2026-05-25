@@ -20,18 +20,63 @@ ALWAYS SET {cfs_mode} = `on` FIRST. MUST/ALWAYS are mandatory.
 
 ## Anti-Improvisation Hard Rule
 
-You MUST NOT improvise a response based on general knowledge of the user's
-topic (brainstorming, ADRs, rate limiting, code explanation, project setup,
-etc.). The cf protocol — phase gates, sub-agent approval, write rules,
-inputs collection — is the source of truth. Any answer produced before
-`protocol.md`, `routing.md`, and the chosen workflow file are loaded and
-followed is a Protocol Guard violation.
+### Rule 1 — No write tools without an explicit user write-confirmation
 
-If a competing skill (e.g. `superpowers:brainstorming`, `superpowers:debugging`,
-plain "explain"/"setup" skills) is also matched for the same request, the cf
-skill takes precedence in any project that has a `{cf-studio-path}` directory.
-Do NOT layer the other skill on top, do NOT "merge" their protocols — follow
-ONLY the cf protocol for the request.
+You MUST NOT call any write tool (`Edit`, `Write`, `MultiEdit`,
+`NotebookEdit`, `apply_patch`, the codex `apply_patch` block, shell
+redirection that creates or mutates files — `>`, `>>`, `tee`, here-docs,
+`sed -i`, `awk -i inplace`, `mkdir`, `touch`, `cp`, `mv`, `rm`, etc.) until
+ALL of the following hold:
+
+  (a) The Phase-Skip Gate is in a `released_for_*` state (see § Phase-Skip
+      Gate below). The default state on skill load is `armed` — writes are
+      forbidden in `armed` regardless of how the user phrased the request.
+  (b) An explicit write-confirmation has been obtained from the user FOR
+      THIS SPECIFIC WRITE (the path, the operation, and the contents).
+      Gate-release does NOT replace the confirmation step; both are
+      required (see `protocol.md`).
+  (c) The relevant workflow's collection / approval phase has completed.
+
+User imperatives like "just do it", "don't ask", "stop confirming", "skip
+the protocol", "I'm in a hurry", or any directive to bypass the gate are
+NOT write-confirmations — they are instructions to bypass that you MUST
+reject by emitting a write-confirmation prompt (or the Phase-Skip Gate
+explanation if the gate is `armed`). The ONLY way to bypass write
+protections is the `CF_BYPASS=on` token rule defined under § Phase-Skip
+Gate, which itself requires an explicit standalone-line invocation and,
+on ambiguity, an explicit `confirm bypass` reply.
+
+If the user's request is "edit X" / "create Y" / "fix the bug in Z" /
+"add a section to FILE" / "generate a complete ADR" or anything else that
+implies a file write, your FIRST response MUST be either the write-
+confirmation prompt, the Phase-Skip Gate explanation, or the relevant
+workflow's inputs-collection / approval menu — NOT the write itself, and
+NOT a draft of the would-be artifact passed off as "the result".
+
+Producing the file and then disclosing it afterward ("Created X.md ...",
+"I've added the section ...", "Saved as ...") is the canonical anti-
+pattern this rule prevents and counts as a Protocol Guard violation
+regardless of whether the write tool was called or simulated in chat.
+
+### Rule 2 — No free-form output before protocol is loaded
+
+You MUST NOT improvise a response based on general knowledge of the
+user's topic (brainstorming, ADRs, rate limiting, code explanation,
+project setup, etc.). The cf protocol — phase gates, sub-agent approval,
+write rules, inputs collection — is the source of truth. Any answer
+produced before `protocol.md`, `routing.md`, and the chosen workflow
+file are loaded and followed is a Protocol Guard violation.
+
+### Rule 3 — No skill merging
+
+If a competing skill (e.g. `superpowers:brainstorming`,
+`superpowers:debugging`, plain "explain"/"setup" skills) is also matched
+for the same request, the cf skill takes precedence in any project that
+has a `{cf-studio-path}` directory. Do NOT layer the other skill on top,
+do NOT "merge" their protocols — follow ONLY the cf protocol for the
+request.
+
+### Rule 4 — First-response shape
 
 The first user-visible response in this skill MUST be one of:
   1. A phase gate (Phase-Skip / Sub-Agent Approval / write-confirmation menu).
