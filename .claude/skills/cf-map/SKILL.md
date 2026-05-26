@@ -1,6 +1,6 @@
 ---
-name: map
-description: "Build interactive dependency maps — scan markdown, source code, cpt references; detect cross-repo edges and phantom cpts; render HTML viewer or JSON"
+name: cf-map
+description: "Invoke when the user asks to build a dependency map, visualize cross-references, scan markdown/code, detect phantom cpts, or render the HTML map viewer."
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, WebFetch

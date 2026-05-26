@@ -1,0 +1,69 @@
+[[categories]]
+name = "studio-skill"
+paths = ["skills/studio/**"]
+[categories.style]
+color      = "#ef4444"
+background = "#fee2e2"
+
+[[categories]]
+name = "bootstrap-config"
+paths = [".bootstrap/config/**"]
+[categories.style]
+color      = "#f97316"
+background = "#ffedd5"
+
+[[categories]]
+name = "claude-agents"
+paths = [".claude/agents/**"]
+[categories.style]
+color      = "#f59e0b"
+background = "#fffbeb"
+
+[[categories]]
+name = "cursor-agents"
+paths = [".cursor/agents/**"]
+[categories.style]
+color      = "#eab308"
+background = "#fefce8"
+
+[[categories]]
+name = "github-agents"
+paths = [".github/agents/**"]
+[categories.style]
+color      = "#84cc16"
+background = "#f7fee7"
+
+[[categories]]
+name = "plans"
+paths = [".bootstrap/.plans/**"]
+[categories.style]
+color      = "#22c55e"
+background = "#f0fdf4"
+
+[[categories]]
+name = "workflow-generate"
+paths = ["workflows/generate/**"]
+[categories.style]
+color      = "#14b8a6"
+background = "#f0fdfa"
+
+[[categories]]
+name = "workflow-analyze"
+paths = ["workflows/analyze/**"]
+[categories.style]
+color      = "#06b6d4"
+background = "#ecfeff"
+
+[[categories]]
+name = "adr"
+paths = ["architecture/ADR/**"]
+[categories.style]
+color      = "#3b82f6"
+background = "#eff6ff"
+
+[[categories]]
+name = "example-overwork-alert"
+paths = ["examples/overwork_alert/**"]
+[categories.style]
+color      = "#6366f1"
+background = "#eef2ff"
