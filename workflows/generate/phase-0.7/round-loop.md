@@ -582,7 +582,7 @@ RULES:
 
 ### Agent availability check (pre-dispatch)
 
-See `skills/studio/sub-agent-dispatch.md § Registered native sub-agent set & INLINE_FALLBACK_THIS_ROUND` for membership semantics and lifecycle. Handled by `Phase07AgentAvailabilityCheck` unit above.
+Membership semantics and lifecycle defined in `skills/studio/sub-agent-dispatch.md` § Registered native sub-agent set & INLINE_FALLBACK_THIS_ROUND. Handled by `Phase07AgentAvailabilityCheck` unit above.
 
 ### Envelope flattening (single-agent mode)
 

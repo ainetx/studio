@@ -1,4 +1,6 @@
 ---
+cf: true
+type: requirement
 name: PDSL Patterns Registry
 version: 0.1
 purpose: Canonical named-pattern registry for the PDSL matches() operator

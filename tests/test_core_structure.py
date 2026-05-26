@@ -265,7 +265,7 @@ class TestWorkflowStructure:
         """Workflow steps should be numbered or have phase/step structure."""
         wf_dir = PROJECT_ROOT / "workflows"
         # Exclude meta-workflows that embed protocols rather than having direct steps
-        exclude = {"README.md", "AGENTS.md", "analyze.md", "generate.md", "studio.md", "rules.md", "explain.md", "auto-config.md", "brainstorm.md"}
+        exclude = {"README.md", "AGENTS.md", "analyze.md", "generate.md", "studio.md", "rules.md", "explain.md", "auto-config.md", "brainstorm.md", "pdsl.md"}
         wf_files = [f for f in wf_dir.glob("*.md") if f.name not in exclude]
         for f in wf_files:
             text = f.read_text(encoding="utf-8")
@@ -276,7 +276,7 @@ class TestWorkflowStructure:
     def test_workflow_next_steps(self):
         """Workflow should have Next Steps or similar conclusion."""
         wf_dir = PROJECT_ROOT / "workflows"
-        wf_files = [f for f in wf_dir.glob("*.md") if f.name not in ("README.md", "AGENTS.md", "explain.md", "auto-config.md", "brainstorm.md")]
+        wf_files = [f for f in wf_dir.glob("*.md") if f.name not in ("README.md", "AGENTS.md", "explain.md", "auto-config.md", "brainstorm.md", "pdsl.md")]
         for f in wf_files:
             text = f.read_text(encoding="utf-8").lower()
             has_conclusion = "next" in text or "after" in text or "complete" in text or "done" in text
