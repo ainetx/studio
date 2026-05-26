@@ -70,33 +70,41 @@ PURPOSE:
 
 DO:
   RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json info
-    (look for [[systems.codebase]] entries in artifacts.toml)
-  CHECK for .studio-workspace.toml in project root
+    (look for [[systems.codebase]] or [[systems.autodetect.codebase]] entries in artifacts.toml)
+  CHECK for .studio-workspace.toml in project root (federation axis)
+  CHECK for [[systems.codebase]] or [[systems.autodetect.codebase]] entries in
+    <adapter_dir>/config/artifacts.toml or <project_root>/artifacts.toml (source-scanning axis)
   EMIT discovered state:
-    "Local markdown only" OR list all workspace sources that will be scanned
-    List [[systems.codebase]] from artifacts.toml (or "no artifact registry found")
+    Federation: ".studio-workspace.toml present" OR "no workspace config — federation unavailable"
+    Source scanning: list [[systems.codebase]] / [[systems.autodetect.codebase]] entries found,
+      OR "no codebase entries found — source scanning unavailable"
   EMIT_MENU MapScopeMenu
   WAIT user.reply
   STOP_TURN
 
 MENU MapScopeMenu:
   TITLE: >
-    Why this input is needed: decide whether to scan workspace sources and include
-    source code in the map. Reply with the scope: local-only, include-workspace, or no-source.
-    Suggested default: include-workspace if workspace config exists, else local-only.
+    Why this input is needed: decide the scan scope along two independent axes —
+    federation (this repo only vs. include workspace sources) and source scanning
+    (scan source code vs. markdown only).
+    Reply with the scope: single-repo, with-workspace, or markdown-only.
+    Suggested default:
+      with-workspace  when .studio-workspace.toml exists AND codebase entries exist
+      single-repo     when no .studio-workspace.toml but codebase entries exist
+      markdown-only   when no codebase entries exist
   OPTIONS:
-    local-only ->
-      SET map.scope = local-only
+    single-repo ->
+      SET map.scope = single-repo
       CONTINUE MapPhase2
-    include-workspace ->
+    with-workspace ->
       REQUIRE .studio-workspace.toml exists
-      SET map.scope = include-workspace
+      SET map.scope = with-workspace
       CONTINUE MapPhase2
-    no-source ->
-      SET map.scope = no-source
+    markdown-only ->
+      SET map.scope = markdown-only
       CONTINUE MapPhase2
   INVALID:
-    EMIT "Reply with local-only, include-workspace, or no-source."
+    EMIT "Reply with single-repo, with-workspace, or markdown-only."
     WAIT user.reply
     STOP_TURN
 ```
@@ -147,12 +155,12 @@ PURPOSE:
   Invoke cfs map and produce output.
 
 DO:
-  WHEN map.scope == local-only:
-    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map --no-source [--out PATH] [--format html|json]
-  WHEN map.scope == include-workspace:
-    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map [--out PATH] [--format html|json]
-  WHEN map.scope == no-source:
+  WHEN map.scope == single-repo:
     RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map --local-only [--out PATH] [--format html|json]
+  WHEN map.scope == with-workspace:
+    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map [--out PATH] [--format html|json]
+  WHEN map.scope == markdown-only:
+    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map --no-source [--out PATH] [--format html|json]
   VERIFY output file exists and size is reasonable
   IF format == html:
     EMIT file path; note that it opens in a browser
