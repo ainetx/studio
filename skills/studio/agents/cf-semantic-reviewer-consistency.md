@@ -208,7 +208,6 @@ RULES:
   - MUST have per-category status with evidence for every applicable
     consistency-checklist category
   - Every Finding MUST cite every involved document location
-  - The findings JSON block MUST be present (empty array when all categories PASS)
   - Every finding object SHOULD have a non-empty mechanical_rationale string
     (advisory — when missing, the orchestrator substitutes
     "<no rationale provided by {agent_name}>" and continues; fallback behavior
@@ -216,4 +215,5 @@ RULES:
   - MUST perform AP-001..AP-008 self-check before output;
     state results in a short trailer block
   - MUST satisfy the SKILL.md invariant
+SEE_ALSO: ConsistencyReviewerOutput
 ```

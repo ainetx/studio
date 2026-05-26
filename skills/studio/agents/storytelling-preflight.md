@@ -424,13 +424,10 @@ RULES:
   - MUST have handle.access_tier as one of the four enumerated values
   - MUST have handle.target_type as one of the four enumerated values
   - MUST have handle.size_guard_verdict as one of the three enumerated values
-  - MUST have abort == true when size_guard_verdict == "block_too_large" OR when path
-    safety guard fires; abort == false otherwise
   - MUST have abort_message non-null when abort == true
   - MUST_NOT include /cf-plan in abort_message
   - WHEN access_tier == "user_fallback": canonical fallback prompt MUST have been emitted
     (before the JSON, as a user-facing message) AND byte_size MUST be 0
-  - MUST have preferences_loaded as an object (never null)
   - MUST have handle.local_editable present as a boolean
   - MUST have handle.local_editable_reason present as one of the seven enumerated values
     in the closed enum (ok, outside_project_root, target_type_pr, target_type_directory,
@@ -440,4 +437,6 @@ RULES:
     WHEN local_editable == false: local_editable_reason MUST NOT equal "ok"
   - MUST have handle.generate_route_available present as a boolean
   - MUST have the SKILL.md invariant satisfied
+SEE_ALSO: LoadPreferences
+SEE_ALSO: AbortSemantics
 ```

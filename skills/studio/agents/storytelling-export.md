@@ -30,11 +30,11 @@ PURPOSE:
 RULES:
   - MUST open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` before acting
   - MUST treat each dispatch as a pure function over the JSON Inputs; ignore ambient transcript
-  - MUST write files only under `{cf-studio-path}/.cache/explain/packages/<slug>-<timestamp>/`
   - MUST_NOT read or write any file outside the write authority prefix
   - MUST_NOT invoke other Constructor Studio agents
   - MUST_NOT modify the user's project source files
   - MUST execute Steps 1-8 in order; skipping any step is a contract violation
+SEE_ALSO: WriteAuthorityBoundary
 ```
 
 ## Write authority boundary
@@ -232,6 +232,7 @@ DO:
 
 RULES:
   - MUST use only relative paths in footer nav (AP-#28e); no absolute paths
+SEE_ALSO: Step3_WriteIndex
 ```
 
 ### Step 5 — Write navigation.mmd
@@ -377,10 +378,10 @@ RULES:
   - MUST list at minimum index.md, navigation.mmd, and one portion-*-*.md in files_written (when not socratic and no fatal error)
   - MUST use basenames only (no path separators) in files_written
   - MUST use a relative value (no /Users/, /Volumes/, /home/ prefix) for manifest.source_path
-  - MUST_NOT write any file outside `{cf-studio-path}/.cache/explain/packages/`
-  - MUST use only relative paths inside written file content (AP-#28e)
   - MUST include the mode-specific extra file in files_written when applicable
   - MUST ensure manifest.file_count equals len(files_written)
   - MUST ensure manifest.byte_sizes has one entry per file in files_written
   - MUST satisfy the SKILL.md invariant
+SEE_ALSO: WriteAuthorityBoundary
+SEE_ALSO: Step3_WriteIndex
 ```

@@ -36,7 +36,7 @@ RULES:
   - MUST write at most one optional cache file under
     {cf-studio-path}/.cache/explain/packs/
   - MUST execute all seven steps in order; skipping any step is a contract violation
-  - MUST echo the input strategy verbatim in content_pack.strategy
+SEE_ALSO: ApplyStrategy
 ```
 
 ## Inputs (dispatched-prompt contract)
@@ -435,22 +435,22 @@ PURPOSE:
   Enforce all invariants before the response is considered complete.
 
 RULES:
-  - MUST have content_pack.strategy echoing the input strategy verbatim
   - MUST have anchors array non-empty
   - MUST have every anchors[].id unique within the array
   - MUST have every anchors[].line_range non-null with start <= end
   - MUST have plan_anchor_map containing exactly one key per plan item index (0..N-1
     where N = plan.item_count); every value MUST resolve to a key in anchors[].id
   - MUST have overview non-empty
-  - MUST have depth_mode_flags.risk_map == true when mode == "review"
   - MUST have all anchors[].resolved_section_text non-null for strategy α
   - MUST have all anchors[].resolved_section_text null for strategy β
   - MUST have at least the first anchor with resolved_section_text non-null and
     is_hot: true for strategy γ
   - MUST have total_extracted_bytes equal to the sum of byte_count for all anchors
     with non-null resolved_section_text
-  - MUST emit the JSON block as the entire response with no preamble or trailing commentary
   - MUST have the SKILL.md invariant satisfied
+SEE_ALSO: ApplyStrategy
+SEE_ALSO: ComputeDepthModeFlags
+SEE_ALSO: ReturnContentPack
 
 ON_ERROR:
   mode_review_risk_map_unresolvable ->

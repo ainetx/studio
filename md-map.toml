@@ -41,29 +41,43 @@ color      = "#22c55e"
 background = "#f0fdf4"
 
 [[categories]]
-name = "workflow-generate"
-paths = ["workflows/generate/**"]
+name = "workflows"
+paths = ["workflows/**"]
 [categories.style]
 color      = "#14b8a6"
 background = "#f0fdfa"
 
 [[categories]]
-name = "workflow-analyze"
-paths = ["workflows/analyze/**"]
-[categories.style]
-color      = "#06b6d4"
-background = "#ecfeff"
-
-[[categories]]
-name = "adr"
-paths = ["architecture/ADR/**"]
+name = "architecture-root"
+paths = ["architecture/*.md"]
 [categories.style]
 color      = "#3b82f6"
 background = "#eff6ff"
 
 [[categories]]
-name = "example-overwork-alert"
-paths = ["examples/overwork_alert/**"]
+name = "architecture-adr"
+paths = ["architecture/ADR/**"]
 [categories.style]
 color      = "#6366f1"
 background = "#eef2ff"
+
+[[categories]]
+name = "architecture-features"
+paths = ["architecture/features/**"]
+[categories.style]
+color      = "#8b5cf6"
+background = "#f5f3ff"
+
+[[categories]]
+name = "architecture-specs"
+paths = ["architecture/specs/**"]
+[categories.style]
+color      = "#d946ef"
+background = "#fdf4ff"
+
+[[categories]]
+name = "example-overwork-alert"
+paths = ["examples/overwork_alert/**"]
+[categories.style]
+color      = "#ec4899"
+background = "#fdf2f8"

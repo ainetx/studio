@@ -261,14 +261,14 @@ UNIT ResponseCompletionGate
 RULES:
   - MUST return the JSON shape above as the entire output (no chat, no preamble, no markdown wrapping outside the JSON block)
   - MUST set wrap.header to exactly "Storytelling Wrap-up"
-  - MUST produce 3-5 key_takeaways entries with no two entries paraphrasing the same e2_segments entry
   - MUST ensure every key_takeaways[].source_ref is a valid clickable markdown link
   - MUST ensure open_questions is a verbatim copy of open_questions_buffer — no additions, removals, reorderings, or rephrasing (AP-#21)
   - MUST set glossary to null when glossary_buffer was empty; otherwise verbatim copy
   - MUST set bookmarks_export_prompt to true if and only if bookmarked_takeaways was non-empty
   - MUST produce 2-3 next_steps entries; MUST include a "Resume this session" entry as first element if and only if session_ended_early=true
-  - MUST_NOT enumerate all four candidate categories mechanically in next_steps
-  - MUST ensure save_prompt_default_path is relative (no /Users/, /Volumes/, /home/ prefix)
   - MUST ensure all file paths in output are relative-from-project-root (AP-#28e)
   - MUST satisfy the SKILL.md invariant
+SEE_ALSO: Step1_KeyTakeaways
+SEE_ALSO: Step5_NextSteps
+SEE_ALSO: Step7_PathNormalization
 ```

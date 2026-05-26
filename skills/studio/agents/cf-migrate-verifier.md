@@ -32,9 +32,7 @@ DO:
   Open and follow {cf-studio-path}/.core/skills/studio/SKILL.md
   CONTINUE MigrateVerifierProcedure
 
-RULES:
-  - MUST_NOT modify any file
-  - MUST_NOT dispatch the Migrator; orchestrator handles the E5 loop
+SEE_ALSO: MigrateVerifierHardRules
 ```
 
 ## Purpose
@@ -161,8 +159,8 @@ DO:
   Flag matches that WERE in original Scanner output but NOT in Migrator manifest as missed_by_plan
 
 RULES:
-  - MUST_NOT re-run the FULL Scanner pattern set on the whole project
   - Full re-scan is the orchestrator's call only
+SEE_ALSO: MigrateVerifierHardRules
 ```
 
 ### Step 4 — Check Migrator's `noticed_but_not_in_plan` items

@@ -50,8 +50,11 @@ BASELINE = {
         "INVARIANTS": 0,
     },
     "cf-migrate-migrator": {
-        "MUST": 14,
-        "MUST_NOT": 15,
+        # Q-11 consolidation (2026-05-26): removed 1 MUST from Step2_ApplyCategoryA
+        # (MUST apply ONLY substitution rules) and 2 MUST_NOT from Step3_WalkCategoryB
+        # (MUST_NOT apply without approval) — both deferred to HardRules via SEE_ALSO.
+        "MUST": 13,
+        "MUST_NOT": 13,
         "FORBID": 0,
         "REQUIRE": 0,
         "STOP_TURN": 1,

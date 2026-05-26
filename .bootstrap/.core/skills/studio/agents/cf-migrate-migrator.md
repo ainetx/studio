@@ -141,10 +141,10 @@ MENU SpecialCaseAItems:
     WHEN slug appears in code (variable name, etc.): treat as B (skip in this step).
 
 RULES:
-  - MUST apply ONLY substitution rules listed in the Planner's plan; MUST_NOT invent new substitutions
   - WHEN edit fails (old_string not found unique): record failure in manifest with file:line + reason;
     do NOT fall back to replace_all blindly
   - MUST append noticed-but-out-of-plan lines to manifest under `noticed_but_not_in_plan` for the Verifier
+SEE_ALSO: HardRules
 ```
 
 ### Step 3 — Walk Category B (if `B` in selection)
@@ -187,8 +187,7 @@ WHEN:
 DO:
   Skip ALL B-items; record each as `deferred_no_interactive`.
 
-RULES:
-  - MUST_NOT apply a substitution without explicit user approval at the walk prompt
+SEE_ALSO: HardRules
 ```
 
 ### Step 4 — Print Category C commands (if `C` in selection)
