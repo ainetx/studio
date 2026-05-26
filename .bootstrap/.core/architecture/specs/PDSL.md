@@ -156,6 +156,27 @@ appear. Add them to the canonical registry when you want cross-file reuse.
 
 ---
 
+## Naming Scope
+
+`UNIT`, `MENU`, and `STATE` names are **file-local by default**. A name
+declared in one file creates no obligation or alias in any other file.
+
+Cross-file references require one of:
+
+- An explicit path qualifier: `<workflows/foo.md>:<UnitName>` or
+  `<workflows/foo.md>:<MenuName>`.
+- A `SEE_ALSO` line in the referencing unit's executable blocks, pointing
+  to the file that declares the target name.
+
+Without one of the above, two files that happen to declare the same `UNIT`
+or `MENU` name are independent and do not collide.
+
+This subsection is **normative from v0.3**. For v0.2, treat it as a strong
+authoring recommendation: prefer unique names across files to avoid
+reader confusion even though no collision exists at the execution level.
+
+---
+
 ## Actions
 
 Actions are imperative and one per line.

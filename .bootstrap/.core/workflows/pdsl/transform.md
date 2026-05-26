@@ -30,14 +30,15 @@ REQUIRE:
 
 DO:
   EMIT write_summary(target_paths, source_paths)
-  EMIT_MENU WriteConfirmMenu
+  EMIT_MENU TransformWriteConfirmMenu
   WAIT user.reply
   STOP_TURN
 
-MENU WriteConfirmMenu:
+MENU TransformWriteConfirmMenu:
   TITLE: Confirm write to target path(s) listed above
   OPTIONS:
-    1 proceed -> DISPATCH cf-pdsl-transformer WITH TransformPromptInputs
+    1 proceed -> SET CF_PHASE_GATE = released_for_dispatch
+                 DISPATCH cf-pdsl-transformer WITH TransformPromptInputs
                  RETURN manifest
     2 cancel  -> EMIT "Write cancelled. No files written."
                  STOP_TURN
@@ -45,6 +46,11 @@ MENU WriteConfirmMenu:
     EMIT "Reply with 1 (proceed) or 2 (cancel)."
     WAIT user.reply
     STOP_TURN
+
+RULES:
+  - MUST set CF_PHASE_GATE = released_for_dispatch immediately before DISPATCH
+  - MUST reset CF_PHASE_GATE to armed on dispatch return or error
+  SEE_ALSO: {cf-studio-path}/.core/skills/studio/SKILL.md §Phase-Skip Gate
 
 ON_ERROR:
   missing_target_paths ->

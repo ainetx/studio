@@ -25,19 +25,20 @@ WHEN:
   PDSL_MODE == new
 
 REQUIRE:
-  target_paths contains exactly one output path
+  target_paths is an array of exactly 1 output path
   user intent or source context is available
 
 DO:
   EMIT write_summary(target_paths, source_paths)
-  EMIT_MENU WriteConfirmMenu
+  EMIT_MENU NewWriteConfirmMenu
   WAIT user.reply
   STOP_TURN
 
-MENU WriteConfirmMenu:
+MENU NewWriteConfirmMenu:
   TITLE: Confirm write to target path(s) listed above
   OPTIONS:
-    1 proceed -> DISPATCH cf-pdsl-author WITH NewPromptInputs
+    1 proceed -> SET CF_PHASE_GATE = released_for_dispatch
+                 DISPATCH cf-pdsl-author WITH NewPromptInputs
                  RETURN manifest
     2 cancel  -> EMIT "Write cancelled. No files written."
                  STOP_TURN
@@ -45,6 +46,11 @@ MENU WriteConfirmMenu:
     EMIT "Reply with 1 (proceed) or 2 (cancel)."
     WAIT user.reply
     STOP_TURN
+
+RULES:
+  - MUST set CF_PHASE_GATE = released_for_dispatch immediately before DISPATCH
+  - MUST reset CF_PHASE_GATE to armed on dispatch return or error
+  SEE_ALSO: {cf-studio-path}/.core/skills/studio/SKILL.md §Phase-Skip Gate
 
 ON_ERROR:
   missing_output_path ->
@@ -67,7 +73,7 @@ Dispatch payload:
 
 ```json
 {
-  "target_path": "<new file path>",
+  "target_paths": ["<new file path>"],
   "prompt_purpose": "<what the prompt/workflow/skill should do>",
   "source_paths": ["<optional context paths>"],
   "constraints": ["<must-have behavior, state, UX, routing, or safety rules>"],
