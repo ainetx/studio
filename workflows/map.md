@@ -50,19 +50,19 @@ PURPOSE:
 MENU MapIntentRouter:
   TITLE: >
     What would you like to do with the map tool?
-    Reply with the option number or the full option text.
+    Reply with a number or the option name.
   OPTIONS:
-    1 Generate map of current project ->
+    1 generate-map ->
       CONTINUE MapPhase1
-    2 Analyze map for dangling cpts ->
+    2 analyze-dangling ->
       LOAD analyze.md with map target
-    3 Export map data for tooling ->
+    3 export-json ->
       SET map.format = json
       CONTINUE MapPhase1
-    4 Generate or refine md-map.toml config ->
+    4 config-assist ->
       CONTINUE MapPhaseConfigAssist
   INVALID:
-    EMIT "Unrecognised intent. Reply with 1, 2, 3, or 4."
+    EMIT "Reply with 1 generate-map, 2 analyze-dangling, 3 export-json, or 4 config-assist."
     WAIT user.reply
     STOP_TURN
 
@@ -99,24 +99,24 @@ MENU MapScopeMenu:
     Why this input is needed: decide the scan scope along two independent axes —
     federation (this repo only vs. include workspace sources) and source scanning
     (scan source code vs. markdown only).
-    Reply with the scope: single-repo, with-workspace, or markdown-only.
+    Reply with a number (1, 2, or 3) or the option name.
     Suggested default:
-      with-workspace  when .studio-workspace.toml exists AND codebase entries exist
-      single-repo     when no .studio-workspace.toml but codebase entries exist
-      markdown-only   when no codebase entries exist
+      2 with-workspace  when .studio-workspace.toml exists AND codebase entries exist
+      1 single-repo     when no .studio-workspace.toml but codebase entries exist
+      3 markdown-only   when no codebase entries exist
   OPTIONS:
-    single-repo ->
+    1 single-repo ->
       SET map.scope = single-repo
       CONTINUE MapPhase2
-    with-workspace ->
+    2 with-workspace ->
       REQUIRE .studio-workspace.toml exists
       SET map.scope = with-workspace
       CONTINUE MapPhase2
-    markdown-only ->
+    3 markdown-only ->
       SET map.scope = markdown-only
       CONTINUE MapPhase2
   INVALID:
-    EMIT "Reply with single-repo, with-workspace, or markdown-only."
+    EMIT "Reply with 1 single-repo, 2 with-workspace, or 3 markdown-only."
     WAIT user.reply
     STOP_TURN
 ```
@@ -142,10 +142,10 @@ DO:
 MENU MapConfigMenu:
   TITLE: >
     Why this input is needed: confirm map output settings before scanning.
-    Reply with `approve` to accept defaults, or list only the fields to change.
+    Reply with a number (1 or 2) or the option name to accept defaults or list only the fields to change.
     Suggested defaults: HTML output to ./md-map.html, auto-detect categories, keep data separate.
   OPTIONS:
-    approve ->
+    1 approve ->
       WHEN map.scope != markdown-only AND ./md-map.toml does NOT exist:
         EMIT "No md-map.toml detected. Want help generating one before scanning?"
         EMIT_MENU ConfigAssistOfferMenu
@@ -153,13 +153,13 @@ MENU MapConfigMenu:
         STOP_TURN
       OTHERWISE:
         CONTINUE MapPhase3
-    field edits ->
+    2 field-edits ->
       SET map.config_pending_edits = user.named_fields
       RE-EMIT updated proposal with map.config_pending_edits applied
       WAIT user.reply
       STOP_TURN
   INVALID:
-    EMIT "Reply with approve or list fields to change."
+    EMIT "Reply with 1 approve or 2 field-edits."
     WAIT user.reply
     STOP_TURN
 
@@ -167,14 +167,14 @@ MENU ConfigAssistOfferMenu:
   TITLE: >
     Would you like to generate an md-map.toml config before scanning?
     A prior map run with JSON output is needed; if none exists, one will be run first.
-    Reply with 1 or 2.
+    Reply with a number (1 or 2) or the option name.
   OPTIONS:
     1 yes ->
       CONTINUE MapPhaseConfigAssist
     2 no ->
       CONTINUE MapPhase3
   INVALID:
-    EMIT "Reply with 1 or 2."
+    EMIT "Reply with 1 yes or 2 no."
     WAIT user.reply
     STOP_TURN
 
@@ -284,13 +284,13 @@ DO:
   9. After uncategorized bucket choice, emit the full proposed TOML block in chat with:
      - Top-level field: show_uncategorized = {true|false} (based on step 8 choice)
      - Derived category names populated in the `name = "..."` field for each category
-     Include a note: "Names are derived from path prefixes. Use `edit-names` if you want to
-     refine them, or `approve` to accept. Toggle `show_uncategorized` directly in the TOML
+     Include a note: "Names are derived from path prefixes. Use 2 edit-names if you want to
+     refine them, or 1 approve to accept. Toggle `show_uncategorized` directly in the TOML
      if you change your mind before approve."
   10. EMIT_MENU ConfigAssistActionMenu
       WAIT user.reply
       STOP_TURN
-  11. On approve:
+  11. On 1 approve:
         a. EMIT "About to write ./md-map.toml ({N} categories). Reply `yes` to confirm."
         b. WAIT user.reply
            STOP_TURN
@@ -299,15 +299,15 @@ DO:
         d. After write:
              EMIT "Re-running map with new config..."
              CONTINUE MapPhase3 with `--config ./md-map.toml` appended to the RUN line
-  12. On edit-names:
+  12. On 2 edit-names:
         WAIT user.reply with renames
         STOP_TURN
         RE-EMIT updated TOML; loop back to step 10
-  13. On add-manual:
+  13. On 3 add-manual:
         WAIT user.reply for one or more manual {name, paths, style?} entries
         STOP_TURN
         APPEND to proposed config; loop back to step 10
-  14. On skip:
+  14. On 4 skip:
         CONTINUE MapNextSteps
 
 MENU PaletteMenu:
@@ -339,9 +339,9 @@ MENU PaletteMenu:
 
 MENU ThemePickerMenu:
   TITLE: >
-    Pick a theme. Reply with light, dark, pastel, or neon.
+    Pick a theme. Reply with a number (1-4) or the option name.
   OPTIONS:
-    light ->
+    1 light ->
       SET palette = theme-light
       (Tailwind-200 series — muted mid-tone fills, paired with -50 backgrounds)
       Colors in order:
@@ -355,7 +355,7 @@ MENU ThemePickerMenu:
         #67e8f9 / #ecfeff   (cyan-300   / cyan-50)
         #93c5fd / #eff6ff   (blue-300   / blue-50)
         #a5b4fc / #eef2ff   (indigo-300 / indigo-50)
-    dark ->
+    2 dark ->
       SET palette = theme-dark
       (Tailwind-700 series — deep fills, paired with -900 backgrounds)
       Colors in order:
@@ -369,7 +369,7 @@ MENU ThemePickerMenu:
         #0e7490 / #083344   (cyan-700   / cyan-950)
         #1d4ed8 / #172554   (blue-700   / blue-950)
         #4338ca / #1e1b4b   (indigo-700 / indigo-950)
-    pastel ->
+    3 pastel ->
       SET palette = theme-pastel
       (Tailwind-100 series — very soft fills, paired with white-equivalent backgrounds)
       Colors in order:
@@ -383,7 +383,7 @@ MENU ThemePickerMenu:
         #cffafe / #ecfeff   (cyan-100   / cyan-50)
         #dbeafe / #eff6ff   (blue-100   / blue-50)
         #e0e7ff / #eef2ff   (indigo-100 / indigo-50)
-    neon ->
+    4 neon ->
       SET palette = theme-neon
       (fluorescent / saturated set — bright fills on near-black backgrounds)
       Colors in order:
@@ -398,7 +398,7 @@ MENU ThemePickerMenu:
         #ff00c8 / #1a0016   (neon pink   / near-black)
         #ffffff / #0d0d0d   (white       / near-black — neutral contrast anchor)
   INVALID:
-    EMIT "Reply with light, dark, pastel, or neon."
+    EMIT "Reply with 1 light, 2 dark, 3 pastel, or 4 neon."
     WAIT user.reply
     STOP_TURN
 
@@ -421,18 +421,18 @@ MENU UncategorizedBucketMenu:
 MENU ConfigAssistActionMenu:
   TITLE: >
     Review the proposed TOML above. What would you like to do?
-    Reply with: approve, edit-names, add-manual, or skip.
+    Reply with a number (1-4) or the option name.
   OPTIONS:
-    approve ->
+    1 approve ->
       (proceed to step 11 — write confirmation)
-    edit-names ->
+    2 edit-names ->
       (proceed to step 12 — rename loop)
-    add-manual ->
+    3 add-manual ->
       (proceed to step 13 — append manual entries)
-    skip ->
+    4 skip ->
       CONTINUE MapNextSteps
   INVALID:
-    EMIT "Reply with approve, edit-names, add-manual, or skip."
+    EMIT "Reply with 1 approve, 2 edit-names, 3 add-manual, or 4 skip."
     WAIT user.reply
     STOP_TURN
 ```
