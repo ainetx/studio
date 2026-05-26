@@ -32,7 +32,7 @@ Keep prose for context and rationale. Use PDSL for behavior.
 
 PDSL MUST be:
 
-- compact enough to replace repetitive prose
+- compact for structurally dense control flow; explicitness over byte savings for simple narrative
 - readable by humans without a parser
 - explicit about state, branches, and stop points
 - easy for an LLM to follow as an execution contract
@@ -40,6 +40,18 @@ PDSL MUST be:
 
 PDSL MUST NOT depend on hidden semantics. If a state change,
 menu choice, or stop condition matters, write it explicitly.
+
+---
+
+## Compactness Caveat
+
+PDSL conversion typically increases byte count by 0–20 % on prose-heavy files.
+The win is in explicit ruling, not in size.
+
+Measured across 32 files transformed in commit 604eeb9: mean +5.6 % bytes
+(range −7 % to +18 %); only 3 of 32 files shrank. The ×46 control-keyword
+density and ×7 `MUST` density relative to prose are the structural gains.
+Do not expect byte savings as an outcome when converting narrative sections.
 
 ---
 
@@ -96,7 +108,7 @@ Use this small keyword set before inventing new words.
 | `EMIT_MENU` | Show a named `MENU` block |
 | `MENU` | User choice surface |
 | `WAIT` | Stop for user input |
-| `STOP_TURN` | End assistant turn immediately |
+| `STOP_TURN` | End assistant turn immediately (orchestrator context). Inside a dispatched sub-agent, `RETURN` terminates the dispatch; `STOP_TURN` is a no-op alias for `RETURN`. |
 | `CONTINUE` | Move to named unit or phase — see §CONTINUE Target Resolution |
 | `DISPATCH` | Invoke a named sub-agent or worker contract |
 | `RETURN` | Return a manifest, report, checkpoint, or handoff |
@@ -335,6 +347,22 @@ additional obligations.
 
 ---
 
+## Sub-Agent Context
+
+In dispatched sub-agent UNITs — identified by the file's frontmatter `type`
+field containing `agent` — `RETURN` is the sole termination keyword. The
+dispatch boundary ends when `RETURN` is executed.
+
+Authors MUST omit `STOP_TURN` immediately after `RETURN` in sub-agent
+files. The combination `RETURN { ... }` / `STOP_TURN` is redundant and
+creates misleading turn-boundary semantics.
+
+The transformer SHOULD strip `STOP_TURN` lines that immediately follow
+a `RETURN` statement in any file whose frontmatter identifies it as an
+agent (`type` contains `"agent"`).
+
+---
+
 ## CONTINUE Target Resolution
 
 `CONTINUE <target>` transfers control to a named destination. The following
@@ -472,6 +500,9 @@ output:
 
 The authoritative preservation definition for the `transform` workflow is this
 section. See also: `.bootstrap/.core/workflows/pdsl/transform.md`.
+
+Enforcement: `cf-pdsl-transformer` runs an `EquivalenceSelfCheck`
+(see `workflows/pdsl/transform.md`).
 
 ---
 

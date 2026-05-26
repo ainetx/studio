@@ -85,5 +85,37 @@ ALWAYS follow the authoritative preservation definition in
 `.bootstrap/.core/architecture/specs/PDSL.md` §Transform Equivalence when
 assessing whether a transformed file is equivalent to its prose source.
 
+```text
+UNIT EquivalenceSelfCheck
+
+PURPOSE:
+  Verify that the PDSL output preserves every executable rule from the prose source.
+
+WHEN:
+  PDSL_MODE == transform
+  AND CF_PHASE_GATE == armed
+  AND dispatch returned TransformManifest
+
+DO:
+  1. For each written target path:
+       a. Extract the set of executable rules from the prose source:
+            collect all MUST / MUST_NOT / FORBID / REQUIRE / STOP_TURN sentences.
+       b. Extract the equivalent set from the PDSL output:
+            collect all RULES entries, INVARIANTS entries, FORBID statements.
+       c. Compare the two sets:
+            - prose rules with no PDSL counterpart → `missing_in_pdsl`
+            - PDSL rules with no prose source → `invented_in_pdsl`
+       d. Emit an `EQUIVALENCE_REPORT` block in the transformer manifest for this path.
+  2. IF any path has non-empty `missing_in_pdsl` or `invented_in_pdsl`:
+       SET TRANSFORM_INCOMPLETE = true
+       EMIT EQUIVALENCE_REPORT to orchestrator before claiming PASS
+  3. RETURN updated manifest with `equivalence_report` and `transform_incomplete` fields.
+
+RULES:
+  - MUST surface TRANSFORM_INCOMPLETE = true to the orchestrator when any discrepancy exists
+  - MUST_NOT mark a transform as PASS when `missing_in_pdsl` is non-empty
+  - MUST_NOT treat `invented_in_pdsl` entries as errors — flag them for author review only
+```
+
 Completion: return the `cf-pdsl-transformer` manifest or a
 `TRANSFORM_BLOCKED` payload.
