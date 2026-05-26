@@ -1,5 +1,5 @@
-# @cpt-algo:cpt-cypilot-spec-init-structure-change-infrastructure:p1
-.PHONY: test test-verbose test-quick test-coverage test-coverage-diff validate validate-examples validate-feature validate-code validate-code-feature self-check validate-kits validate-kits-sdlc vulture vulture-ci pylint install install-pipx install-proxy clean help check-pytest check-pytest-cov check-pipx check-vulture check-pylint check-versions update spec-coverage ci lint-ci
+# @cpt-algo:cpt-studio-spec-init-structure-change-infrastructure:p1
+.PHONY: test test-verbose test-quick test-coverage test-coverage-diff validate validate-examples validate-feature validate-code validate-code-feature self-check validate-kits validate-kits-sdlc vulture vulture-ci pylint install install-pipx install-proxy install-prompt-tests clean help check-pytest check-pytest-cov check-pipx check-vulture check-pylint check-versions check-prompt-tests update spec-coverage ci lint-ci test-prompts test-prompts-view
 
 # Detect container architecture for act (arm64 on Apple Silicon, amd64 otherwise)
 UNAME_M := $(shell uname -m)
@@ -14,7 +14,7 @@ ACT_FLAGS ?= --container-architecture $(ACT_ARCH)
 
 PYTHON ?= python3
 PIPX ?= pipx
-CPT ?= cpt
+CFS ?= cfs
 PYTEST_PIPX ?= $(PIPX) run --spec pytest pytest
 PYTEST_PIPX_COV ?= $(PIPX) run --spec pytest-cov pytest
 VULTURE_PIPX ?= $(PIPX) run --spec vulture vulture
@@ -23,11 +23,17 @@ DIFF_COVER_PIPX ?= $(PIPX) run --spec diff-cover diff-cover
 DIFF_COVER_COMPARE ?= main
 DIFF_COVER_MIN ?= 80
 VULTURE_MIN_CONF ?= 0
-PYLINT_TARGETS ?= src/cypilot_proxy skills/cypilot/scripts/cypilot
+PYLINT_TARGETS ?= src/studio_proxy skills/studio/scripts/studio
+
+# Prompt-tests (cf-skill UX pilot, tests/prompts/cf-ux/)
+PROMPTFOO_VERSION ?= latest
+PROMPTFOO ?= npx -y promptfoo@$(PROMPTFOO_VERSION)
+PROMPT_TESTS_DIR ?= tests/prompts/cf-ux
+PROMPT_TESTS_TIMEOUT_MS ?= 900000
 
 # Default target
 help:
-	@echo "Cyber Constructor Makefile"
+	@echo "Constructor Studio Makefile"
 	@echo ""
 	@echo "Available targets:"
 	@echo "  make test                          - Run all tests"
@@ -47,7 +53,10 @@ help:
 	@echo "  make ci                            - Run full CI pipeline locally"
 	@echo "  make lint-ci                       - Lint GitHub Actions workflow files"
 	@echo "  make install                       - Install Python dependencies"
-	@echo "  make install-proxy                 - Reinstall cpt proxy from local source"
+	@echo "  make install-proxy                 - Reinstall cfs proxy from local source"
+	@echo "  make install-prompt-tests          - Pre-cache promptfoo for cf-skill UX tests"
+	@echo "  make test-prompts                  - Run cf-skill UX pilot (claude + codex)"
+	@echo "  make test-prompts-view             - Open promptfoo HTML report for last run"
 	@echo "  make update                        - Update .bootstrap from local source"
 	@echo "  make clean                         - Remove Python cache files"
 	@echo "  make help                          - Show this help message"
@@ -112,12 +121,12 @@ check-pylint: check-pipx
 	}
 
 test: check-pytest
-	@echo "Running Cyber Constructor tests with pipx..."
+	@echo "Running Constructor Studio tests with pipx..."
 	$(PYTEST_PIPX) tests/ -v --tb=short
 
 # Run tests with verbose output
 test-verbose: check-pytest
-	@echo "Running Cyber Constructor tests (verbose) with pipx..."
+	@echo "Running Constructor Studio tests (verbose) with pipx..."
 	$(PYTEST_PIPX) tests/ -vv
 
 # Run quick tests only
@@ -129,13 +138,13 @@ test-quick: check-pytest
 test-coverage: check-pytest-cov
 	@echo "Running tests with coverage..."
 	$(PYTEST_PIPX_COV) tests/ \
-		--cov=skills/cypilot/scripts/cypilot \
+		--cov=skills/studio/scripts/studio \
 		--cov-report=term-missing \
 		--cov-report=json:coverage.json \
 		--cov-report=xml:coverage.xml \
 		--cov-report=html \
 		-v --tb=short
-	@$(PYTHON) scripts/check_coverage.py coverage.json --root skills/cypilot/scripts/cypilot --min 90
+	@$(PYTHON) scripts/check_coverage.py coverage.json --root skills/studio/scripts/studio --min 90 --exclude vendor/
 	@echo ""
 	@echo "Coverage report generated:"
 	@echo "  HTML: htmlcov/index.html"
@@ -174,22 +183,22 @@ test-coverage-diff:
 	fi
 
 vulture: check-vulture
-	@echo "Running vulture dead-code scan (excluding tests by scanning only skills/cypilot/scripts/cypilot)..."
+	@echo "Running vulture dead-code scan (excluding tests by scanning only skills/studio/scripts/studio)..."
 	@echo "Tip: raise/lower VULTURE_MIN_CONF to reduce false positives (current: $(VULTURE_MIN_CONF))."
-	@$(VULTURE_PIPX) skills/cypilot/scripts/cypilot vulture_whitelist.py --min-confidence $(VULTURE_MIN_CONF) || true
+	@$(VULTURE_PIPX) skills/studio/scripts/studio vulture_whitelist.py --exclude '*/vendor/*' --min-confidence $(VULTURE_MIN_CONF) || true
 
 vulture-ci: check-vulture
 	@echo "Running vulture dead-code scan (CI mode, fails if findings)..."
-	$(VULTURE_PIPX) skills/cypilot/scripts/cypilot vulture_whitelist.py --min-confidence $(VULTURE_MIN_CONF)
+	$(VULTURE_PIPX) skills/studio/scripts/studio vulture_whitelist.py --exclude '*/vendor/*' --min-confidence $(VULTURE_MIN_CONF)
 
 pylint: check-pylint
 	@echo "Running pylint..."
-	PYTHONPATH=src:skills/cypilot/scripts $(PYLINT_PIPX) $(PYLINT_TARGETS)
+	PYTHONPATH=src:skills/studio/scripts $(PYLINT_PIPX) $(PYLINT_TARGETS)
 
-# Spec coverage check (Cyber Constructor system only)
+# Spec coverage check (Constructor Studio system only)
 spec-coverage:
-	@echo "Checking spec coverage (Cyber Constructor system)..."
-	$(PYTHON) .bootstrap/.core/skills/cypilot/scripts/cypilot.py spec-coverage --system cypilot --min-coverage 90 --min-file-coverage 60 --min-granularity 0.44
+	@echo "Checking spec coverage (Constructor Studio system)..."
+	$(PYTHON) .bootstrap/.core/skills/studio/scripts/studio.py spec-coverage --system studio --min-coverage 90 --min-file-coverage 60 --min-granularity 0.44
 
 # Check version consistency
 check-versions:
@@ -197,26 +206,26 @@ check-versions:
 
 # Update .bootstrap from local source
 update:
-	$(CPT) update --source . --force
+	$(CFS) update --source . --force
 
 # Validate core methodology spec
 validate:
-	$(CPT) validate
+	$(CFS) validate
 
 # Validate SDLC examples against templates
 self-check:
 	@echo "Running self-check: validating SDLC examples against templates..."
-	$(CPT) self-check
+	$(CFS) self-check
 
 # Validate all registered kits
 validate-kits:
 	@echo "Validating all registered kits..."
-	$(CPT) validate-kits
+	$(CFS) validate-kits
 
 # Validate kits/sdlc kit by path
 validate-kits-sdlc:
 	@echo "Validating kits/sdlc..."
-	$(CPT) validate-kits kits/sdlc
+	$(CFS) validate-kits kits/sdlc
 
 # Install Python dependencies
 install-pipx: check-pipx
@@ -227,9 +236,65 @@ install-pipx: check-pipx
 
 install: install-pipx
 
-# Reinstall cfc/cf-constructor proxy from local source
+# Reinstall cfs/constructor-studio proxy from local source
 install-proxy: check-pipx
 	$(PIPX) install --force .
+
+# cf-skill UX prompt-tests (tests/prompts/cf-ux/) -----------------------------
+#
+# Dependencies the tests need at runtime:
+#   - node / npx        (for promptfoo)
+#   - claude CLI        (provider + grader)
+#   - codex  CLI        (provider)
+#   - cfs    CLI        (sandbox init via the local studio engine — already
+#                        installed by `make install-proxy`)
+#
+# Test runs spin up fresh `cfs init`-ed tmpdir sandboxes and consume real
+# Claude / Codex API tokens. Defaults to cheap models (Haiku 4.5, gpt-5.4-mini
+# at low effort, 128k context); override via CF_UX_* env vars — see
+# tests/prompts/cf-ux/README.md.
+check-prompt-tests:
+	@command -v node >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ERROR: node not found (needed for npx promptfoo)"; \
+		echo "  Install via nvm:  https://github.com/nvm-sh/nvm"; \
+		echo ""; \
+		exit 1; \
+	}
+	@command -v claude >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ERROR: claude CLI not found"; \
+		echo "  Install:  https://docs.claude.com/en/docs/claude-code"; \
+		echo ""; \
+		exit 1; \
+	}
+	@command -v codex >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ERROR: codex CLI not found"; \
+		echo "  Install:  https://developers.openai.com/codex/cli"; \
+		echo ""; \
+		exit 1; \
+	}
+	@command -v $(CFS) >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ERROR: cfs not found — run \`make install-proxy\` first"; \
+		echo ""; \
+		exit 1; \
+	}
+
+install-prompt-tests: check-prompt-tests
+	@echo "Pre-caching promptfoo@$(PROMPTFOO_VERSION) via npx..."
+	@$(PROMPTFOO) --version >/dev/null
+	@echo "Done. Run prompt tests with:  make test-prompts"
+
+test-prompts: check-prompt-tests
+	@echo "Running cf-skill UX pilot in $(PROMPT_TESTS_DIR)..."
+	@cd $(PROMPT_TESTS_DIR) && \
+		REQUEST_TIMEOUT_MS=$(PROMPT_TESTS_TIMEOUT_MS) $(PROMPTFOO) eval --no-cache
+
+test-prompts-view:
+	@cd $(PROMPT_TESTS_DIR) && $(PROMPTFOO) view
+# --------------------------------------------------------------------------
 
 # Lint CI workflow files
 lint-ci:

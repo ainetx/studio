@@ -1,8 +1,8 @@
 ---
-cf-constructor: true
+cf: true
 type: workflow
-name: cf-constructor-generate
-description: Create/update artifacts or implement code
+name: cf-generate
+description: Invoke when the user asks to create, update, edit, fix, implement, refactor, add, set up, configure, or build any artifact or code — universal create-or-modify workflow.
 version: 1.0
 purpose: Universal workflow for creating or updating any artifact or code
 ---
@@ -18,481 +18,380 @@ purpose: Universal workflow for creating or updating any artifact or code
 - [Rules Mode Behavior](#rules-mode-behavior)
 - [Phase 0: Ensure Dependencies](#phase-0-ensure-dependencies)
 - [Phase 0.1: Plan Escalation Gate](#phase-01-plan-escalation-gate)
+- [Phase 0.2: Review-Loop Configuration](#phase-02-review-loop-configuration)
+- [Phase 0.x: GIT_COMMIT_MODE Probe](#phase-0x-git_commit_mode-probe)
 - [Phase 0.5: Clarify Output & Context](#phase-05-clarify-output--context)
+- [Phase 0.7: Brainstorm](#phase-07-brainstorm)
 - [Phase 1: Collect Information](#phase-1-collect-information)
-- [Phase 2: Generate](#phase-2-generate)
-- [Phase 2.5: Checkpoint (for long artifacts)](#phase-25-checkpoint-for-long-artifacts)
+- [Phase 1.5: Author Plan](#phase-15-author-plan)
+- [Phase 2 / Phase 2.5](#phase-2--phase-25)
 - [Phase 3: Summary](#phase-3-summary)
 - [Phase 4: Write](#phase-4-write)
-- [Phase 5: Analyze](#phase-5-analyze)
-  - [Phase 5a: Deterministic Validation (tool-based)](#phase-5a-deterministic-validation-tool-based)
-  - [Phase 5b: Semantic Review + Results Assembly](#phase-5b-semantic-review--results-assembly)
+- [Phase 5: Review Loop](#phase-5-review-loop)
 - [Phase 6: Offer Next Steps](#phase-6-offer-next-steps)
 - [Error Handling](#error-handling)
-- [State Summary](#state-summary)
-- [Validation Criteria](#validation-criteria)
+- [State Summary & Validation Criteria](#state-summary--validation-criteria)
+- [Agent Self-Test (STRICT mode — AFTER completing work)](#agent-self-test-strict-mode--after-completing-work)
 
 <!-- /toc -->
 
 ## Reverse Engineering Prerequisite (BROWNFIELD only)
 
-`GREENFIELD`: skip this section and proceed to Phase 0. `BROWNFIELD`: reverse-engineering may inform generated artifacts, code implementation, and code edits. ALWAYS SKIP this section WHEN GREENFIELD — nothing to reverse-engineer.
-
-For BROWNFIELD work:
-- Use Protocol Guard's matched WHEN-clause spec resolution for the current request; treat only task-matched, applicable project specs/rules as satisfying the brownfield rules gate.
-- If one or more project-specific specs/rules are matched for the current request, load and follow them before generating.
-- If no project-specific specs/rules are matched for the current brownfield request, offer auto-config even when unrelated files exist under `{cf-constructor-path}/config/rules/` or unrelated specs are registered.
-- MUST NOT treat mere on-disk rules-file presence or any unrelated registered spec as sufficient to skip auto-config.
-- ALWAYS open and follow `{cf-constructor-path}/.core/requirements/auto-config.md` WHEN user accepts auto-config.
-
 ```text
-Brownfield project detected — existing code found but no task-matched, applicable project-specific specs/rules were found for this request.
-Auto-config can scan your project and generate rules that teach Cyber Constructor your conventions.
-This produces config/rules/, heading-level WHEN rules in config/AGENTS.md, navigation rules for existing project guides, and system entries in config/artifacts.toml.
+UNIT GenerateReverseEngineering
 
-→ Run auto-config now? [yes/no/skip]
-Reply with `yes`, `no`, or `skip`.
-"yes"  → Suggested for first-time setup; run auto-config now, then return to generation with task-matched project rules.
-"no"   → Cancel generation now.
-"skip" → Continue without task-matched project specs/rules (reduced quality for this run).
+PURPOSE:
+  Evaluate auto-config / storytelling-package gates before Phase 0 on BROWNFIELD projects.
+
+WHEN:
+  project is BROWNFIELD
+
+DO:
+  REQUIRE workflows/generate/reverse-engineering.md is loaded and followed
 ```
-
-If user confirms `yes`: execute auto-config methodology (Phases 1→6), then return to generate. If user says `skip`: proceed without task-matched project-specific specs/rules. If user says `no`: cancel.
-
-ALWAYS open and follow `{cf-constructor-path}/.core/requirements/storytelling.md` WHEN user requests an explanatory / educational / presentation / guide / README / training-material **package** to be written to disk (intent like `generate guide for X`, `make a README from X`, `export explain package`, `create training material from X`, `build onboarding doc set for X`, `write a how-to package about X`, or equivalents in any user language). WHEN this rule triggers, set BOTH `EXPLAIN_MODE=true` AND `EXPLAIN_EXPORT=true`; the storytelling methodology handles plan + portion construction; the package is written under `{cf-constructor-path}/.cache/explain/packages/{slug}-{ISO-timestamp}/`. Standard `generate.md` write-permission gates apply (user confirmation before writing files; do NOT add `--yes`/`-y` to write-capable commands unless the user explicitly requested non-interactive behavior). The hybrid execution from `storytelling.md` Export Mode applies: Phases E0/E1 (pre-flight, role/audience confirmation, plan approval) remain interactive; portion construction runs in batch after plan approval and writes files directly (no per-portion chat navigation prompts).
 
 ## Overview
 
-Artifact generation mode = template + example by default; load checklist up front only when the current rules explicitly require it before writing. Code generation mode = design/spec context first; load checklist during validation/review unless the current rules explicitly require it during implementation. Config mode = create/update config files. After `execution-protocol.md`, you have `TARGET_TYPE`, `RULES`, `KIND`, `PATH`, `MODE`, and resolved phase-appropriate dependencies. Key variables: `{cf-constructor-path}/config/`, `{ARTIFACTS_REGISTRY}`, `{KITS_PATH}`, `{PATH}`. Use `{KITS_PATH}/artifacts/{KIND}/examples/` for style and quality guidance.
+```text
+UNIT GenerateOverview
+
+PURPOSE:
+  Define generation mode defaults and key variables.
+
+RULES:
+  - Artifact generation mode: template + example by default; load checklist up front
+    only when current rules explicitly require it before writing
+  - Code generation mode: design/spec context first; load checklist during validation/review
+    unless current rules explicitly require it during implementation
+  - Config mode: create/update config files
+  - After protocol.md: TARGET_TYPE, RULES, KIND, PATH, MODE, and resolved
+    phase-appropriate dependencies are known
+  - Key variables: {cf-studio-path}/config/, {ARTIFACTS_REGISTRY}, {KITS_PATH}, {PATH}
+  - Use {KITS_PATH}/artifacts/{KIND}/examples/ for style and quality guidance
+```
 
 ## Context Budget & Overflow Prevention (CRITICAL)
 
-- Budget first: estimate size before loading large docs (for example with `wc -l`) and state the budget for this turn.
-- Load only what you need: prefer only the generation-phase sections required for the current `KIND`; defer checklist loading to validation/review unless the current rules explicitly require it earlier.
-- Chunk reads and summarize-and-drop: use `read_file` ranges, summarize each chunk, and keep only extracted criteria.
-- Fail-safe: if required steps cannot fit in context, stop and output a checkpoint in chat only; do not proceed to writing files.
-- Plan escalation: [Phase 0.1](#phase-01-plan-escalation-gate) is mandatory after dependencies load; if budget is exceeded, the agent MUST offer plan escalation before proceeding.
+```text
+UNIT GenerateContextBudget
+
+PURPOSE:
+  Enforce context budget throughout generation phases.
+
+RULES:
+  - MUST estimate size before loading large docs (e.g. wc -l) and state the budget for this turn
+  - MUST load only generation-phase sections required for the current KIND
+  - MUST defer checklist loading to validation/review unless current rules explicitly require it earlier
+  - MUST use read_file ranges, summarize each chunk, and keep only extracted criteria
+  - MUST stop and output a checkpoint in chat only (do not proceed to writing files)
+    if required steps cannot fit in context
+  - Plan escalation: Phase 0.1 is mandatory after dependencies load
+  - WHEN SUB_AGENT_SESSION_APPROVED=true AND INLINE_FALLBACK=false:
+      gate logs the estimate and proceeds without proposing /cf-plan;
+      decomposition is handled in-workflow by Phase 1.5 (mandatory in that branch)
+  - OTHERWISE: legacy size-based escalation menu fires when budget is exceeded
+```
 
 ## Agent Anti-Patterns (STRICT mode)
 
-**Reference**: `{cf-constructor-path}/.core/requirements/agent-compliance.md` for the full list.
+```text
+UNIT GenerateAntiPatterns
 
-Critical failures: `SKIP_TEMPLATE`, `SKIP_EXAMPLE`, `SKIP_CHECKLIST`, `PLACEHOLDER_SHIP`, `NO_CONFIRMATION`, `SIMULATED_VALIDATION`.
+PURPOSE:
+  Identify and prevent critical generation failures in STRICT mode.
 
-Self-check before writing files (MANDATORY in STRICT mode): template loaded, example referenced, no placeholders, and explicit `yes` received. Checklist self-review is required here only when the current rules explicitly require checklist use before writing; otherwise defer checklist review to Phase 5. If any required answer fails → STOP and fix before proceeding. STRICT mode MUST include self-check results in Phase 3 Summary output.
+RULES:
+  - Reference: {cf-studio-path}/.core/requirements/agent-compliance.md for full list
+  - Critical failures: SKIP_TEMPLATE, SKIP_EXAMPLE, SKIP_CHECKLIST, PLACEHOLDER_SHIP,
+    NO_CONFIRMATION, SIMULATED_VALIDATION
+  - MUST self-check before writing files (MANDATORY in STRICT mode):
+      template loaded, example referenced, no placeholders, explicit `yes` received
+  - Checklist self-review required before writing only when current rules explicitly require it;
+    otherwise defer to Phase 5
+  - MUST stop and fix before proceeding if any required answer fails
+  - MUST include self-check results in Phase 3 Summary output (STRICT mode)
+```
 
 ## Rules Mode Behavior
 
-STRICT: generation must load the required generation-phase dependencies (typically template + example for artifacts, design/spec context for code), checklist-driven review must run in Phase 5, and Phase 6 requires validation `PASS`. RELAXED: use user-provided or best-effort phase-appropriate dependencies, still attempt post-write validation automatically when practical, and if validation cannot reach `PASS` after recovery, stop with an explicitly unvalidated result instead of treating it as success.
-
 ```text
-⚠️ Generated without Cyber Constructor rules (reduced quality assurance)
+UNIT GenerateRulesMode
+
+PURPOSE:
+  Load canonical STRICT/RELAXED and stop-token behavior.
+
+DO:
+  REQUIRE workflows/shared/mode-resolution.md is loaded and followed
+  REQUIRE workflows/shared/stop-token-policy.md is loaded and followed
 ```
 
 ## Phase 0: Ensure Dependencies
 
-After `execution-protocol.md`, you have `KITS_PATH`, the phase-appropriate dependency set, and `REQUIREMENTS`.
+```text
+UNIT GeneratePhase0
 
-Variable checkpoint: `{cfc_cmd}`, `{cf-constructor-path}`, and `{project_root}` are resolved by `execution-protocol.md`. On context loss or new-chat resume, re-run `{cfc_cmd} --json info` to restore these values before any path-dependent step.
+PURPOSE:
+  Resolve dependencies after protocol.md loads.
 
-| Condition | Action |
-|-----------|--------|
-| `rules.md` loaded | Phase-appropriate dependencies were already resolved from rules Dependencies; proceed silently. |
-| `rules.md` not loaded | Ask the user to provide/specify the generation-phase dependencies that are actually needed now; request `checklist` only when the current phase or rules explicitly require it. |
-| Code mode additional | Ask the user to specify the design artifact if missing; load `{cf-constructor-path}/.core/requirements/code-checklist.md` up front only when the current rules explicitly require implementation-time checklist guidance, otherwise defer it to Phase 5 review. |
+WHEN:
+  workflow enters dependency resolution after skills/studio/protocol.md
 
-**MUST NOT proceed** to Phase 1 until all generation-phase dependencies required for the current target are available.
+DO:
+  REQUIRE workflows/generate/phase-0-dependencies.md is loaded and followed
 
-Raw-input overflow rule: see `{cf-constructor-path}/.core/requirements/raw-input-overflow.md`. If the direct user prompt plus all provided files exceeds `500` total lines, the agent MUST stop direct generation long enough to offer `/cf-constructor-plan` versus continuing here with reduced guarantees, exactly as specified in that file.
+NOTES:
+  phase-0-dependencies.md delegates the INLINE_FALLBACK probe to
+  workflows/shared/inline-fallback-probe.md (canonical block reused by analyze.md).
+```
 
 ## Phase 0.1: Plan Escalation Gate
 
-**MUST** estimate total context from `rules.md`, the generation-phase dependencies actually needed for this run (for example `template.md` and `example.md`, plus `checklist.md` only when explicitly required before writing), expected output size, project context, and ~30% reasoning overhead.
-
-| Estimated total | Action |
-|----------------|--------|
-| `≤ 1500` lines | Proceed normally — optimal zone, >95% rule adherence. |
-| `1501-2500` lines | Proceed with warning + aggressive summarize-and-drop: _"This is a medium-sized task. Activating chunked loading — will checkpoint if context runs low."_ |
-| `> 2500` lines | **MUST** offer plan escalation before proceeding. |
-
-> **Why these thresholds**: rule-following quality drops above ~2000 lines of active constraints; SDLC kit files plus output and reasoning can easily exceed 2500.
-
-When `> 2500` lines, offer:
-
 ```text
-⚠️ This task is large — estimated ~{N} lines of context needed (`rules.md`, active generation dependencies, output, project ctx).
-This exceeds the safe single-context budget (~2500 lines). The plan workflow can decompose this into focused phases (≤500 lines each) that ensure every kit rule is followed and nothing is skipped.
+UNIT GeneratePhase01
 
-Options:
-1. Switch to /cf-constructor-plan (recommended for full quality)
-2. Continue here (risk: context overflow, rules may be partially applied)
-Reply with `1` or `2`.
-1. Switch to /cf-constructor-plan — Suggested for full quality; this decomposes the task into focused phases and reduces context-overflow risk.
-2. Continue here — Faster, but context overflow may reduce rule coverage.
+PURPOSE:
+  Run plan escalation gate after dependencies load.
+
+DO:
+  REQUIRE workflows/shared/plan-escalation-gate.md is loaded and followed
 ```
 
-If user chooses plan: stop and tell them to run `/cf-constructor-plan generate {KIND}` with the same parameters. If user chooses continue: proceed with aggressive chunking and log _"Proceeding in single-context mode — quality may be reduced for large artifacts."_
+## Phase 0.2: Review-Loop Configuration
+
+```text
+UNIT GeneratePhase02
+
+PURPOSE:
+  Load COLLECTOR_MAX_ITER configuration.
+
+DO:
+  REQUIRE workflows/generate/phase-0.2-review-loop-cfg.md is loaded and followed
+
+NOTES:
+  MAX_ITER prompt + parser live in workflows/generate/phase-5/index.md
+  § Pre-Phase-Setup (also the analyze.md external-entry point).
+```
+
+## Phase 0.x: GIT_COMMIT_MODE Probe
+
+```text
+UNIT GeneratePhase0x
+
+PURPOSE:
+  Probe GIT_COMMIT_MODE before Phase 0.5.
+
+WHEN:
+  GIT_COMMIT_MODE == unset
+  AND Phase 0.5 has not yet started
+
+DO:
+  REQUIRE workflows/generate/phase-0-git-commit-mode.md is loaded and followed
+
+RULES:
+  - MUST skip if GIT_COMMIT_MODE is already set from an earlier run in this chat session
+```
 
 ## Phase 0.5: Clarify Output & Context
 
-If system context is unclear, ask:
-
 ```text
-Which system does this artifact/code belong to?
-- {list systems from artifacts.toml}
-- Create new system
-Reply with the system name or `Create new system`.
+UNIT GeneratePhase05
+
+PURPOSE:
+  Clarify output destination or system context when unclear.
+
+WHEN:
+  system context or output destination is unclear
+  AND before Phase 0.7 / Phase 1
+
+DO:
+  REQUIRE workflows/generate/phase-0.5-clarify.md is loaded and followed
 ```
 
-Store the selected system for registry placement.
-
-If output destination is unclear, ask:
+## Phase 0.7: Brainstorm
 
 ```text
-Where should the result go?
-- File (will be written to disk and registered)
-- Chat only (preview, no file created)
-- MCP tool / external system (specify)
-Reply with `File`, `Chat only`, or `MCP tool / external system`.
-```
+UNIT GeneratePhase07
 
-Then: store the selected system; if file output + using rules, determine the path, plan the `artifacts.toml` entry, and check `UPDATE` vs `CREATE`; for artifacts identify parent references; for code identify design artifacts + requirement IDs + traceability markers; for new IDs use `cpt-{system}-{kind}-{slug}` and verify uniqueness with `{cfc_cmd} --json list-ids`.
+PURPOSE:
+  Run brainstorm phase when applicable.
+
+WHEN:
+  Phase 0.5 is complete
+  AND --no-brainstorm was NOT passed
+  AND active KIND's rules.md does NOT set brainstorm = "disabled"
+
+DO:
+  REQUIRE workflows/generate/phase-0.7/index.md is loaded and followed
+```
 
 ## Phase 1: Collect Information
 
-Artifacts: parse template H2 sections into questions, load the example, and present required questions in one batch with concrete proposals.
+```text
+UNIT GeneratePhase1
 
-```markdown
-## Inputs for {KIND}: {name}
-Why this input is needed: complete the required sections with concrete, reviewable proposals before writing anything.
-### {Section from template H2}
-- Context: {from template}
-- Proposal: {based on project context}
-- Reference: {from example}
-...
-Reply: `approve all` or provide edits per item
+PURPOSE:
+  Gather Inputs for Phase 4.
+
+WHEN:
+  dependency resolution and Phase 0.5 / 0.7 are complete
+
+DO:
+  REQUIRE workflows/generate/phase-1-collect.md is loaded and followed
 ```
 
-Code: parse the related artifact, extract requirements to implement, and present:
-
-```markdown
-## Implementation Plan for {KIND}
-Source: {related artifact path}
-Requirements to implement:
-1. {requirement}
-2. {requirement}
-...
-Proposed approach: {implementation strategy}
-Why this input is needed: confirm the implementation direction before code changes are written.
-Reply: `approve` or describe the modifications you want
-```
-
-Input collection rules: MUST ask all required questions in a single batch by default, propose specific answers, use project context, show reasoning clearly, allow modifications, and require final confirmation. MUST NOT ask open-ended questions without proposals, skip questions, assume answers, or proceed without final confirmation.
-
-After approval:
+## Phase 1.5: Author Plan
 
 ```text
-Inputs confirmed. Proceeding to generation...
+UNIT GeneratePhase15
+
+PURPOSE:
+  Present author plan offer gate before Phase 3 summary.
+
+WHEN:
+  Phase 1 inputs are approved
+  AND before Phase 3 summary
+
+DO:
+  REQUIRE workflows/generate/phase-1.5-author-plan.md is loaded and followed
+
+RULES:
+  - The author plan is optional for the user
+  - The offer gate is MANDATORY unless an explicit auto-skip condition in that file applies
 ```
 
-## Phase 2: Generate
+## Phase 2 / Phase 2.5
 
-Follow the loaded `rules.md` Tasks section.
+```text
+UNIT GeneratePhase2
 
-Artifacts: load the generation-phase dependencies required now (typically template + example, plus checklist only when explicitly required before writing), create content per rules, and generate IDs/structure.
+PURPOSE:
+  Emit Phase 2 no-op or Phase 2.5 checkpoint for long-running generation.
 
-Code: load spec design and any implementation-time dependencies required by the current rules, implement with traceability markers, and use the correct marker format; defer checklist-driven review to Phase 5 unless the current rules explicitly require it earlier.
+WHEN:
+  orchestrator passes through Phase 2 no-op
+  OR must emit a Phase 2.5 checkpoint for a long-running generation
 
-Standard checks:
-
-- [ ] No placeholders (`TODO`, `TBD`, `[Description]`)
-- [ ] All IDs valid and unique
-- [ ] All sections filled
-- [ ] Parent artifacts referenced correctly
-- [ ] Follows conventions
-- [ ] Implements all requirements
-- [ ] Has tests (if required)
-- [ ] Traceability markers present (if `to_code="true"`)
-
-Content rules: MUST follow content requirements exactly, use imperative language, wrap IDs in backticks, reference types from the domain model, and use Cyber Constructor DSL (CDSL) for behavioral sections when applicable. MUST NOT leave placeholders, skip required content, redefine parent types, or use code examples in `DESIGN.md`.
-
-Markdown quality: MUST use empty lines between headings/paragraphs/lists, fenced code blocks with language tags, and proper line-break formatting.
-
-## Phase 2.5: Checkpoint (for long artifacts)
-
-Checkpoint when artifacts have `>10` sections or generation spans multiple turns.
-
-```markdown
-### Generation Checkpoint
-**Workflow**: /cf-constructor-generate {KIND}
-**Phase**: 2 complete, ready for Phase 3
-**Inputs collected**: {section summaries}
-**Content generated**: {line count} lines
-**Pending**: Summary → Confirmation → Write → Analyze
-Resume: Re-read this checkpoint, verify no file changes, continue to Phase 3.
+DO:
+  REQUIRE workflows/generate/phase-2-checkpoint.md is loaded and followed
 ```
-
-Checkpoint policy: default is chat only; write a checkpoint file only if the user explicitly requests/approves it. On resume after compaction: re-read the target file if it exists, re-load rules dependencies, then continue from the saved phase.
 
 ## Phase 3: Summary
 
-```markdown
-## Summary
-**Target**: {TARGET_TYPE}
-**Kind**: {KIND}
-**Name**: {name}
-**Path**: {path}
-**Mode**: {MODE}
-**Content preview**: {brief overview of what will be created/changed}
-**Files to write**: `{path}`: {description}; {additional files if any}
-**Artifacts registry**: `{cf-constructor-path}/config/artifacts.toml`: {entry additions/updates, if any}
-**STRICT self-check**: template loaded = {yes/no}; example referenced = {yes/no}; checklist status = {required-and-complete/deferred-to-phase-5}; placeholders absent = {yes/no}; explicit `yes` received = {yes/no}
-**Proceed?** [yes/no/modify]
-Reply with `yes`, `no`, or `modify`.
-`yes` → Suggested when the summary is accurate; write files and continue to validation.
-`no` → Cancel without writing files.
-`modify` → Revisit the inputs or proposal before any files are written.
-```
+```text
+UNIT GeneratePhase3
 
-Responses: `yes` = create files and validate; `no` = cancel; `modify` = revisit a question and iterate (max 3 iterations, then require explicit `continue iterating` or restart workflow).
+PURPOSE:
+  Present summary and obtain user confirmation before any files are written.
+
+WHEN:
+  Phase 1 inputs are approved
+  AND Phase 1.5 has set AUTHOR_PLAN_OFFER_RESOLVED
+  AND user must confirm yes/no/modify before any files are written
+
+DO:
+  REQUIRE workflows/generate/phase-3-summary.md is loaded and followed
+```
 
 ## Phase 4: Write
 
-Only after confirmation: update `{cf-constructor-path}/config/artifacts.toml` if a new artifact path is introduced, create directories if needed, write file(s), and verify content.
+```text
+UNIT GeneratePhase4
+
+PURPOSE:
+  Dispatch author to write files atomically.
+
+WHEN:
+  Phase 3 returned yes
+  AND author must be dispatched (mode=create) to write files atomically
+
+DO:
+  REQUIRE workflows/generate/phase-4-write.md is loaded and followed
+```
+
+## Phase 5: Review Loop
 
 ```text
-✓ Written: {path}
+UNIT GeneratePhase5
+
+PURPOSE:
+  Run bounded review loop after files are written.
+
+WHEN:
+  Phase 4 has written files
+  OR analyze.md Remediation Handoff option 1 routes external entry into Phase 5.3
+
+DO:
+  REQUIRE workflows/generate/phase-5/index.md is loaded and followed
 ```
-
-**MUST NOT** create files before confirmation, create incomplete files, or create placeholder files.
-
-## Phase 5: Analyze
-
-Attempt deterministic validation automatically after generation; do not list it in Next Steps. STRICT mode requires validation `PASS` before Phase 6. RELAXED mode may exit with an explicitly unvalidated result either because no target-applicable deterministic validator exists for the current written output (`Deterministic gate: SKIPPED`) or through the Error Handling recovery branch after repeated validation failure (`Deterministic gate: FAIL`).
-
-> **⛔ CRITICAL**: The agent's own checklist walkthrough is **NOT** a substitute for the applicable deterministic validator command(s). A manual "✅ PASS" table in chat is semantic review, not deterministic validation — these are **separate steps**. See anti-pattern `SIMULATED_VALIDATION`.
-
-### Phase 5a: Deterministic Validation (tool-based)
-
-MUST run deterministic validation as an actual terminal command using the canonical agent-safe form.
-
-Deterministic gate is available only when the current Cyber Constructor configuration and current written output support a canonical validator invocation for this target. Treat availability as proven by active config plus CLI support for the concrete validator command(s) selected for the current output; do **not** infer availability or non-availability from kit prose, examples, `format` labels, or the absence of an exact example in this workflow. Before taking a RELAXED `Deterministic gate: SKIPPED` path, MUST record `Validator availability proof` showing which canonical validator route(s) were checked for the current target (for example project-wide `validate`, artifact-scoped `validate --artifact {PATH}`, `validate-toc {PATH}`, or another deterministic validator explicitly required by the current target) and why none is target-applicable for the current written output.
-
-Artifacts:
-
-```bash
-{cfc_cmd} --json validate
-```
-
-Specific artifact:
-
-```bash
-{cfc_cmd} --json validate --artifact {PATH}
-```
-
-Workflow / instruction Markdown file with TOC requirements:
-
-```bash
-{cfc_cmd} --json validate-toc {PATH}
-```
-
-Language content check (run after writing any `.md` artifact when `[validation] allowed_content_languages` is configured in `.cf-constructor-workspace.toml`):
-
-```bash
-{cfc_cmd} --json check-language {PATH}
-```
-
-If `check-language` returns violations (`LANG001`): fix flagged lines — rewrite non-English content in the allowed language(s) — then re-run until `PASS`. Language violations are errors, not warnings; STRICT mode requires `PASS` before Phase 6.
-
-Rules:
-- execute the deterministic validator BEFORE any semantic review
-- choose the target-applicable deterministic validator command(s) for the current output and rules (for example `{cfc_cmd} --json validate`, `{cfc_cmd} --json validate --artifact {PATH}`, `{cfc_cmd} --json validate-toc {PATH}`, or another deterministic validator explicitly required by the current target)
-- use `{cfc_cmd} --json validate-toc {PATH}` as the canonical deterministic validator for workflow / instruction Markdown files when TOC validation applies, and MUST NOT classify that target as having no target-applicable deterministic validator while that route exists
-- treat `{cfc_cmd} --json validate --artifact {PATH}` as artifact-scoped only when the current file is a registered artifact target
-- record the exact deterministic validator command(s) executed, including subcommand and path flags, plus each command's actual validator exit code and JSON `status` / `error_count` / `warning_count`
-- record the overall deterministic gate result across the full required validator set
-- if no target-applicable deterministic validator exists for the current written output and RELAXED mode takes the explicitly unvalidated path, record `Deterministic gate: SKIPPED`, explicit `Validator availability proof`, explicit `Skip reason`, and an explicit `Validator-backed evidence note` that no deterministic validator command completed
-- if RELAXED recovery stops after repeated validation failure, record the actual failing command results and `Deterministic gate: FAIL`
-- in STRICT mode, MUST NOT proceed to Phase 5b until all applicable deterministic validator command(s) for the current target have been run and the overall deterministic gate is `PASS`
-- MUST NOT summarize validation without the actual validator output, omit which validator command produced each result, collapse a mixed-result validator set into a single untraceable line, or claim that no validator was target-applicable without the required validator-availability proof
-- if FAIL → fix errors → re-run until PASS
-- repeated validation failure is a recovery branch, not a PASS substitute
-
-Gate: MUST NOT proceed to Phase 5b until Phase 5a deterministic gate result is recorded (PASS, FAIL, or SKIPPED with proof).
-
-### Phase 5b: Semantic Review + Results Assembly
-
-Only enter Phase 5b after Phase 5a is complete (deterministic gate result recorded).
-
-Only after deterministic PASS (or SKIPPED with recorded proof): load `checklist.md` if it was not already loaded, then self-review generated content against it, verify no placeholders (`TODO`, `TBD`, `FIXME`), verify cross-references are meaningful, and verify content quality/completeness.
-
-Validation Results body below is the single authoritative sub-contract for deterministic validation metadata. Whenever this workflow requires validation results to be embedded elsewhere, paste the completed body verbatim with actual values instead of rewriting the fields; include the conditional `SKIPPED`-only lines only when the deterministic gate is `SKIPPED`.
-
-```markdown
-## Validation Results
-Deterministic validator command(s): `{exact command(s) run}` | `none; skipped before execution`
-Deterministic validator results:
-- `{command 1}` → exit code {actual exit code}, status {actual JSON status}, errors {N}, warnings {N}
-- `{command N}` → exit code {actual exit code}, status {actual JSON status}, errors {N}, warnings {N}
-- `skipped before execution` → no deterministic validator command executed; include this line only when deterministic validation was skipped
-Deterministic gate: {PASS|FAIL|SKIPPED}; overall result across all required validator command(s)
-Validator availability proof (SKIPPED only): {canonical validator route(s) checked and why none is target-applicable for the current written output}
-Skip reason (SKIPPED only): {why deterministic validation was skipped}
-Validator-backed evidence note (SKIPPED only): {`none; deterministic validation was skipped, so there is no validator-backed evidence`}
-Semantic review basis: {`static/manual only; no validator-backed semantic checker exists` | `validator-backed by {tool}` | `hybrid: validator-backed by {tool} + manual checklist review`}
-Semantic Review: checklist coverage {summary}; content quality {summary}; issues found {list or "none"}
-```
-
-If deterministic validation passes and semantic review passes: proceed to Phase 6. If no target-applicable deterministic validator exists for the current written output, STRICT mode stops here; RELAXED mode may proceed only on an explicitly unvalidated `Deterministic gate: SKIPPED` path with explicit `Validator availability proof`, `Skip reason`, and `Validator-backed evidence note`. If semantic issues are found: fix them and re-validate from the validator step. If deterministic validation cannot reach PASS after recovery attempts, follow Error Handling: STRICT mode stops here; RELAXED mode may only exit with an explicitly unvalidated `Deterministic gate: FAIL` result and MUST NOT present it as PASS. If Phase 4 wrote or updated any files before either RELAXED explicitly unvalidated exit, Phase 6 still applies and the response remains incomplete until both `Plan Review Prompt` and `Direct Review Prompt` blocks are emitted.
 
 ## Phase 6: Offer Next Steps
 
-Prerequisite guard: before constructing `Review Prompts`, verify that Phase 5 produced the complete `Validation Results` body from the canonical template with actual values filled in. If the body is missing, still contains placeholder/template content, or is otherwise incomplete, abort Phase 6 with a clear prerequisite error stating that Phase 5 validation output must be completed before review prompts can be generated.
-
-Read `## Next Steps` from `rules.md` and present:
-
 ```text
-What would you like to do next?
-1. {option from rules Next Steps}
-2. {option from rules Next Steps}
-3. Other
-Reply with the option number or a short custom instruction.
-1. {option from rules Next Steps} — Mark as `Suggested` when it is the clearest continuation from the current result; state why and what happens next.
-2. {option from rules Next Steps} — State what this does next.
-3. Other — Say what you want to change or do next.
-```
+UNIT GeneratePhase6
 
-If Phase 4 wrote or updated any files, the next-step menu is informational only; whether the workflow is ending on the validated success path or any RELAXED explicitly unvalidated exit, it MUST generate the review prompts automatically in the same response after listing the options. MUST NOT ask whether review prompts should be generated and MUST NOT wait for a later user turn to generate them.
+PURPOSE:
+  Assemble next-steps and handoff menus after Phase 5 exits.
 
-If Phase 4 wrote or updated any files, MUST append a final chat-only `Review Prompts` section immediately after the next-step options in the same response. If output was chat-only and no files changed, skip this section.
+WHEN:
+  Phase 5 exits
 
-This applies to any file-writing generate flow, including validated outputs, RELAXED explicitly unvalidated outputs, artifacts, code, workflow/instruction updates, and multi-file edits.
+DO:
+  REQUIRE workflows/generate/phase-6/index.md is loaded and followed
 
-If files were written and the response omits the `Review Prompts` section or either required review prompt, or ends before those blocks are emitted, the generate output is incomplete.
-
-A summary alone is not completion. The `Validation Results` body alone is not completion. The next-step menu alone is not completion. For any file-writing generate flow, the response is invalid unless it ends with `Review Prompts`, then `Plan Review Prompt`, then `Direct Review Prompt`.
-
-Before ending a file-writing response, perform this final self-check: were files written; if yes, was the `Review Prompts` section emitted; if yes, were both `Plan Review Prompt` and `Direct Review Prompt` emitted in that order; only then may the response end.
-
-`Review Prompts` rules — both prompts MUST be **self-contained final prompts** usable in a fresh chat without any prior context:
-
-- explicitly begin with the phrase `Invoke skill cf-constructor`
-- state that `/cf-constructor-generate` is complete and the next chat is for reviewing the generated changes
-- embed inline: changed file paths, what was changed per file (brief summary), kind/target, and the completed `Validation Results` body with actual values
-- verify again before emitting the prompts that the `Validation Results` body is present and complete; if not, stop with the Phase 6 prerequisite error instead of generating partial prompts
-- do NOT reference "previous chat", "findings above", or any content outside the prompt itself
-- the prompt alone must give the next agent everything needed to start work immediately
-- generate **two separate prompts**:
- 1. `Plan Review Prompt` — route to `/cf-constructor-plan` when the review scope is broad, multi-file, or needs to be phased or strict coverage
- 2. `Direct Review Prompt` — route to `/cf-constructor-analyze` when the review scope is bounded and can be performed immediately
-- include both prompts in the same final response whenever files were written
-- MUST NOT ask the next agent to regenerate or re-implement the changes
-
-Template:
-
-```text
-Plan Review Prompt (copy-paste into new chat if needed):
-```
-
-```text
-Invoke skill `cf-constructor`.
-
-I just completed `/cf-constructor-generate` and want a phased review plan for the generated changes.
-
-Target: {TARGET_TYPE} / {KIND}
-Changed files:
-- `{path}` — {brief description of what was created/changed}
-- `{additional path}` — {brief description}
-
-{paste the completed Validation Results body from the canonical template above verbatim, preserving field names, order, values, and any conditional `SKIPPED`-only lines exactly as emitted}
-
-Use `/cf-constructor-plan` to create a phased review plan for these changes.
-Focus on review coverage, risk hotspots, and the minimal set of review phases needed for high confidence.
-After creating the plan, give me the next execution prompt for the first review phase.
-
-Do not regenerate the implementation. Do not ask me to restate the task unless required inputs are missing.
-```
-
-```text
-Direct Review Prompt (copy-paste into new chat if needed):
-```
-
-```text
-Invoke skill `cf-constructor`.
-
-I just completed `/cf-constructor-generate` and want an immediate review of the generated changes.
-
-Target: {TARGET_TYPE} / {KIND}
-Changed files:
-- `{path}` — {brief description of what was created/changed}
-- `{additional path}` — {brief description}
-
-{paste the completed Validation Results body from the canonical template above verbatim, preserving field names, order, values, and any conditional `SKIPPED`-only lines exactly as emitted}
-
-Use `/cf-constructor-analyze` to review these changes now.
-Report findings with severity, evidence, risks, regressions, and recommended fixes.
-
-Do not regenerate the implementation. Do not ask me to restate the task unless required inputs are missing.
+RULES:
+  - Remediation Handoff: conditional on non-empty remaining_findings
+  - Post-Write Review Handoff: mandatory when files were written
 ```
 
 ## Error Handling
 
-Tool failure:
-
 ```text
-⚠️ Tool error: {error message}
-→ Check Python environment and dependencies
-→ Verify Cyber Constructor is correctly configured
-→ Run `{cfc_cmd} --json update` to refresh the adapter if the local installation is stale
+UNIT GenerateErrorHandling
+
+PURPOSE:
+  Handle tool/dispatch failures, user abandonment, and validation-failure loops.
+
+WHEN:
+  tool/dispatch failure occurs
+  OR user abandonment occurs
+  OR validation-failure loop reaches 3+ failed iterations
+  (during any generate phase)
+
+DO:
+  REQUIRE workflows/generate/error-handling.md is loaded and followed
 ```
 
-STOP — do not continue with incomplete state.
-
-User abandonment: do not auto-proceed with assumptions; state is resumed by re-running the workflow command; no cleanup is required because no partial files are created before Phase 4.
-
-Validation failure loop (3+ times):
+## State Summary & Validation Criteria
 
 ```text
-⚠️ Deterministic validation is still failing after repeated fixes. Options:
-1. Review checklist requirements manually and fix the reported validator errors
-2. Simplify artifact scope or revert the last change set, then re-run validation
-3. RELAXED mode only: stop the validated success path and return the result as explicitly unvalidated with `Deterministic gate: FAIL`; do not present it as PASS, and if files were written still emit both review prompts before ending the response
-Reply with `1`, `2`, or `3`.
-1. Review checklist requirements manually and fix the reported validator errors — Suggested default path; continue trying to reach validator `PASS`.
-2. Simplify artifact scope or revert the last change set, then re-run validation — Use this when the current scope is too broad or the last changes were incorrect.
-3. RELAXED mode only: stop the validated success path and return the result as explicitly unvalidated with `Deterministic gate: FAIL`; do not present it as PASS, and if files were written still emit both review prompts before ending the response.
+UNIT GenerateStateSummary
+
+PURPOSE:
+  Track generation state and run post-flight checklist.
+
+STATE:
+  Generating artifact: TARGET_TYPE=artifact, Has Template=true, Has Checklist=phase-dependent, Has Example=true
+  Generating code:     TARGET_TYPE=code,     Has Template=false, Has Checklist=phase-dependent, Has Example=false
+
+WHEN:
+  post-flight checklist must be verified before ending the response
+
+DO:
+  REQUIRE workflows/generate/validation-criteria.md is loaded and followed
 ```
 
-A legitimate RELAXED `Deterministic gate: SKIPPED` exit for file-writing output is separate from this failure loop: use it only when `Validator availability proof` shows that no canonical validator route is target-applicable for the current written output, and record the explicit `Validator availability proof`, `Skip reason`, `Validator-backed evidence note`, and mandatory review-prompt pair without inventing a validation-failure narrative.
+## Agent Self-Test (STRICT mode — AFTER completing work)
 
-## State Summary
+```text
+UNIT GenerateSelfTest
 
-| State | TARGET_TYPE | Has Template | Has Checklist | Has Example |
-|-------|-------------|--------------|---------------|-------------|
-| Generating artifact | artifact | ✓ | phase-dependent | ✓ |
-| Generating code | code | ✗ | phase-dependent | ✗ |
+PURPOSE:
+  Answer canonical self-test questions in STRICT mode after completing work.
 
-## Validation Criteria
+WHEN:
+  STRICT mode finalization requires self-test
 
-- [ ] `{cf-constructor-path}/.core/requirements/execution-protocol.md` executed
-- [ ] Phase-appropriate dependencies loaded (generation: template/example unless checklist explicitly required; validation/review: checklist when applicable)
-- [ ] System context clarified (if using rules)
-- [ ] Output destination clarified
-- [ ] Parent references identified
-- [ ] ID naming verified unique
-- [ ] Information collected and confirmed
-- [ ] Content generated with no placeholders
-- [ ] All IDs follow naming convention
-- [ ] All cross-references valid
-- [ ] File written after confirmation (if file output)
-- [ ] Artifacts registry updated (if file output + rules)
-- [ ] Validation executed
-- [ ] Language content check executed (`{cfc_cmd} check-language`) when `allowed_content_languages` is configured
-- [ ] Exact deterministic validator command(s), per-command validator results, and overall deterministic gate recorded
-- [ ] `Validator availability proof` recorded when deterministic gate is `SKIPPED`
-- [ ] `Semantic review basis` recorded
-- [ ] `Skip reason` and `Validator-backed evidence note` recorded when deterministic gate is `SKIPPED`
-- [ ] For file-writing output, the final-response gate self-check was completed before ending the response
-- [ ] `Review Prompts` section generated when files were written
-- [ ] `Plan Review Prompt` appears before `Direct Review Prompt` whenever files were written
-- [ ] Both `Plan Review Prompt` and `Direct Review Prompt` generated in the same response whenever files were written, including RELAXED explicitly unvalidated exits
+DO:
+  REQUIRE workflows/generate/validation-criteria.md § Agent Self-Test
+    (STRICT mode — AFTER completing work) is loaded and followed
+```

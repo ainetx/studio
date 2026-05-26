@@ -1,5 +1,5 @@
 ---
-cypilot: true
+cf: true
 type: project-rule
 topic: patterns
 generated-by: auto-config
@@ -25,7 +25,7 @@ version: 1.0
 
 <!-- /toc -->
 
-Recurring implementation patterns and idioms observed in the Cypilot codebase.
+Recurring implementation patterns and idioms observed in the Constructor Studio codebase.
 
 ## Error Handling
 

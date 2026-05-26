@@ -1,7 +1,7 @@
 """
-Tests for Cypilot project core structure validation.
+Tests for Constructor Studio project core structure validation.
 
-Validates that the Cypilot project itself follows Cypilot conventions:
+Validates that the Constructor Studio project itself follows Constructor Studio conventions:
 - Directory structure
 - Base file structure (frontmatter, sections)
 - Requirements file structure
@@ -48,7 +48,7 @@ class TestDirectoriesExist:
 
 
 class TestBaseStructure:
-    """Validate base file structure for Cypilot specification files."""
+    """Validate base file structure for Constructor Studio specification files."""
 
     def _get_spec_files(self):
         """Scan all .md files in requirements/ and workflows/."""
@@ -62,18 +62,20 @@ class TestBaseStructure:
         wf_files = [
             f
             for f in (PROJECT_ROOT / "workflows").glob("*.md")
-            if f.name not in ("README.md", "AGENTS.md", "analyze.md", "generate.md", "plan.md", "cypilot.md", "rules.md", "adapter.md")
+            if f.name not in ("README.md", "AGENTS.md", "analyze.md", "generate.md", "plan.md", "studio.md", "rules.md", "adapter.md")
         ]
         return req_files + wf_files
 
     def _has_yaml_frontmatter(self, path: Path) -> bool:
-        """Check if file has YAML frontmatter with cf-constructor: true."""
+        """Check if file has YAML frontmatter with cf: true or cf-constructor: true."""
         text = path.read_text(encoding="utf-8")
         parsed = self._parse_frontmatter(text)
         if parsed is None:
             return False
         frontmatter, _body = parsed
-        return str(frontmatter.get("cf-constructor", "")).strip().lower() == "true"
+        cf_val = str(frontmatter.get("cf-constructor", "")).strip().lower()
+        cf_new_val = str(frontmatter.get("cf", "")).strip().lower()
+        return cf_val == "true" or cf_new_val == "true"
 
     def _has_required_frontmatter_fields(self, path: Path) -> bool:
         """Check for required frontmatter fields: type, name, version, purpose."""
@@ -95,7 +97,7 @@ class TestBaseStructure:
         return bool(re.fullmatch(r"\d+\.\d+", str(frontmatter.get("version", "")).strip()))
 
     def _has_title_format(self, path: Path) -> bool:
-        """Verify title format # Cypilot: {Title} or similar heading."""
+        """Verify title format # Constructor Studio: {Title} or similar heading."""
         text = path.read_text(encoding="utf-8")
         parsed = self._parse_frontmatter(text)
         if parsed is None:
@@ -263,7 +265,7 @@ class TestWorkflowStructure:
         """Workflow steps should be numbered or have phase/step structure."""
         wf_dir = PROJECT_ROOT / "workflows"
         # Exclude meta-workflows that embed protocols rather than having direct steps
-        exclude = {"README.md", "AGENTS.md", "analyze.md", "generate.md", "cypilot.md", "rules.md"}
+        exclude = {"README.md", "AGENTS.md", "analyze.md", "generate.md", "studio.md", "rules.md", "explain.md", "auto-config.md", "brainstorm.md", "pdsl.md"}
         wf_files = [f for f in wf_dir.glob("*.md") if f.name not in exclude]
         for f in wf_files:
             text = f.read_text(encoding="utf-8")
@@ -274,7 +276,7 @@ class TestWorkflowStructure:
     def test_workflow_next_steps(self):
         """Workflow should have Next Steps or similar conclusion."""
         wf_dir = PROJECT_ROOT / "workflows"
-        wf_files = [f for f in wf_dir.glob("*.md") if f.name not in ("README.md", "AGENTS.md")]
+        wf_files = [f for f in wf_dir.glob("*.md") if f.name not in ("README.md", "AGENTS.md", "explain.md", "auto-config.md", "brainstorm.md", "pdsl.md", "studio.md")]
         for f in wf_files:
             text = f.read_text(encoding="utf-8").lower()
             has_conclusion = "next" in text or "after" in text or "complete" in text or "done" in text
@@ -307,23 +309,23 @@ class TestAgentsStructure:
 
     def _verify_agents_type(self, text):
         """Verify agents file has proper structure."""
-        return "cf-constructor-path" in text or "ALWAYS" in text or "WHEN" in text
+        return "cf-studio-path" in text or "ALWAYS" in text or "WHEN" in text
 
     def test_root_agents_exists(self):
         """Root AGENTS.md should exist."""
         assert (PROJECT_ROOT / "AGENTS.md").is_file(), "Missing root AGENTS.md"
 
     def test_skills_agents_exists(self):
-        """skills/cypilot/SKILL.md should exist as the skill definition."""
-        assert (PROJECT_ROOT / "skills" / "cypilot" / "SKILL.md").is_file(), "Missing skills/cypilot/SKILL.md"
+        """skills/studio/SKILL.md should exist as the skill definition."""
+        assert (PROJECT_ROOT / "skills" / "studio" / "SKILL.md").is_file(), "Missing skills/studio/SKILL.md"
 
     def test_extract_when_clauses(self):
         """Test that WHEN clauses can be extracted from AGENTS.md."""
         root_agents = PROJECT_ROOT / "AGENTS.md"
         text = root_agents.read_text(encoding="utf-8")
-        assert "<!-- @cpt:root-agents -->" in text, "Missing root AGENTS managed block start"
-        assert 'cypilot_path = ".bootstrap"' in text, "Missing cypilot_path in root AGENTS.md"
-        assert "<!-- /@cpt:root-agents -->" in text, "Missing root AGENTS managed block end"
+        assert "<!-- @cf:root-agents -->" in text, "Missing root AGENTS managed block start"
+        assert 'cf-studio-path = ".bootstrap"' in text, "Missing cf-studio-path in root AGENTS.md"
+        assert "<!-- /@cf:root-agents -->" in text, "Missing root AGENTS managed block end"
 
     def test_agents_refs_exist(self):
         """AGENTS.md file references should point to existing files (excluding adapter-specific paths)."""
@@ -358,7 +360,7 @@ class TestAgentsStructure:
         for f in agents_files:
             text = f.read_text(encoding="utf-8")
             if f == PROJECT_ROOT / "AGENTS.md":
-                assert 'cypilot_path = ".bootstrap"' in text, f"{f} missing managed cypilot_path"
+                assert 'cf-studio-path = ".bootstrap"' in text, f"{f} missing managed cypilot_path"
             else:
                 assert len(text) > 100, f"{f} too short"
 

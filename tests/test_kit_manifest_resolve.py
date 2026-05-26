@@ -15,10 +15,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
 from _test_helpers import bootstrap_test_project
-from cypilot.utils.manifest import resolve_resource_bindings
+from studio.utils.manifest import resolve_resource_bindings
 
 
 # ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ from cypilot.utils.manifest import resolve_resource_bindings
 
 def _write_core_toml(config_dir: Path, data: dict) -> Path:
     """Write core.toml into *config_dir* and return the path."""
-    from cypilot.utils import toml_utils
+    from studio.utils import toml_utils
     config_dir.mkdir(parents=True, exist_ok=True)
     core_path = config_dir / "core.toml"
     toml_utils.dump(data, core_path)
@@ -62,7 +62,7 @@ class TestResolveResourceBindings(unittest.TestCase):
                 "project_root": "..",
                 "kits": {
                     "mykit": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/mykit",
                         "version": "2.0",
                         "resources": {
@@ -115,8 +115,8 @@ class TestResolveResourceBindings(unittest.TestCase):
 
     def test_preserves_absolute_binding_after_relpath_fallback_behavior(self):
         """Absolute bindings serialized via relpath fallback stay absolute when resolved."""
-        import cypilot.commands.kit as kit_module
-        from cypilot.commands.kit import _serialize_manifest_binding_path
+        import studio.commands.kit as kit_module
+        from studio.commands.kit import _serialize_manifest_binding_path
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -208,7 +208,7 @@ class TestResolveResourceBindings(unittest.TestCase):
                 "project_root": "..",
                 "kits": {
                     "legacykit": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/legacykit",
                         "version": "1.0",
                     },
@@ -362,10 +362,10 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
 
     def test_loaded_kit_has_resource_bindings_field(self):
         """LoadedKit dataclass accepts resource_bindings."""
-        from cypilot.utils.context import LoadedKit
-        from cypilot.utils.artifacts_meta import Kit
+        from studio.utils.context import LoadedKit
+        from studio.utils.artifacts_meta import Kit
 
-        kit = Kit(kit_id="mykit", format="Cypilot", path="config/kits/mykit")
+        kit = Kit(kit_id="mykit", format="CFS", path="config/kits/mykit")
         lk = LoadedKit(
             kit=kit,
             templates={},
@@ -376,16 +376,16 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
 
     def test_loaded_kit_default_none(self):
         """LoadedKit resource_bindings defaults to None."""
-        from cypilot.utils.context import LoadedKit
-        from cypilot.utils.artifacts_meta import Kit
+        from studio.utils.context import LoadedKit
+        from studio.utils.artifacts_meta import Kit
 
-        kit = Kit(kit_id="mykit", format="Cypilot", path="config/kits/mykit")
+        kit = Kit(kit_id="mykit", format="CFS", path="config/kits/mykit")
         lk = LoadedKit(kit=kit, templates={})
         self.assertIsNone(lk.resource_bindings)
 
     def test_context_load_populates_resource_bindings(self):
-        """CypilotContext.load() populates resource_bindings for manifest-driven kit."""
-        from cypilot.utils.context import CypilotContext
+        """StudioContext.load() populates resource_bindings for manifest-driven kit."""
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -394,13 +394,13 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             config = adapter / "config"
 
             # Install a kit with resources in core.toml
-            from cypilot.utils import toml_utils
+            from studio.utils import toml_utils
             toml_utils.dump({
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
                     "sdlc": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/sdlc",
                         "version": "2.0",
                         "resources": {
@@ -415,7 +415,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
-                    "sdlc": {"format": "Cypilot", "path": "config/kits/sdlc"},
+                    "sdlc": {"format": "CFS", "path": "config/kits/sdlc"},
                 },
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
@@ -425,7 +425,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             kit_dir.mkdir(parents=True)
             (kit_dir / "constraints.toml").write_text("[artifacts]\n", encoding="utf-8")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
             lk = ctx.kits["sdlc"]
@@ -433,8 +433,8 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             self.assertIn("adr_artifacts", lk.resource_bindings)
 
     def test_context_load_preserves_same_os_absolute_kit_path(self):
-        """CypilotContext.load() keeps same-OS absolute kits.{slug}.path absolute."""
-        from cypilot.utils.context import CypilotContext
+        """StudioContext.load() keeps same-OS absolute kits.{slug}.path absolute."""
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -446,13 +446,13 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             (absolute_kit_dir / "constraints.toml").write_text("[artifacts]\n", encoding="utf-8")
             stale_registry_path = "config/kits/sdlc"
 
-            from cypilot.utils import toml_utils
+            from studio.utils import toml_utils
             toml_utils.dump({
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
                     "sdlc": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": str(absolute_kit_dir),
                         "version": "2.0",
                     },
@@ -463,12 +463,12 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
-                    "sdlc": {"format": "Cypilot", "path": stale_registry_path},
+                    "sdlc": {"format": "CFS", "path": stale_registry_path},
                 },
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
 
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
@@ -477,8 +477,8 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             self.assertIsNotNone(ctx.kits["sdlc"].constraints)
 
     def test_context_load_preserves_same_os_absolute_binding(self):
-        """CypilotContext.load() keeps same-OS absolute resource bindings absolute."""
-        from cypilot.utils.context import CypilotContext
+        """StudioContext.load() keeps same-OS absolute resource bindings absolute."""
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -489,13 +489,13 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             absolute_constraints.parent.mkdir(parents=True, exist_ok=True)
             absolute_constraints.write_text("[artifacts]\n", encoding="utf-8")
 
-            from cypilot.utils import toml_utils
+            from studio.utils import toml_utils
             toml_utils.dump({
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
                     "sdlc": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/sdlc",
                         "version": "2.0",
                         "resources": {
@@ -509,7 +509,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
-                    "sdlc": {"format": "Cypilot", "path": "config/kits/sdlc"},
+                    "sdlc": {"format": "CFS", "path": "config/kits/sdlc"},
                 },
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
@@ -517,7 +517,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             kit_dir = config / "kits" / "sdlc"
             kit_dir.mkdir(parents=True)
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
 
             self.assertIsNotNone(ctx)
             self.assertEqual(
@@ -526,8 +526,8 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             )
 
     def test_context_load_no_resources_is_none(self):
-        """CypilotContext.load() leaves resource_bindings as None for legacy kit."""
-        from cypilot.utils.context import CypilotContext
+        """StudioContext.load() leaves resource_bindings as None for legacy kit."""
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -535,13 +535,13 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             adapter = _bootstrap_project(root)
             config = adapter / "config"
 
-            from cypilot.utils import toml_utils
+            from studio.utils import toml_utils
             toml_utils.dump({
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
                     "sdlc": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/sdlc",
                         "version": "1.0",
                     },
@@ -552,7 +552,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
-                    "sdlc": {"format": "Cypilot", "path": "config/kits/sdlc"},
+                    "sdlc": {"format": "CFS", "path": "config/kits/sdlc"},
                 },
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
@@ -561,13 +561,13 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             kit_dir.mkdir(parents=True)
             (kit_dir / "constraints.toml").write_text("[artifacts]\n", encoding="utf-8")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
             self.assertIsNotNone(ctx)
             self.assertIn("sdlc", ctx.kits)
             self.assertIsNone(ctx.kits["sdlc"].resource_bindings)
 
     def test_context_load_surfaces_invalid_binding_as_structured_error(self):
-        from cypilot.utils.context import CypilotContext
+        from studio.utils.context import StudioContext
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -576,13 +576,13 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             config = adapter / "config"
             invalid_binding = "/opt/cypilot/constraints.toml" if os.name == "nt" else "C:/external-kits/sdlc/constraints.toml"
 
-            from cypilot.utils import toml_utils
+            from studio.utils import toml_utils
             toml_utils.dump({
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
                     "sdlc": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/sdlc",
                         "version": "2.0",
                         "resources": {
@@ -596,7 +596,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
-                    "sdlc": {"format": "Cypilot", "path": "config/kits/sdlc"},
+                    "sdlc": {"format": "CFS", "path": "config/kits/sdlc"},
                 },
                 "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
             }, config / "artifacts.toml")
@@ -605,7 +605,7 @@ class TestLoadedKitResourceBindings(unittest.TestCase):
             kit_dir.mkdir(parents=True)
             (kit_dir / "constraints.toml").write_text("[artifacts]\n", encoding="utf-8")
 
-            ctx = CypilotContext.load(root)
+            ctx = StudioContext.load(root)
 
             self.assertIsNotNone(ctx)
             self.assertIsNone(ctx.kits["sdlc"].resource_bindings)
@@ -622,16 +622,16 @@ class TestAdapterInfoResources(unittest.TestCase):
     """Test that cpt info includes resources per kit."""
 
     def setUp(self):
-        from cypilot.utils.ui import set_json_mode
+        from studio.utils.ui import set_json_mode
         set_json_mode(True)
 
     def tearDown(self):
-        from cypilot.utils.ui import set_json_mode
+        from studio.utils.ui import set_json_mode
         set_json_mode(False)
 
     def test_info_includes_resources_for_manifest_kit(self):
         """cpt info output contains resources for manifest-driven kit."""
-        from cypilot.commands.adapter_info import cmd_adapter_info
+        from studio.commands.adapter_info import cmd_adapter_info
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -639,13 +639,13 @@ class TestAdapterInfoResources(unittest.TestCase):
             adapter = _bootstrap_project(root)
             config = adapter / "config"
 
-            from cypilot.utils import toml_utils
+            from studio.utils import toml_utils
             toml_utils.dump({
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
                     "sdlc": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/sdlc",
                         "version": "2.0",
                         "resources": {
@@ -679,7 +679,7 @@ class TestAdapterInfoResources(unittest.TestCase):
 
     def test_info_no_resources_for_legacy_kit(self):
         """cpt info output omits resources for legacy kit without resources."""
-        from cypilot.commands.adapter_info import cmd_adapter_info
+        from studio.commands.adapter_info import cmd_adapter_info
 
         with TemporaryDirectory() as td:
             td_path = Path(td)
@@ -687,13 +687,13 @@ class TestAdapterInfoResources(unittest.TestCase):
             adapter = _bootstrap_project(root)
             config = adapter / "config"
 
-            from cypilot.utils import toml_utils
+            from studio.utils import toml_utils
             toml_utils.dump({
                 "version": "1.0",
                 "project_root": "..",
                 "kits": {
                     "legacykit": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/legacykit",
                         "version": "1.0",
                     },

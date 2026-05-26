@@ -1,9 +1,11 @@
 """Tests for cypilot.utils.fixing — validation output enrichment.
 
 Covers:
-- enrich_issues: cypilot: prefix, path stripping, fixing_prompt generation
+- enrich_issues: studio:prefix, path stripping, fixing_prompt generation
+- enrich_issues strip_path=False: path key preserved after enrichment
 - _rel_loc: absolute → relative path conversion
 - _headings_hint: heading context in prompts
+- _build_fixing_prompt: at least 2 different error codes from _REASONS
 - All major error message categories
 """
 from __future__ import annotations
@@ -13,8 +15,8 @@ from typing import Dict, List
 
 import pytest
 
-from cypilot.utils import error_codes as EC
-from cypilot.utils.fixing import enrich_issues
+from studio.utils import error_codes as EC
+from studio.utils.fixing import enrich_issues, _build_fixing_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +57,7 @@ class TestEnrichIssuesBasic:
     def test_adds_cypilot_prefix(self):
         issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
         enrich_issues(issues, project_root=PROJECT_ROOT)
-        assert issues[0]["fixing_prompt"].startswith("cypilot: ")
+        assert issues[0]["fixing_prompt"].startswith("studio:")
 
     def test_strips_path_key(self):
         issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
@@ -87,7 +89,7 @@ class TestEnrichIssuesBasic:
         ]
         enrich_issues(issues, project_root=PROJECT_ROOT)
         assert all("fixing_prompt" in i for i in issues)
-        assert all(i["fixing_prompt"].startswith("cypilot: ") for i in issues)
+        assert all(i["fixing_prompt"].startswith("studio:") for i in issues)
 
     def test_without_project_root_uses_absolute_path(self):
         issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
@@ -648,3 +650,72 @@ class TestWarningPrompts:
         )]
         enrich_issues(issues, project_root=PROJECT_ROOT)
         assert "no references" in issues[0]["fixing_prompt"]
+
+
+# ---------------------------------------------------------------------------
+# CR-T6-030: strip_path parameter and _build_fixing_prompt direct tests
+# ---------------------------------------------------------------------------
+
+class TestStripPath:
+    """Round-trip tests for the strip_path keyword parameter of enrich_issues."""
+
+    def test_strip_path_true_removes_path_key(self):
+        """Default behavior: path key is removed after enrichment."""
+        issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
+        assert "path" in issues[0]
+        enrich_issues(issues, project_root=PROJECT_ROOT, strip_path=True)
+        assert "path" not in issues[0]
+
+    def test_strip_path_false_preserves_path_key(self):
+        """strip_path=False: path key is preserved after enrichment."""
+        issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
+        assert "path" in issues[0]
+        enrich_issues(issues, project_root=PROJECT_ROOT, strip_path=False)
+        assert "path" in issues[0]
+        assert issues[0]["path"] == "/project/architecture/PRD.md"
+
+    def test_strip_path_false_still_adds_fixing_prompt(self):
+        """With strip_path=False, fixing_prompt and reasons are still added."""
+        issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
+        enrich_issues(issues, project_root=PROJECT_ROOT, strip_path=False)
+        assert "fixing_prompt" in issues[0]
+        assert issues[0]["fixing_prompt"].startswith("studio:")
+
+    def test_strip_path_default_is_true(self):
+        """Calling without strip_path kwarg strips the path (backward compat)."""
+        issues = [_make_issue("Reference has no definition", code=EC.REF_NO_DEFINITION, id="cpt-x-y")]
+        enrich_issues(issues, project_root=PROJECT_ROOT)
+        assert "path" not in issues[0]
+
+
+class TestBuildFixingPromptDirect:
+    """Direct tests for _build_fixing_prompt with specific error codes."""
+
+    def test_cdsl_step_unchecked_prompt(self):
+        """EC.CDSL_STEP_UNCHECKED produces a prompt referencing checked [x]."""
+        issue = _make_issue(
+            "CDSL step is unchecked but parent ID is checked",
+            code=EC.CDSL_STEP_UNCHECKED,
+            type="structure",
+            id="cpt-sys-fr-x",
+        )
+        result = _build_fixing_prompt(issue, project_root=PROJECT_ROOT)
+        assert result is not None
+        assert "checked `[x]`" in result
+
+    def test_ref_no_definition_prompt(self):
+        """EC.REF_NO_DEFINITION produces a prompt with 'add a definition'."""
+        issue = _make_issue(
+            "Reference has no definition",
+            code=EC.REF_NO_DEFINITION,
+            id="cpt-sys-fr-x",
+        )
+        result = _build_fixing_prompt(issue, project_root=PROJECT_ROOT)
+        assert result is not None
+        assert "add a definition" in result
+
+    def test_unknown_code_returns_none(self):
+        """An issue with no recognized code returns None from _build_fixing_prompt."""
+        issue = _make_issue("Some totally unrecognized message")
+        result = _build_fixing_prompt(issue, project_root=PROJECT_ROOT)
+        assert result is None

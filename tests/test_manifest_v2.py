@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from cypilot.utils.manifest import (
+from studio.utils.manifest import (
     AgentEntry,
     ComponentEntry,
     ManifestLayer,
@@ -45,6 +45,11 @@ tools = ["Read", "Grep"]
 color = "#FF0000"
 memory_dir = ".memory/reviewer"
 agents = ["claude"]
+role = "analyze"
+target = "codebase"
+provider = "openai"
+reasoning_effort = "high"
+context_window = "max"
 
 [[skills]]
 id = "deploy"
@@ -73,7 +78,7 @@ scope = "project"
 _V1_COMPAT = """\
 [manifest]
 version = "1.0"
-root = "{cf-constructor-path}/config/kits/test"
+root = "{cf-studio-path}/config/kits/test"
 
 [[resources]]
 id = "agents_md"
@@ -115,6 +120,11 @@ def test_parse_v2_full_manifest():
         assert agent.color == "#FF0000"
         assert agent.memory_dir == ".memory/reviewer"
         assert agent.agents == ["claude"]
+        assert agent.role == "analyze"
+        assert agent.target == "codebase"
+        assert agent.provider == "openai"
+        assert agent.reasoning_effort == "high"
+        assert agent.context_window == "max"
 
         # Skills
         assert len(result.skills) == 1
@@ -130,6 +140,87 @@ def test_parse_v2_full_manifest():
         assert len(result.rules) == 1
         assert isinstance(result.rules[0], RuleEntry)
         assert result.rules[0].id == "no-console-log"
+
+
+def test_load_manifest_accepts_numeric_v2_version_for_compatibility():
+    """load_manifest keeps accepting numeric TOML versions accepted by the parser."""
+    with TemporaryDirectory() as tmpdir:
+        kit = Path(tmpdir)
+        mpath = kit / "manifest.toml"
+        mpath.write_text(
+            """\
+[manifest]
+version = 2.0
+
+[[agents]]
+id = "reviewer"
+description = "Code reviewer agent"
+""",
+            encoding="utf-8",
+        )
+
+        result = load_manifest(kit)
+
+        assert isinstance(result, ManifestV2)
+        assert result.version == "2.0"
+        assert result.agents[0].id == "reviewer"
+
+
+def test_parse_v2_agent_defaults_extended_selector_fields():
+    """Omitted extended agent selector fields use generator-compatible defaults."""
+    with TemporaryDirectory() as tmpdir:
+        mpath = Path(tmpdir) / "manifest.toml"
+        mpath.write_text(
+            """\
+[manifest]
+version = "2.0"
+
+[[agents]]
+id = "reviewer"
+description = "Code reviewer agent"
+"""
+        )
+
+        result = parse_manifest_v2(mpath)
+        agent = result.agents[0]
+
+        assert agent.role == "any"
+        assert agent.target == "any"
+        assert agent.provider == "anthropic"
+        assert agent.reasoning_effort is None
+        assert agent.context_window is None
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("mode", "bogus"),
+        ("role", "review"),
+        ("target", "docs"),
+        ("provider", "ollama"),
+        ("reasoning_effort", "ultra"),
+        ("context_window", "huge"),
+        ("model", "cf:tier:invalid-tier"),
+    ],
+)
+def test_parse_v2_rejects_invalid_agent_selector_fields(field, value):
+    """V2 manifests must reject invalid generated-agent selector values."""
+    with TemporaryDirectory() as tmpdir:
+        mpath = Path(tmpdir) / "manifest.toml"
+        mpath.write_text(
+            f"""\
+[manifest]
+version = "2.0"
+
+[[agents]]
+id = "reviewer"
+description = "Code reviewer agent"
+{field} = "{value}"
+"""
+        )
+
+        with pytest.raises(ValueError, match=field):
+            parse_manifest_v2(mpath)
 
 
 def test_parse_v1_backward_compatibility():
@@ -209,12 +300,9 @@ disallowed_tools = ["Write"]
         mpath = Path(tmpdir) / "manifest.toml"
         mpath.write_text(toml_content)
 
-        try:
+        with pytest.raises(ValueError, match="mutually exclusive") as exc_info:
             parse_manifest_v2(mpath)
-            assert False, "Should have raised ValueError"
-        except ValueError as exc:
-            assert "mutually exclusive" in str(exc)
-            assert "bad-agent" in str(exc)
+        assert "bad-agent" in str(exc_info.value)
 
 
 def test_hooks_and_permissions_accepted_and_ignored():
@@ -241,12 +329,9 @@ def test_parse_error_missing_version():
         mpath = Path(tmpdir) / "manifest.toml"
         mpath.write_text(toml_content)
 
-        try:
+        with pytest.raises(ValueError, match="version") as exc_info:
             parse_manifest_v2(mpath)
-            assert False, "Should have raised ValueError"
-        except ValueError as exc:
-            assert "version" in str(exc)
-            assert str(mpath) in str(exc)
+        assert str(mpath) in str(exc_info.value)
 
 
 def test_parse_error_invalid_toml():
@@ -255,20 +340,14 @@ def test_parse_error_invalid_toml():
         mpath = Path(tmpdir) / "manifest.toml"
         mpath.write_text("this is not valid toml [[[")
 
-        try:
+        with pytest.raises(ValueError, match="TOML parse error"):
             parse_manifest_v2(mpath)
-            assert False, "Should have raised ValueError"
-        except ValueError as exc:
-            assert "TOML parse error" in str(exc)
 
 
 def test_parse_error_file_not_found():
     """parse_manifest_v2 raises ValueError when file does not exist."""
-    try:
+    with pytest.raises(ValueError, match="not found"):
         parse_manifest_v2(Path("/nonexistent/manifest.toml"))
-        assert False, "Should have raised ValueError"
-    except ValueError as exc:
-        assert "not found" in str(exc)
 
 
 def test_parse_error_unsupported_version():
@@ -281,12 +360,9 @@ version = "3.0"
         mpath = Path(tmpdir) / "manifest.toml"
         mpath.write_text(toml_content)
 
-        try:
+        with pytest.raises(ValueError, match="unsupported") as exc_info:
             parse_manifest_v2(mpath)
-            assert False, "Should have raised ValueError"
-        except ValueError as exc:
-            assert "unsupported" in str(exc)
-            assert "3.0" in str(exc)
+        assert "3.0" in str(exc_info.value)
 
 
 def test_parse_error_invalid_agent_id():
@@ -302,11 +378,8 @@ id = "Bad-Agent!"
         mpath = Path(tmpdir) / "manifest.toml"
         mpath.write_text(toml_content)
 
-        try:
+        with pytest.raises(ValueError, match="Bad-Agent!"):
             parse_manifest_v2(mpath)
-            assert False, "Should have raised ValueError"
-        except ValueError as exc:
-            assert "Bad-Agent!" in str(exc)
 
 
 def test_manifest_layer_state_enum():
@@ -315,6 +388,7 @@ def test_manifest_layer_state_enum():
     assert ManifestLayerState.LOADED.value == "LOADED"
     assert ManifestLayerState.PARSE_ERROR.value == "PARSE_ERROR"
     assert ManifestLayerState.INCLUDE_ERROR.value == "INCLUDE_ERROR"
+    assert len(ManifestLayerState) == 4  # update if a new state is added
 
 
 def test_manifest_layer_dataclass():
@@ -401,6 +475,29 @@ class TestParseBaseFieldsAppendFile:
             result = _parse_base_fields(raw, manifest_path=manifest_path)
             assert result["append"] == "Worktree appended content"
 
+    def test_append_file_prefers_active_worktree_checkout_over_main_repo(self):
+        """append_file in a real worktree reads from that checkout, not the shared repo."""
+        with TemporaryDirectory() as tmp:
+            main = Path(tmp) / "main"
+            main.mkdir()
+            gitdir = main / ".git" / "worktrees" / "feature"
+            gitdir.mkdir(parents=True)
+            (main / "extra.md").write_text("stale main content", encoding="utf-8")
+
+            worktree = Path(tmp) / "feature"
+            worktree.mkdir()
+            (worktree / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf-8")
+            (worktree / "extra.md").write_text("active worktree content", encoding="utf-8")
+
+            manifest_dir = worktree / "cypilot" / "config"
+            manifest_dir.mkdir(parents=True)
+            manifest_path = manifest_dir / "manifest.toml"
+            manifest_path.write_text("[manifest]\n", encoding="utf-8")
+
+            raw = {"id": "test", "append_file": "extra.md"}
+            result = _parse_base_fields(raw, manifest_path=manifest_path)
+            assert result["append"] == "active worktree content"
+
     def test_append_and_append_file_mutually_exclusive(self):
         """Supplying both append and append_file raises ValueError."""
 
@@ -480,3 +577,64 @@ class TestParseBaseFieldsAppendFile:
             raw = {"id": "test", "append_file": "notes.md"}
             with pytest.raises(ValueError, match=r"no \.git ancestor"):
                 _parse_base_fields(raw, manifest_path=manifest_path)
+
+
+# ---------------------------------------------------------------------------
+# V1 / V2 resource id character set
+# ---------------------------------------------------------------------------
+
+
+def test_v2_resource_id_allows_hyphens():
+    """V2 manifests accept [[resources]] entries with hyphenated ids.
+
+    The v2 component-id regex is ^[a-z][a-z0-9_-]*$ (hyphens allowed).
+    _parse_resources() is shared but does not validate ids via
+    _validate_component_id, so a hyphenated resource id must not raise.
+    """
+    toml_content = """\
+[manifest]
+version = "2.0"
+
+[[resources]]
+id = "my-resource"
+source = "some/path.md"
+default_path = "out/path.md"
+type = "file"
+description = "Hyphenated resource id"
+"""
+    with TemporaryDirectory() as tmpdir:
+        mpath = Path(tmpdir) / "manifest.toml"
+        mpath.write_text(toml_content)
+        # Must not raise — hyphen is valid in v2 resource ids.
+        result = parse_manifest_v2(mpath)
+        assert result.version == "2.0"
+        assert len(result.resources) == 1
+        assert result.resources[0].id == "my-resource"
+
+
+def test_v1_resource_id_rejects_hyphens():
+    """V1 manifests reject [[resources]] entries with hyphens in the id.
+
+    The v1 schema validator uses _ID_CHARS = lowercase + digits + '_' (no
+    hyphen), matching ^[a-z][a-z0-9_]*$.  A hyphenated id must cause
+    load_manifest to raise ValueError.
+    """
+    toml_content = """\
+[manifest]
+version = "1.0"
+root = "{cf-studio-path}/config/kits/test"
+
+[[resources]]
+id = "my-resource"
+source = "some/path.md"
+default_path = "out/path.md"
+type = "file"
+description = "Hyphenated resource id"
+"""
+    with TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        mpath = root / "manifest.toml"
+        mpath.write_text(toml_content)
+        # Must raise ValueError because hyphens are not in _ID_CHARS for v1.
+        with pytest.raises(ValueError):
+            load_manifest(root)

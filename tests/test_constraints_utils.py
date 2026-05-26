@@ -1,8 +1,8 @@
 from pathlib import Path
 import json
 
-from skills.cypilot.scripts.cypilot.utils import error_codes as EC
-from skills.cypilot.scripts.cypilot.utils.constraints import (
+from skills.studio.scripts.studio.utils import error_codes as EC
+from skills.studio.scripts.studio.utils.constraints import (
     ArtifactRecord,
     ArtifactKindConstraints,
     HeadingConstraint,
@@ -159,7 +159,7 @@ def test_heading_constraint_ids_by_line_read_failure_returns_empty(tmp_path: Pat
     p = tmp_path / "x.md"
     p.write_text("# X\n", encoding="utf-8")
 
-    with patch("skills.cypilot.scripts.cypilot.utils.document.read_text_safe", return_value=None):
+    with patch("skills.studio.scripts.studio.utils.document.read_text_safe", return_value=None):
         got = heading_constraint_ids_by_line(p, [])
     assert got == [[]]
 

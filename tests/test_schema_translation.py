@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
 
-from cypilot.commands.agents import (
+from studio.commands.agents import (
     translate_agent_schema,
     generate_manifest_skills,
     _translate_claude_schema,
@@ -24,32 +24,8 @@ from cypilot.commands.agents import (
     _translate_codex_schema,
     _translate_windsurf_schema,
 )
-from cypilot.utils.manifest import AgentEntry, SkillEntry
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _make_agent(**kwargs) -> AgentEntry:
-    """Create an AgentEntry with sensible defaults."""
-    defaults = {
-        "id": "test-agent",
-        "description": "A test agent",
-        "prompt_file": "agents/test-agent.md",
-        "source": "",
-        "agents": [],
-        "append": None,
-        "mode": "readwrite",
-        "isolation": False,
-        "model": "",
-        "tools": [],
-        "disallowed_tools": [],
-        "color": "",
-        "memory_dir": "",
-    }
-    defaults.update(kwargs)
-    return AgentEntry(**defaults)
+from studio.utils.manifest import AgentEntry, SkillEntry
+from _test_helpers import _make_agent
 
 
 def _make_skill(**kwargs) -> SkillEntry:
@@ -132,45 +108,53 @@ class TestTranslateClaudeSchema(unittest.TestCase):
         result = _translate_claude_schema(agent)
         self.assertEqual(result["body_prefix"], "")
 
-    def test_claude_mcp_tools_filtered_from_tools(self):
-        """mcp__* entries are stripped from tools: frontmatter."""
+    def test_claude_mcp_tools_cause_skip_instead_of_partial_tool_allowlist(self):
+        """mcp__* entries must not be silently dropped from tools."""
         agent = _make_agent(tools=["Bash", "mcp__standctl__standctl_deploy", "Read"])
         result = _translate_claude_schema(agent)
         frontmatter = "\n".join(result["frontmatter"])
-        self.assertIn("tools:", frontmatter)
-        self.assertIn("Bash", frontmatter)
-        self.assertIn("Read", frontmatter)
+        self.assertTrue(result["skip"])
+        self.assertIn("cannot safely represent MCP tools", result["skip_reason"])
+        self.assertEqual(result["frontmatter"], [])
         self.assertNotIn("mcp__", frontmatter)
+        self.assertNotIn("tools:", frontmatter)
 
     def test_claude_mcp_tools_only_omits_tools_field(self):
-        """When tools list contains only mcp__* entries, tools: field is omitted and mode default applies."""
+        """When tools list contains only mcp__* entries, translation skips instead of widening access."""
         agent = _make_agent(tools=["mcp__standctl__standctl_deploy"], mode="readwrite")
         result = _translate_claude_schema(agent)
         frontmatter = "\n".join(result["frontmatter"])
-        # Field must not contain mcp__ tools; mode default readwrite applies
+        self.assertTrue(result["skip"])
+        self.assertIn("Claude frontmatter cannot safely represent MCP-only tools without broadening access", result["skip_reason"])
+        self.assertEqual(result["frontmatter"], [])
+        self.assertEqual(frontmatter, "")
         self.assertNotIn("mcp__", frontmatter)
-        # Falls through to readwrite default
-        self.assertIn("tools:", frontmatter)
-        self.assertIn("Write", frontmatter)
+        self.assertNotIn("tools:", frontmatter)
+        self.assertNotIn("Write", frontmatter)
 
-    def test_claude_mcp_tools_filtered_from_disallowed_tools(self):
-        """mcp__* entries are stripped from disallowedTools: frontmatter."""
+    def test_claude_mcp_disallowed_tools_cause_skip_instead_of_partial_denylist(self):
+        """mcp__* entries must not be silently dropped from disallowedTools."""
         agent = _make_agent(disallowed_tools=["Write", "mcp__standctl__standctl_deploy"])
         result = _translate_claude_schema(agent)
         frontmatter = "\n".join(result["frontmatter"])
-        self.assertIn("disallowedTools:", frontmatter)
-        self.assertIn("Write", frontmatter)
+        self.assertTrue(result["skip"])
+        self.assertIn("cannot safely represent MCP disallowed_tools", result["skip_reason"])
+        self.assertEqual(result["frontmatter"], [])
         self.assertNotIn("mcp__", frontmatter)
+        self.assertNotIn("disallowedTools:", frontmatter)
 
     def test_claude_mcp_tools_only_disallowed_omits_field(self):
-        """When disallowed_tools contains only mcp__* entries, disallowedTools: field is omitted and mode default applies."""
+        """When disallowed_tools contains only mcp__* entries, translation skips instead of widening access."""
         agent = _make_agent(disallowed_tools=["mcp__standctl__standctl_deploy"], mode="readwrite")
         result = _translate_claude_schema(agent)
         frontmatter = "\n".join(result["frontmatter"])
+        self.assertTrue(result["skip"])
+        self.assertIn("Claude frontmatter cannot safely represent MCP-only disallowed_tools", result["skip_reason"])
+        self.assertEqual(result["frontmatter"], [])
+        self.assertEqual(frontmatter, "")
         self.assertNotIn("mcp__", frontmatter)
-        # Falls through to readwrite default
-        self.assertIn("tools:", frontmatter)
-        self.assertIn("Write", frontmatter)
+        self.assertNotIn("tools:", frontmatter)
+        self.assertNotIn("Write", frontmatter)
 
 
 # ---------------------------------------------------------------------------
@@ -260,11 +244,11 @@ class TestTranslateCopilotSchema(unittest.TestCase):
         frontmatter = "\n".join(result["frontmatter"])
         self.assertIn("tools:", frontmatter)
 
-    def test_copilot_no_model_support(self):
+    def test_copilot_model_passthrough(self):
         agent = _make_agent(model="claude-opus-4-5")
         result = _translate_copilot_schema(agent)
         frontmatter = "\n".join(result["frontmatter"])
-        self.assertNotIn("model:", frontmatter)
+        self.assertIn("model: claude-opus-4-5", frontmatter)
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +273,24 @@ class TestTranslateCodexSchema(unittest.TestCase):
         agent = _make_agent(model="gpt-4o")
         result = _translate_codex_schema(agent)
         self.assertEqual(result["model"], "gpt-4o")
+
+    def test_codex_model_fast_maps_to_balanced_gpt54(self):
+        """`fast` is an alias for `cf:tier:balanced`; under the new matrix that
+        resolves to gpt-5.4 (not gpt-5.4-mini). This is a deliberate change
+        captured in spec §7: `fast` agents upgrade from mini to the standard
+        balanced tier on Codex. Agents that prefer the mini tier should use
+        `model = "cheap"` explicitly.
+        """
+        agent = _make_agent(model="fast")
+        result = _translate_codex_schema(agent)
+        self.assertEqual(result["model"], "gpt-5.4")
+
+    def test_codex_model_inherit_omits_model_key(self):
+        """`inherit` causes the selector to return None; no `model` key is
+        emitted in the result dict (the renderer will skip the `model =` line)."""
+        agent = _make_agent(model="inherit")
+        result = _translate_codex_schema(agent)
+        self.assertNotIn("model", result)
 
     def test_codex_developer_instructions_field(self):
         agent = _make_agent(description="My codex agent")

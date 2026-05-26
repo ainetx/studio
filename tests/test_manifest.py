@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from cypilot.utils.manifest import Manifest, ManifestResource, load_manifest, resolve_resource_bindings_with_errors, validate_manifest
+from studio.utils.manifest import Manifest, ManifestResource, load_manifest, resolve_resource_bindings_with_errors, validate_manifest
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +34,7 @@ def _make_kit_with_manifest(tmp_path: Path) -> Path:
     _write_manifest(kit, """\
         [manifest]
         version = "1.0"
-        root = "{cf-constructor-path}/config/kits/{slug}"
+        root = "{cf-studio-path}/config/kits/{slug}"
         user_modifiable = true
 
         [[resources]]
@@ -70,7 +70,7 @@ class TestLoadManifest:
         assert m is not None
         assert isinstance(m, Manifest)
         assert m.version == "1.0"
-        assert m.root == "{cf-constructor-path}/config/kits/{slug}"
+        assert m.root == "{cf-studio-path}/config/kits/{slug}"
         assert m.user_modifiable is True
         assert len(m.resources) == 2
 
@@ -106,10 +106,27 @@ class TestLoadManifest:
         with pytest.raises(ValueError, match="version"):
             load_manifest(kit)
 
-    def test_manifest_empty_resources_raises(self, tmp_path: Path) -> None:
-        kit = tmp_path / "no-res"
+    def test_manifest_missing_resources_key_allowed(self, tmp_path: Path) -> None:
+        # CR-T6-017: V1 manifest with no `resources` key is allowed (treated as empty).
+        kit = tmp_path / "no-res-key"
         kit.mkdir()
         _write_manifest(kit, """\
+            [manifest]
+            version = "1.0"
+        """)
+        m = load_manifest(kit)
+        assert m is not None
+        assert m.resources == []
+
+    def test_manifest_empty_resources_array_raises(self, tmp_path: Path) -> None:
+        # CR-T6-017: explicit top-level `resources = []` (empty array) is still rejected.
+        kit = tmp_path / "empty-res-array"
+        kit.mkdir()
+        # resources must be at the top level (before [manifest]) to be parsed
+        # as a top-level TOML key rather than a key inside [manifest].
+        _write_manifest(kit, """\
+            resources = []
+
             [manifest]
             version = "1.0"
         """)
@@ -172,7 +189,7 @@ class TestLoadManifest:
         """)
         m = load_manifest(kit)
         assert m is not None
-        assert m.root == "{cf-constructor-path}/config/kits/{slug}"
+        assert m.root == "{cf-studio-path}/config/kits/{slug}"
         assert m.user_modifiable is True
         assert m.resources[0].user_modifiable is True
         assert m.resources[0].description == ""
@@ -200,7 +217,7 @@ class TestValidateManifest:
 
         m = Manifest(
             version="1.0",
-            root="{cf-constructor-path}/config/kits/{slug}",
+            root="{cf-studio-path}/config/kits/{slug}",
             user_modifiable=True,
             resources=[
                 ManifestResource(id="foo", source="a.md", default_path="a.md", type="file"),
@@ -218,7 +235,7 @@ class TestValidateManifest:
 
         m = Manifest(
             version="1.0",
-            root="{cf-constructor-path}/config/kits/{slug}",
+            root="{cf-studio-path}/config/kits/{slug}",
             user_modifiable=True,
             resources=[
                 ManifestResource(
@@ -240,7 +257,7 @@ class TestValidateManifest:
 
         m = Manifest(
             version="1.0",
-            root="{cf-constructor-path}/config/kits/{slug}",
+            root="{cf-studio-path}/config/kits/{slug}",
             user_modifiable=True,
             resources=[
                 ManifestResource(
@@ -263,7 +280,7 @@ class TestValidateManifest:
 
         m = Manifest(
             version="1.0",
-            root="{cf-constructor-path}/config/kits/{slug}",
+            root="{cf-studio-path}/config/kits/{slug}",
             user_modifiable=True,
             resources=[
                 ManifestResource(
@@ -286,7 +303,7 @@ class TestValidateManifest:
 
         m = Manifest(
             version="1.0",
-            root="{cf-constructor-path}/config/kits/{slug}",
+            root="{cf-studio-path}/config/kits/{slug}",
             user_modifiable=True,
             resources=[
                 ManifestResource(
@@ -307,7 +324,7 @@ class TestValidateManifest:
 
         m = Manifest(
             version="1.0",
-            root="{cf-constructor-path}/config/kits/{slug}",
+            root="{cf-studio-path}/config/kits/{slug}",
             user_modifiable=True,
             resources=[
                 ManifestResource(
@@ -328,7 +345,7 @@ class TestValidateManifest:
 
         m = Manifest(
             version="1.0",
-            root="{cf-constructor-path}/config/kits/{slug}",
+            root="{cf-studio-path}/config/kits/{slug}",
             user_modifiable=True,
             resources=[
                 ManifestResource(
@@ -360,7 +377,7 @@ class TestResolveResourceBindings:
             textwrap.dedent(
                 f"""
                 [kits.sdlc]
-                format = "Cypilot"
+                format = "CFS"
                 path = "config/kits/sdlc"
 
                 [kits.sdlc.resources]
@@ -396,7 +413,7 @@ class TestResolveResourceBindings:
 # _validate_against_schema — edge cases for per-file coverage
 # ---------------------------------------------------------------------------
 
-from cypilot.utils.manifest import _validate_against_schema
+from studio.utils.manifest import _validate_against_schema
 
 
 class TestValidateAgainstSchema:
@@ -481,7 +498,7 @@ class TestBuildSourceToResourceMapping:
 
     def test_no_manifest_returns_empty(self, tmp_path: Path) -> None:
         """Kit without manifest.toml returns empty dicts."""
-        from cypilot.utils.manifest import build_source_to_resource_mapping
+        from studio.utils.manifest import build_source_to_resource_mapping
 
         kit = tmp_path / "kit"
         kit.mkdir()
@@ -493,7 +510,7 @@ class TestBuildSourceToResourceMapping:
 
     def test_file_resource_mapping(self, tmp_path: Path) -> None:
         """File resources are mapped directly."""
-        from cypilot.utils.manifest import build_source_to_resource_mapping, ResourceInfo
+        from studio.utils.manifest import build_source_to_resource_mapping, ResourceInfo
 
         kit = tmp_path / "kit"
         kit.mkdir()
@@ -519,7 +536,7 @@ class TestBuildSourceToResourceMapping:
 
     def test_directory_resource_expands_files(self, tmp_path: Path) -> None:
         """Directory resources expand to all files within."""
-        from cypilot.utils.manifest import build_source_to_resource_mapping, ResourceInfo
+        from studio.utils.manifest import build_source_to_resource_mapping, ResourceInfo
 
         kit = tmp_path / "kit"
         kit.mkdir()
@@ -553,7 +570,7 @@ class TestBuildSourceToResourceMapping:
 
     def test_mixed_file_and_directory_resources(self, tmp_path: Path) -> None:
         """Both file and directory resources are handled correctly."""
-        from cypilot.utils.manifest import build_source_to_resource_mapping
+        from studio.utils.manifest import build_source_to_resource_mapping
 
         kit = tmp_path / "kit"
         kit.mkdir()
@@ -595,8 +612,8 @@ class TestFileLevelKitUpdateIntegration:
 
     def test_file_and_directory_resources_written_to_bound_paths(self, tmp_path: Path) -> None:
         """Both file and directory resources are written to their registered bound paths."""
-        from cypilot.utils.diff_engine import file_level_kit_update
-        from cypilot.utils.manifest import build_source_to_resource_mapping
+        from studio.utils.diff_engine import file_level_kit_update
+        from studio.utils.manifest import build_source_to_resource_mapping
 
         kit = tmp_path / "kit"
         kit.mkdir()

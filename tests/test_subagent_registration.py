@@ -14,9 +14,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
-from cypilot.commands.agents import (
+from studio.commands.agents import (
     _agent_template_claude,
     _agent_template_copilot,
     _agent_template_cursor,
@@ -32,14 +32,14 @@ from cypilot.commands.agents import (
 
 _AGENTS_TOML = """\
 [agents.cypilot-codegen]
-description = "Cypilot code generator. Implements fully-specified requirements."
+description = "Constructor Studio code generator. Implements fully-specified requirements."
 prompt_file = "agents/cypilot-codegen.md"
 mode = "readwrite"
 isolation = true
 model = "inherit"
 
 [agents.cypilot-pr-review]
-description = "Cypilot PR reviewer. Checklist-based review in isolated context."
+description = "Constructor Studio PR reviewer. Checklist-based review in isolated context."
 prompt_file = "agents/cypilot-pr-review.md"
 mode = "readonly"
 isolation = false
@@ -85,14 +85,14 @@ class TestDiscoverKitAgents(unittest.TestCase):
     """Tests for _discover_kit_agents() — core skill + kit discovery."""
 
     def _make_core_tree(self, root: Path) -> Path:
-        """Build cypilot tree with agents in core skill area."""
+        """Build studio tree with agents in core skill area."""
         cypilot = root / "cypilot_src"
-        skill_dir = cypilot / "skills" / "cypilot"
+        skill_dir = cypilot / "skills" / "studio"
         _make_kit(skill_dir)
         return cypilot
 
     def _make_kit_tree(self, root: Path, kit_name: str = "sdlc") -> Path:
-        """Build cypilot tree with agents in a kit."""
+        """Build studio tree with agents in a kit."""
         cypilot = root / "cypilot_src"
         kit_dir = cypilot / "config" / "kits" / kit_name
         _make_kit(kit_dir)
@@ -124,7 +124,8 @@ class TestDiscoverKitAgents(unittest.TestCase):
             codegen = next(a for a in agents if a["name"] == "cypilot-codegen")
             self.assertEqual(codegen["mode"], "readwrite")
             self.assertTrue(codegen["isolation"])
-            self.assertEqual(codegen["model"], "inherit")
+            # bare "inherit" alias is normalised to canonical "cf:inherit" by _validate_agent_entry
+            self.assertEqual(codegen["model"], "cf:inherit")
             self.assertIsNotNone(codegen["prompt_file_abs"])
             self.assertTrue(str(codegen["prompt_file_abs"]).endswith("cypilot-codegen.md"))
 
@@ -136,13 +137,14 @@ class TestDiscoverKitAgents(unittest.TestCase):
             pr = next(a for a in agents if a["name"] == "cypilot-pr-review")
             self.assertEqual(pr["mode"], "readonly")
             self.assertFalse(pr["isolation"])
-            self.assertEqual(pr["model"], "fast")
+            # bare "fast" alias is normalised to canonical "cf:tier:balanced" by _validate_agent_entry
+            self.assertEqual(pr["model"], "cf:tier:balanced")
 
     def test_no_agents_returns_empty(self):
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             cypilot = root / "cypilot_src"
-            (cypilot / "skills" / "cypilot").mkdir(parents=True)
+            (cypilot / "skills" / "studio").mkdir(parents=True)
             (cypilot / "config" / "kits").mkdir(parents=True)
             agents = _discover_kit_agents(cypilot, root)
             self.assertEqual(agents, [])
@@ -225,7 +227,7 @@ class TestDiscoverKitAgents(unittest.TestCase):
             root = Path(tmpdir)
             cypilot = root / "cypilot_src"
             # Core agent
-            skill_dir = cypilot / "skills" / "cypilot"
+            skill_dir = cypilot / "skills" / "studio"
             skill_dir.mkdir(parents=True)
             (skill_dir / "x.md").write_text("core prompt", encoding="utf-8")
             (skill_dir / "agents.toml").write_text(
@@ -271,7 +273,7 @@ class TestDiscoverKitAgents(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             cypilot = self._make_kit_tree(root)
-            with patch("cypilot.commands.agents._registered_kit_dirs", return_value=object()):
+            with patch("studio.commands.agents._registered_kit_dirs", return_value=object()):
                 agents = _discover_kit_agents(cypilot, root)
             self.assertEqual(len(agents), 2)
             names = {a["name"] for a in agents}
@@ -284,13 +286,16 @@ class TestToolTemplates(unittest.TestCase):
     """Tests for per-tool template rendering functions."""
 
     def test_claude_readwrite_with_isolation(self):
-        agent = _make_semantic_agent(mode="readwrite", isolation=True, model="inherit")
+        # Use canonical cf:inherit — bare "inherit" is also accepted but the
+        # alias normalises to cf:inherit in _agent_template_claude, so no model:
+        # line is emitted for inherit agents (they take the session's model).
+        agent = _make_semantic_agent(mode="readwrite", isolation=True, model="cf:inherit")
         lines = _agent_template_claude(agent)
         text = "\n".join(lines)
         self.assertIn("tools: Bash, Read, Write, Edit, Glob, Grep", text)
         self.assertNotIn("disallowedTools", text)
         self.assertIn("isolation: worktree", text)
-        self.assertIn("model: inherit", text)
+        self.assertNotIn("model:", text)  # inherit → no model line emitted
 
     def test_claude_readonly_no_isolation(self):
         agent = _make_semantic_agent(mode="readonly", isolation=False, model="fast")
@@ -314,7 +319,7 @@ class TestToolTemplates(unittest.TestCase):
         text = "\n".join(lines)
         self.assertIn("tools: grep, view, bash", text)
         self.assertIn("readonly: true", text)
-        self.assertIn("model: claude-3.5-sonnet", text)
+        self.assertIn("model: claude-sonnet-4-6", text)
 
     def test_copilot_readwrite(self):
         agent = _make_semantic_agent(mode="readwrite")
@@ -352,9 +357,9 @@ class TestRenderTomlAgent(unittest.TestCase):
         self.assertIn('name = "cypilot-codegen"', result)
 
     def test_has_top_level_description(self):
-        agent = _make_semantic_agent("cypilot-codegen", description="Cypilot code generator.")
+        agent = _make_semantic_agent("cypilot-codegen", description="Constructor Studio code generator.")
         result = _render_toml_agent(agent, "@/agents/cypilot-codegen.md")
-        self.assertIn('description = "Cypilot code generator."', result)
+        self.assertIn('description = "Constructor Studio code generator."', result)
 
     def test_has_developer_instructions_with_pointer(self):
         agent = _make_semantic_agent("cypilot-codegen")
@@ -395,13 +400,13 @@ class TestSubagentIntegration(unittest.TestCase):
     """Integration tests for subagent generation via _process_single_agent()."""
 
     def _setup_cypilot_tree(self, root: Path) -> Path:
-        """Create minimal cypilot structure with core skill agents."""
+        """Create minimal studio structure with core skill agents."""
         (root / ".git").mkdir(exist_ok=True)
         cypilot = root / "cypilot_src"
-        skill_dir = cypilot / "skills" / "cypilot"
+        skill_dir = cypilot / "skills" / "studio"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
-            "---\nname: cypilot\ndescription: Cypilot core skill\n---\n\nSkill content.\n",
+            "---\nname: studio\ndescription: Constructor Studio core skill\n---\n\nSkill content.\n",
             encoding="utf-8",
         )
         # Core agents in skills/cypilot/
@@ -582,6 +587,66 @@ class TestSubagentIntegration(unittest.TestCase):
             subagents = result["subagents"]
             self.assertTrue(subagents["skipped"])
             self.assertIn("no agents discovered", subagents.get("skip_reason", ""))
+
+
+class TestLegacyStubClassification(unittest.TestCase):
+    """Regression: a freshly-generated current-vintage file MUST NOT be
+    classified as a legacy stub just because its NAME has a legacy prefix
+    (cypilot-* / cf-constructor-*).
+
+    The previous implementation of `_is_legacy_generator_stub` returned True
+    when the generator-marker comment (which now matches every vintage,
+    including current `cf agents`) was present, even if the follow-link
+    template prefix was current. That caused the idempotency-second-run
+    test to fail in clean Linux CI environments where template path resolution
+    succeeds (the file body carries `{cf-studio-path}/...` rather than an
+    absolute path) — the legacy cleanup helper deleted the freshly-generated
+    file and the next pass recreated it.
+    """
+
+    def test_current_vintage_marker_with_current_template_is_not_legacy(self):
+        from studio.commands.agents import _is_legacy_generator_stub
+
+        # Current-vintage marker + current-vintage follow target prefix
+        content = (
+            "---\nname: cypilot-codegen\ndescription: x\n---\n\n"
+            "<!-- Generated by cf agents -- do not edit -->\n"
+            "ALWAYS open and follow `{cf-studio-path}/skills/studio/agents/cypilot-codegen.md`\n"
+        )
+        self.assertFalse(_is_legacy_generator_stub(content))
+
+    def test_legacy_template_follow_target_is_legacy(self):
+        from studio.commands.agents import _is_legacy_generator_stub
+
+        # Even with a current-vintage marker, a legacy template prefix means legacy.
+        content = (
+            "---\nname: cypilot-codegen\ndescription: x\n---\n\n"
+            "<!-- Generated by cf agents -- do not edit -->\n"
+            "ALWAYS open and follow `{cypilot_path}/skills/cypilot/agents/cypilot-codegen.md`\n"
+        )
+        self.assertTrue(_is_legacy_generator_stub(content))
+
+    def test_current_vintage_toml_marker_alone_is_not_legacy(self):
+        from studio.commands.agents import _is_legacy_generator_toml_stub
+
+        content = (
+            '# Generated by cf agents -- do not edit\n'
+            'name = "cypilot-codegen"\n'
+            'description = "x"\n'
+            'developer_instructions = "ALWAYS open and follow `{cf-studio-path}/skills/studio/agents/cypilot-codegen.md`"\n'
+        )
+        self.assertFalse(_is_legacy_generator_toml_stub(content))
+
+    def test_legacy_template_in_toml_developer_instructions_is_legacy(self):
+        from studio.commands.agents import _is_legacy_generator_toml_stub
+
+        content = (
+            '# Generated by cf agents -- do not edit\n'
+            'name = "cypilot-codegen"\n'
+            'description = "x"\n'
+            'developer_instructions = "ALWAYS open and follow `{cypilot_path}/skills/cypilot/agents/cypilot-codegen.md`"\n'
+        )
+        self.assertTrue(_is_legacy_generator_toml_stub(content))
 
 
 if __name__ == "__main__":

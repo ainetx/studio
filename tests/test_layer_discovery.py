@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from cypilot.utils.layer_discovery import (
+from studio.utils.layer_discovery import (
     discover_layers,
     _load_kit_layers,
     _load_master_layer,
@@ -19,7 +19,7 @@ from cypilot.utils.layer_discovery import (
     _detect_master_repo,
     _is_master_repo_boundary,
 )
-from cypilot.utils.manifest import ManifestLayer, ManifestLayerState
+from studio.utils.manifest import ManifestLayer, ManifestLayerState
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +47,7 @@ def _make_core_toml(config_dir: Path, kits: dict[str, Path]) -> None:
     for slug, kit_path in kits.items():
         lines.append(f"[kits.{slug}]\n")
         lines.append(f'path = "{kit_path.as_posix()}"\n')
-        lines.append('format = "Cypilot"\n')
+        lines.append('format = "CFS"\n')
         lines.append('version = "1.0.0"\n')
     (config_dir / "core.toml").write_text("".join(lines))
 
@@ -220,7 +220,7 @@ version = "1.0"
 [kits]
 [kits.mykit]
 path = "{kit_dir.as_posix()}"
-format = "Cypilot"
+format = "CFS"
 version = "1.0.0"
 """
             (cypilot_root / "config" / "core.toml").write_text(core_content)
@@ -243,7 +243,7 @@ version = "1.0"
 [kits]
 [kits.emptykit]
 path = "{kit_dir.as_posix()}"
-format = "Cypilot"
+format = "CFS"
 version = "1.0.0"
 """
             (cypilot_root / "config" / "core.toml").write_text(core_content)
@@ -289,7 +289,7 @@ version = "1.0.0"
             cypilot_root = Path(tmp) / "cypilot"
             (cypilot_root / "config").mkdir(parents=True)
             (cypilot_root / "config" / "core.toml").write_text(
-                'version = "1.0"\n[kits]\n[kits.mykit]\nformat = "Cypilot"\n'
+                'version = "1.0"\n[kits]\n[kits.mykit]\nformat = "CFS"\n'
             )
 
             result = _load_kit_layers(cypilot_root)
@@ -310,7 +310,7 @@ version = "1.0"
 [kits]
 [kits.badkit]
 path = "{kit_dir.as_posix()}"
-format = "Cypilot"
+format = "CFS"
 version = "1.0.0"
 """
             (cypilot_root / "config" / "core.toml").write_text(core_content)
@@ -337,7 +337,7 @@ version = "1.0"
 [kits]
 [kits.mykit]
 path = "kits/mykit"
-format = "Cypilot"
+format = "CFS"
 version = "1.0.0"
 """
             (cypilot_root / "config" / "core.toml").write_text(core_content)
@@ -521,7 +521,7 @@ version = "1.0"
 [kits]
 [kits.mykit]
 path = "{kit_dir.as_posix()}"
-format = "Cypilot"
+format = "CFS"
 version = "1.0.0"
 """
             (config_dir / "core.toml").write_text(core_content)

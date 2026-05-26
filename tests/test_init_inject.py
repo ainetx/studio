@@ -22,7 +22,7 @@ class TestInjectManagedBlockContainment(unittest.TestCase):
     """Path containment checks in _inject_managed_block."""
 
     def _fn(self):
-        from cypilot.commands.init import _inject_managed_block
+        from studio.commands.init import _inject_managed_block
         return _inject_managed_block
 
     def test_valid_in_root_write_succeeds(self):
@@ -87,7 +87,7 @@ class TestInjectRootWrappers(unittest.TestCase):
     """D: _inject_root_agents and _inject_root_claude still work correctly."""
 
     def test_inject_root_agents_creates(self):
-        from cypilot.commands.init import _inject_root_agents
+        from studio.commands.init import _inject_root_agents
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
             root.mkdir()
@@ -95,24 +95,24 @@ class TestInjectRootWrappers(unittest.TestCase):
             self.assertEqual(result, "created")
             agents = root / "AGENTS.md"
             self.assertTrue(agents.is_file())
-            self.assertIn('cf-constructor-path = "cypilot"', agents.read_text())
+            self.assertIn('cf-studio-path = "cypilot"', agents.read_text())
 
     def test_inject_root_agents_updates(self):
-        from cypilot.commands.init import _inject_root_agents, MARKER_START, MARKER_END
+        from studio.commands.init import _inject_root_agents, MARKER_START, MARKER_END
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
             root.mkdir()
             agents = root / "AGENTS.md"
             agents.write_text(
-                f"{MARKER_START}\n```toml\ncf-constructor-path = \"old\"\n```\n{MARKER_END}\n",
+                f"{MARKER_START}\n```toml\ncf-studio-path = \"old\"\n```\n{MARKER_END}\n",
                 encoding="utf-8",
             )
             result = _inject_root_agents(root, "newdir")
             self.assertEqual(result, "updated")
-            self.assertIn('cf-constructor-path = "newdir"', agents.read_text())
+            self.assertIn('cf-studio-path = "newdir"', agents.read_text())
 
     def test_inject_root_agents_unchanged(self):
-        from cypilot.commands.init import _inject_root_agents, _compute_managed_block
+        from studio.commands.init import _inject_root_agents, _compute_managed_block
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
             root.mkdir()
@@ -122,7 +122,7 @@ class TestInjectRootWrappers(unittest.TestCase):
             self.assertEqual(result, "unchanged")
 
     def test_inject_root_claude_creates(self):
-        from cypilot.commands.init import _inject_root_claude
+        from studio.commands.init import _inject_root_claude
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
             root.mkdir()
@@ -130,24 +130,24 @@ class TestInjectRootWrappers(unittest.TestCase):
             self.assertEqual(result, "created")
             claude = root / "CLAUDE.md"
             self.assertTrue(claude.is_file())
-            self.assertIn('cf-constructor-path = "cypilot"', claude.read_text())
+            self.assertIn('cf-studio-path = "cypilot"', claude.read_text())
 
     def test_inject_root_claude_updates(self):
-        from cypilot.commands.init import _inject_root_claude, MARKER_START, MARKER_END
+        from studio.commands.init import _inject_root_claude, MARKER_START, MARKER_END
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
             root.mkdir()
             claude = root / "CLAUDE.md"
             claude.write_text(
-                f"{MARKER_START}\n```toml\ncf-constructor-path = \"old\"\n```\n{MARKER_END}\n",
+                f"{MARKER_START}\n```toml\ncf-studio-path = \"old\"\n```\n{MARKER_END}\n",
                 encoding="utf-8",
             )
             result = _inject_root_claude(root, "newdir")
             self.assertEqual(result, "updated")
-            self.assertIn('cf-constructor-path = "newdir"', claude.read_text())
+            self.assertIn('cf-studio-path = "newdir"', claude.read_text())
 
     def test_inject_root_agents_dry_run(self):
-        from cypilot.commands.init import _inject_root_agents
+        from studio.commands.init import _inject_root_agents
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
             root.mkdir()
@@ -155,12 +155,33 @@ class TestInjectRootWrappers(unittest.TestCase):
             self.assertEqual(result, "created")
             self.assertFalse((root / "AGENTS.md").exists())
 
+    def test_inject_managed_block_idempotent(self):
+        """Two consecutive injects on an already-injected file report 'unchanged'.
+
+        This test pins the invariant that _inject_managed_block is idempotent:
+        a second call on an already-injected file should return 'unchanged'.
+        (P5-F011: ensures no-op .strip() removal regression)
+        """
+        from studio.commands.init import _inject_managed_block
+        with TemporaryDirectory() as td:
+            project_root = Path(td)
+            target = project_root / "AGENTS.md"
+            target.write_text("# Project AGENTS\n\nSome pre-existing content.\n")
+
+            # First inject
+            result_a = _inject_managed_block(target, "cypilot", project_root=project_root)
+            self.assertIn(result_a, {"created", "updated"}, f"First inject should create/update, got {result_a!r}")
+
+            # Second inject on already-injected file
+            result_b = _inject_managed_block(target, "cypilot", project_root=project_root)
+            self.assertEqual(result_b, "unchanged", f"Expected idempotent 'unchanged', got {result_b!r}")
+
 
 class TestPromptKitInstallFlag(unittest.TestCase):
     """Coverage for _prompt_kit_install_flag interactive/non-interactive paths."""
 
     def _fn(self):
-        from cypilot.commands.init import _prompt_kit_install_flag
+        from studio.commands.init import _prompt_kit_install_flag
         return _prompt_kit_install_flag
 
     def test_non_interactive_returns_true(self):
@@ -182,7 +203,7 @@ class TestPromptKitInstallFlag(unittest.TestCase):
         out = buf.getvalue()
         # Header + the four added help lines + the [a]ccept / [d]ecline cursor.
         self.assertIn("Install SDLC kit", out)
-        self.assertIn("This adds the default Cyber Constructor SDLC templates", out)
+        self.assertIn("This adds the default Constructor Studio SDLC templates", out)
         self.assertIn("Reply with `a` to install it now or `d` to skip it", out)
         self.assertIn("Suggested: `a` for first-time setup", out)
         self.assertIn("`a` = download and install the default kit now", out)

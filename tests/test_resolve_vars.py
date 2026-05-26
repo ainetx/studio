@@ -17,8 +17,8 @@ from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
 
-from cypilot.commands.resolve_vars import _collect_all_variables, cmd_resolve_vars
-from cypilot.utils.ui import set_json_mode
+from studio.commands.resolve_vars import _collect_all_variables, cmd_resolve_vars
+from studio.utils.ui import set_json_mode
 
 
 # ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ def _bootstrap_project(root: Path, adapter_rel: str = "cypilot") -> Path:
     root.mkdir(parents=True, exist_ok=True)
     (root / ".git").mkdir(exist_ok=True)
     (root / "AGENTS.md").write_text(
-        f'<!-- @cf:root-agents -->\n```toml\ncf-constructor-path = "{adapter_rel}"\n```\n<!-- /@cf:root-agents -->\n',
+        f'<!-- @cf:root-agents -->\n```toml\ncf-studio-path = "{adapter_rel}"\n```\n<!-- /@cf:root-agents -->\n',
         encoding="utf-8",
     )
     adapter = root / adapter_rel
@@ -42,7 +42,7 @@ def _bootstrap_project(root: Path, adapter_rel: str = "cypilot") -> Path:
 
 
 def _write_core_toml(config_dir: Path, data: dict) -> None:
-    from cypilot.utils import toml_utils
+    from studio.utils import toml_utils
     config_dir.mkdir(parents=True, exist_ok=True)
     toml_utils.dump(data, config_dir / "core.toml")
 
@@ -60,10 +60,10 @@ class TestCollectAllVariables(unittest.TestCase):
             root = Path(td) / "proj"
             adapter = _bootstrap_project(root)
             result = _collect_all_variables(root, adapter, None)
-            self.assertIn("cf-constructor-path", result["variables"])
+            self.assertIn("cf-studio-path", result["variables"])
             self.assertIn("project_root", result["variables"])
             self.assertEqual(
-                result["variables"]["cf-constructor-path"],
+                result["variables"]["cf-studio-path"],
                 adapter.resolve().as_posix(),
             )
             self.assertEqual(
@@ -82,7 +82,7 @@ class TestCollectAllVariables(unittest.TestCase):
                 "project_root": "..",
                 "kits": {
                     "sdlc": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/sdlc",
                         "version": "2.0",
                         "resources": {
@@ -124,8 +124,9 @@ class TestCollectAllVariables(unittest.TestCase):
                 "kits": {},
             })
             self.assertEqual(len(result["kits"]), 0)
-            self.assertIn("cf-constructor-path", result["variables"])
-            self.assertEqual(len(result["variables"]), 2)  # cypilot_path + project_root
+            self.assertIn("cf-studio-path", result["variables"])
+            # System variables: cf-studio-path, cf-path, studio_path, studio-path, project_root
+            self.assertEqual(len(result["variables"]), 5)
 
     def test_kit_without_resources_skipped(self):
         """Kit without resources section produces no kit variables."""
@@ -136,7 +137,7 @@ class TestCollectAllVariables(unittest.TestCase):
                 "version": "1.0",
                 "kits": {
                     "legacykit": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/legacykit",
                     },
                 },
@@ -253,7 +254,7 @@ class TestCmdResolveVars(unittest.TestCase):
             self.assertEqual(rc, 0)
             out = json.loads(buf.getvalue())
             self.assertEqual(out["status"], "OK")
-            self.assertIn("cf-constructor-path", out["variables"])
+            self.assertIn("cf-studio-path", out["variables"])
             self.assertIn("adr_template", out["variables"])
 
     def test_filter_by_kit(self):
@@ -325,7 +326,7 @@ class TestCmdResolveVars(unittest.TestCase):
             # Flat mode wraps variables with metadata (no "status" key)
             self.assertNotIn("status", out)
             self.assertIn("variables", out)
-            self.assertIn("cf-constructor-path", out["variables"])
+            self.assertIn("cf-studio-path", out["variables"])
             self.assertIn("adr_rules", out["variables"])
 
     def test_flat_with_kit_filter(self):
@@ -355,7 +356,7 @@ class TestCmdResolveVars(unittest.TestCase):
             self.assertNotIn("status", out)
             self.assertIn("variables", out)
             # System vars present
-            self.assertIn("cf-constructor-path", out["variables"])
+            self.assertIn("cf-studio-path", out["variables"])
             # Only sdlc kit var, not other
             self.assertIn("var_a", out["variables"])
             self.assertNotIn("var_b", out["variables"])
@@ -403,7 +404,7 @@ class TestInfoVariablesIntegration(unittest.TestCase):
 
     def test_info_includes_variables(self):
         """cpt info output contains variables dict."""
-        from cypilot.commands.adapter_info import cmd_adapter_info
+        from studio.commands.adapter_info import cmd_adapter_info
 
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
@@ -414,7 +415,7 @@ class TestInfoVariablesIntegration(unittest.TestCase):
                 "project_root": "..",
                 "kits": {
                     "sdlc": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/sdlc",
                         "version": "2.0",
                         "resources": {
@@ -437,7 +438,7 @@ class TestInfoVariablesIntegration(unittest.TestCase):
                 self.assertEqual(rc, 0)
                 out = json.loads(buf.getvalue())
                 variables = out.get("variables", {})
-                self.assertIn("cf-constructor-path", variables)
+                self.assertIn("cf-studio-path", variables)
                 self.assertIn("project_root", variables)
                 self.assertIn("adr_template", variables)
                 self.assertIn("scripts", variables)
@@ -446,7 +447,7 @@ class TestInfoVariablesIntegration(unittest.TestCase):
 
     def test_info_includes_variables_by_kit(self):
         """cpt info output contains variables_by_kit dict."""
-        from cypilot.commands.adapter_info import cmd_adapter_info
+        from studio.commands.adapter_info import cmd_adapter_info
 
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
@@ -457,7 +458,7 @@ class TestInfoVariablesIntegration(unittest.TestCase):
                 "project_root": "..",
                 "kits": {
                     "sdlc": {
-                        "format": "Cypilot",
+                        "format": "CFS",
                         "path": "config/kits/sdlc",
                         "version": "2.0",
                         "resources": {
@@ -486,7 +487,7 @@ class TestInfoVariablesIntegration(unittest.TestCase):
 
     def test_info_includes_collision_flag(self):
         """cpt info output contains variables_collisions when collision exists."""
-        from cypilot.commands.adapter_info import cmd_adapter_info
+        from studio.commands.adapter_info import cmd_adapter_info
 
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
@@ -526,7 +527,7 @@ class TestInfoVariablesIntegration(unittest.TestCase):
 
     def test_info_degraded_on_corrupt_core_toml(self):
         """cpt info sets variables_degraded when core.toml is corrupt."""
-        from cypilot.commands.adapter_info import cmd_adapter_info
+        from studio.commands.adapter_info import cmd_adapter_info
 
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
@@ -551,7 +552,7 @@ class TestInfoVariablesIntegration(unittest.TestCase):
 
     def test_info_variables_empty_when_no_kits(self):
         """cpt info variables has only system vars when no kit resources."""
-        from cypilot.commands.adapter_info import cmd_adapter_info
+        from studio.commands.adapter_info import cmd_adapter_info
 
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
@@ -572,10 +573,10 @@ class TestInfoVariablesIntegration(unittest.TestCase):
                 self.assertEqual(rc, 0)
                 out = json.loads(buf.getvalue())
                 variables = out.get("variables", {})
-                self.assertIn("cf-constructor-path", variables)
+                self.assertIn("cf-studio-path", variables)
                 self.assertIn("project_root", variables)
-                # System vars only (cypilot_path + project_root)
-                self.assertEqual(len(variables), 2)
+                # System variables: cf-studio-path, cf-path, studio_path, studio-path, project_root
+                self.assertEqual(len(variables), 5)
             finally:
                 os.chdir(cwd)
 
@@ -595,7 +596,7 @@ class TestResolveVarsCLIDispatch(unittest.TestCase):
 
     def test_cli_dispatch(self):
         """main(['resolve-vars', ...]) dispatches correctly."""
-        from cypilot.cli import main
+        from studio.cli import main
 
         with TemporaryDirectory() as td:
             root = Path(td) / "proj"
@@ -616,7 +617,7 @@ class TestResolveVarsCLIDispatch(unittest.TestCase):
 
     def test_cli_help_includes_resolve_vars(self):
         """CLI help output lists resolve-vars command."""
-        from cypilot.cli import main
+        from studio.cli import main
 
         buf = io.StringIO()
         with redirect_stdout(buf):
@@ -739,7 +740,7 @@ class TestCmdResolveVarsCorruptToml(unittest.TestCase):
                 rc = cmd_resolve_vars(["--root", str(root)])
             self.assertEqual(rc, 0)
             out = json.loads(buf.getvalue())
-            self.assertIn("cf-constructor-path", out["variables"])
+            self.assertIn("cf-studio-path", out["variables"])
             # No kit vars since core.toml is corrupt
             self.assertEqual(len(out["kits"]), 0)
             # Parse error propagated as core_load_error
@@ -756,24 +757,24 @@ class TestHumanFormatters(unittest.TestCase):
 
     def test_human_flat_output(self):
         """_human_flat produces output without error."""
-        from cypilot.commands.resolve_vars import _human_flat
+        from studio.commands.resolve_vars import _human_flat
         set_json_mode(False)
         try:
             buf = io.StringIO()
             with contextlib.redirect_stderr(buf):
                 _human_flat({"variables": {
-                    "cf-constructor-path": "/tmp/test/cypilot",
+                    "cf-studio-path": "/tmp/test/cypilot",
                     "adr_template": "/tmp/test/cypilot/config/kits/sdlc/artifacts/ADR/template.md",
                 }})
             output = buf.getvalue()
-            self.assertIn("cf-constructor-path", output)
+            self.assertIn("cf-studio-path", output)
             self.assertIn("adr_template", output)
         finally:
             set_json_mode(True)
 
     def test_human_structured_output(self):
         """_human_structured produces output with system, kits, and summary."""
-        from cypilot.commands.resolve_vars import _human_structured
+        from studio.commands.resolve_vars import _human_structured
         set_json_mode(False)
         try:
             buf = io.StringIO()
@@ -781,7 +782,7 @@ class TestHumanFormatters(unittest.TestCase):
                 _human_structured({
                     "status": "OK",
                     "system": {
-                        "cf-constructor-path": "/tmp/test/cypilot",
+                        "cf-studio-path": "/tmp/test/cypilot",
                         "project_root": "/tmp/test",
                     },
                     "kits": {
@@ -790,7 +791,7 @@ class TestHumanFormatters(unittest.TestCase):
                         },
                     },
                     "variables": {
-                        "cf-constructor-path": "/tmp/test/cypilot",
+                        "cf-studio-path": "/tmp/test/cypilot",
                         "project_root": "/tmp/test",
                         "adr_template": "/tmp/test/cypilot/config/kits/sdlc/artifacts/ADR/template.md",
                     },
@@ -804,16 +805,16 @@ class TestHumanFormatters(unittest.TestCase):
 
     def test_human_structured_empty_kits(self):
         """_human_structured with no kits still shows system and summary."""
-        from cypilot.commands.resolve_vars import _human_structured
+        from studio.commands.resolve_vars import _human_structured
         set_json_mode(False)
         try:
             buf = io.StringIO()
             with contextlib.redirect_stderr(buf):
                 _human_structured({
                     "status": "OK",
-                    "system": {"cf-constructor-path": "/tmp/x"},
+                    "system": {"cf-studio-path": "/tmp/x"},
                     "kits": {},
-                    "variables": {"cf-constructor-path": "/tmp/x"},
+                    "variables": {"cf-studio-path": "/tmp/x"},
                 })
             output = buf.getvalue()
             self.assertIn("System", output)
@@ -860,7 +861,7 @@ class TestHumanFormatters(unittest.TestCase):
                     rc = cmd_resolve_vars(["--root", str(root), "--flat"])
                 self.assertEqual(rc, 0)
                 output = buf.getvalue()
-                self.assertIn("cf-constructor-path", output)
+                self.assertIn("cf-studio-path", output)
         finally:
             set_json_mode(True)
 

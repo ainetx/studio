@@ -15,15 +15,15 @@ from tempfile import TemporaryDirectory
 from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
-from cypilot.cli import main
+from studio.cli import main
 
 
 def _bootstrap_registry(project_root: Path, *, entries: list) -> None:
     (project_root / ".git").mkdir(exist_ok=True)
     (project_root / "AGENTS.md").write_text(
-        '<!-- @cf:root-agents -->\n```toml\ncf-constructor-path = "adapter"\n```\n',
+        '<!-- @cf:root-agents -->\n```toml\ncf-studio-path = "adapter"\n```\n',
         encoding="utf-8",
     )
     adapter_dir = project_root / "adapter"
@@ -140,8 +140,8 @@ class TestCLIValidateCommand(unittest.TestCase):
             _bootstrap_registry(
                 root,
                 entries=[
-                    {"kind": "FEATURE", "system": "Test", "path": "architecture/features/feature-a.md", "format": "Cypilot"},
-                    {"kind": "FEATURE", "system": "Test", "path": "architecture/features/feature-b.md", "format": "Cypilot"},
+                    {"kind": "FEATURE", "system": "Test", "path": "architecture/features/feature-a.md", "format": "CFS"},
+                    {"kind": "FEATURE", "system": "Test", "path": "architecture/features/feature-b.md", "format": "CFS"},
                     {"kind": "SRC", "system": "Test", "path": "src", "format": "CONTEXT", "traceability_enabled": True, "extensions": [".py"]},
                 ],
             )
@@ -167,7 +167,7 @@ class TestCLIValidateCommand(unittest.TestCase):
             _bootstrap_registry(
                 root,
                 entries=[
-                    {"kind": "FEATURE", "system": "Test", "path": "architecture/features/feature-x.md", "format": "Cypilot"},
+                    {"kind": "FEATURE", "system": "Test", "path": "architecture/features/feature-x.md", "format": "CFS"},
                 ],
             )
 
@@ -205,7 +205,7 @@ class TestCLIValidateCommand(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -251,7 +251,7 @@ class TestCLICommandsRulesOnlyKit(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot-sdlc": {"format": "Cypilot", "path": "kits/cypilot-sdlc"}},
+                kits={"cypilot-sdlc": {"format": "CFS", "path": "kits/cypilot-sdlc"}},
                 systems=[
                     {
                         "name": "root",
@@ -322,9 +322,9 @@ class TestCLIInitCommand(unittest.TestCase):
 
             stdout = io.StringIO()
             with (
-                patch("cypilot.commands.init.CACHE_DIR", fake_cache),
+                patch("studio.commands.init.CACHE_DIR", fake_cache),
                 patch(
-                    "cypilot.commands.kit._download_kit_from_github",
+                    "studio.commands.kit._download_kit_from_github",
                     return_value=(fake_kit, "1.0.0"),
                 ),
             ):
@@ -340,9 +340,9 @@ class TestCLIInitCommand(unittest.TestCase):
             self.assertEqual(out.get("status"), "PASS")
             # Init now creates root AGENTS.md and cypilot/ directory with config/
             self.assertTrue((project / "AGENTS.md").exists())
-            cypilot_dir_path = Path(out.get("cypilot_dir", ""))
-            self.assertTrue(cypilot_dir_path.is_dir())
-            self.assertTrue((cypilot_dir_path / "config" / "AGENTS.md").exists())
+            studio_dir_path = Path(out.get("studio_dir", ""))
+            self.assertTrue(studio_dir_path.is_dir())
+            self.assertTrue((studio_dir_path / "config" / "AGENTS.md").exists())
 
             stdout = io.StringIO()
             with redirect_stdout(stdout):
@@ -392,7 +392,7 @@ class TestCLIInitCommand(unittest.TestCase):
             orig_cwd = os.getcwd()
             try:
                 os.chdir(project.as_posix())
-                with patch("cypilot.commands.init.CACHE_DIR", fake_cache), \
+                with patch("studio.commands.init.CACHE_DIR", fake_cache), \
                      unittest.mock.patch("builtins.input", side_effect=["", ""]):
                     stdout = io.StringIO()
                     with redirect_stdout(stdout), redirect_stderr(io.StringIO()):
@@ -401,8 +401,8 @@ class TestCLIInitCommand(unittest.TestCase):
                 out = json.loads(stdout.getvalue())
                 self.assertEqual(out.get("status"), "PASS")
                 self.assertTrue((project / "AGENTS.md").exists())
-                cypilot_dir_path = Path(out.get("cypilot_dir", ""))
-                self.assertTrue(cypilot_dir_path.is_dir())
+                studio_dir_path = Path(out.get("studio_dir", ""))
+                self.assertTrue(studio_dir_path.is_dir())
             finally:
                 os.chdir(orig_cwd)
 
@@ -463,7 +463,7 @@ class TestCLIAgentsCommand(unittest.TestCase):
             self.assertGreater(agent_r.get("workflows", {}).get("counts", {}).get("created", 0), 0)
 
             # Ensure description is always double-quoted in generated skill frontmatter
-            skill_file = root / ".agents" / "skills" / "cf-constructor" / "SKILL.md"
+            skill_file = root / ".agents" / "skills" / "cf" / "SKILL.md"
             self.assertTrue(skill_file.exists())
             content = skill_file.read_text(encoding="utf-8")
             self.assertRegex(content, r"(?m)^description:\s+\".*\"\s*$", msg="description not quoted in .agents skill output")
@@ -497,12 +497,12 @@ class TestCLIAgentsCommand(unittest.TestCase):
             out = json.loads(stdout.getvalue())
 
             # One of the generated skill files should contain quoted description
-            skill = root / ".claude" / "skills" / "cf-constructor-generate" / "SKILL.md"
+            skill = root / ".claude" / "skills" / "cf-generate" / "SKILL.md"
             self.assertTrue(skill.exists())
             txt = skill.read_text(encoding="utf-8")
             self.assertRegex(txt, r"(?m)^description:\s+\".*\"\s*$", msg="description not quoted in claude skill file")
 
-            plan_skill = root / ".claude" / "skills" / "cf-constructor-plan" / "SKILL.md"
+            plan_skill = root / ".claude" / "skills" / "cf-plan" / "SKILL.md"
             self.assertTrue(plan_skill.exists())
             self.assertRegex(
                 plan_skill.read_text(encoding="utf-8"),
@@ -510,7 +510,7 @@ class TestCLIAgentsCommand(unittest.TestCase):
                 msg="description not quoted in claude plan skill file",
             )
 
-            workspace_skill = root / ".claude" / "skills" / "cf-constructor-workspace" / "SKILL.md"
+            workspace_skill = root / ".claude" / "skills" / "cf-workspace" / "SKILL.md"
             self.assertTrue(workspace_skill.exists())
             self.assertRegex(
                 workspace_skill.read_text(encoding="utf-8"),
@@ -864,11 +864,11 @@ class TestCLIAgentsCommand(unittest.TestCase):
             self.assertEqual(openai_result.get("status"), "PASS")
 
             expected_skills = [
-                root / ".agents" / "skills" / "cf-constructor" / "SKILL.md",
-                root / ".agents" / "skills" / "cf-constructor-generate" / "SKILL.md",
-                root / ".agents" / "skills" / "cf-constructor-analyze" / "SKILL.md",
-                root / ".agents" / "skills" / "cf-constructor-plan" / "SKILL.md",
-                root / ".agents" / "skills" / "cf-constructor-workspace" / "SKILL.md",
+                root / ".agents" / "skills" / "cf" / "SKILL.md",
+                root / ".agents" / "skills" / "cf-generate" / "SKILL.md",
+                root / ".agents" / "skills" / "cf-analyze" / "SKILL.md",
+                root / ".agents" / "skills" / "cf-plan" / "SKILL.md",
+                root / ".agents" / "skills" / "cf-workspace" / "SKILL.md",
             ]
             for skill_file in expected_skills:
                 self.assertTrue(
@@ -886,9 +886,9 @@ class TestCLIAgentsCommand(unittest.TestCase):
 
             self._generate_agent(root, "openai")
 
-            from cypilot.commands.agents import _parse_frontmatter
+            from studio.commands.agents import _parse_frontmatter
 
-            for skill_name in ("cf-constructor", "cf-constructor-generate", "cf-constructor-analyze", "cf-constructor-plan", "cf-constructor-workspace"):
+            for skill_name in ("cf", "cf-generate", "cf-analyze", "cf-plan", "cf-workspace"):
                 skill_file = root / ".agents" / "skills" / skill_name / "SKILL.md"
                 fm = _parse_frontmatter(skill_file)
                 self.assertTrue(fm.get("name", "").strip(),
@@ -910,7 +910,7 @@ class TestCLIParseFrontmatter(unittest.TestCase):
 
     def test_parse_frontmatter_valid(self):
         """Test parsing valid frontmatter."""
-        from cypilot.commands.agents import _parse_frontmatter
+        from studio.commands.agents import _parse_frontmatter
 
         with TemporaryDirectory() as tmpdir:
             f = Path(tmpdir) / "test.md"
@@ -922,7 +922,7 @@ class TestCLIParseFrontmatter(unittest.TestCase):
 
     def test_parse_frontmatter_strips_quotes(self):
         """Test parsing frontmatter unquotes quoted scalars."""
-        from cypilot.commands.agents import _parse_frontmatter
+        from studio.commands.agents import _parse_frontmatter
 
         with TemporaryDirectory() as tmpdir:
             f = Path(tmpdir) / "test.md"
@@ -934,7 +934,7 @@ class TestCLIParseFrontmatter(unittest.TestCase):
 
     def test_parse_frontmatter_no_frontmatter(self):
         """Test parsing file without frontmatter."""
-        from cypilot.commands.agents import _parse_frontmatter
+        from studio.commands.agents import _parse_frontmatter
 
         with TemporaryDirectory() as tmpdir:
             f = Path(tmpdir) / "test.md"
@@ -945,7 +945,7 @@ class TestCLIParseFrontmatter(unittest.TestCase):
 
     def test_parse_frontmatter_unclosed(self):
         """Test parsing file with unclosed frontmatter."""
-        from cypilot.commands.agents import _parse_frontmatter
+        from studio.commands.agents import _parse_frontmatter
 
         with TemporaryDirectory() as tmpdir:
             f = Path(tmpdir) / "test.md"
@@ -956,14 +956,14 @@ class TestCLIParseFrontmatter(unittest.TestCase):
 
     def test_parse_frontmatter_file_not_found(self):
         """Test parsing non-existent file."""
-        from cypilot.commands.agents import _parse_frontmatter
+        from studio.commands.agents import _parse_frontmatter
 
         result = _parse_frontmatter(Path("/tmp/does-not-exist-abc123.md"))
         self.assertEqual(result, {})
 
     def test_parse_frontmatter_empty_values_skipped(self):
         """Test that empty values are skipped."""
-        from cypilot.commands.agents import _parse_frontmatter
+        from studio.commands.agents import _parse_frontmatter
 
         with TemporaryDirectory() as tmpdir:
             f = Path(tmpdir) / "test.md"
@@ -993,7 +993,7 @@ class TestCLIAgentsEdgeCases(unittest.TestCase):
 
     def test_agents_renames_misnamed_proxy(self):
         """Test agents command renames misnamed proxy files."""
-        from cypilot.commands.agents import _safe_relpath
+        from studio.commands.agents import _safe_relpath
 
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1206,7 +1206,7 @@ class TestCLIAgentsEdgeCases(unittest.TestCase):
 
     def test_agents_rename_conflict_skips(self):
         """Test agents command skips rename when destination already exists."""
-        from cypilot.commands.agents import _safe_relpath
+        from studio.commands.agents import _safe_relpath
 
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1360,7 +1360,7 @@ class TestCLIAgentsEdgeCases(unittest.TestCase):
 
     def test_agents_rename_scan_second_read_error(self):
         """Test agents command handles second read error during rename scan."""
-        from cypilot.commands.agents import _safe_relpath
+        from studio.commands.agents import _safe_relpath
 
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1395,7 +1395,7 @@ class TestCLIAgentsEdgeCases(unittest.TestCase):
 
 
 class TestCLIAgentsAtPathFormat(unittest.TestCase):
-    """Verify that generated agent files use {cf-constructor-path}/ variable paths."""
+    """Verify that generated agent files use {cf-studio-path}/ variable paths."""
 
     def _write_minimal_cypilot_skill(self, root: Path) -> None:
         (root / "skills" / "cypilot").mkdir(parents=True, exist_ok=True)
@@ -1418,7 +1418,7 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
         self.assertEqual(exit_code, 0, f"agents --agent {agent} failed: {stdout.getvalue()}")
 
     def test_workflow_proxy_uses_at_path(self):
-        """Workflow proxies must reference the target via {cf-constructor-path}/ not relative traversal."""
+        """Workflow proxies must reference the target via {cf-studio-path}/ not relative traversal."""
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             (root / ".git").mkdir()
@@ -1427,14 +1427,14 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
 
             self._run_agents("windsurf", root, root)
 
-            proxy = root / ".windsurf" / "workflows" / "cf-constructor-generate.md"
+            proxy = root / ".windsurf" / "workflows" / "cf-generate.md"
             self.assertTrue(proxy.exists())
             content = proxy.read_text(encoding="utf-8")
-            self.assertIn("{cf-constructor-path}/", content, "Workflow proxy must use {cf-constructor-path}/ path prefix")
+            self.assertIn("{cf-studio-path}/", content, "Workflow proxy must use {cf-studio-path}/ path prefix")
             self.assertNotIn("../", content, "Workflow proxy must not use relative traversal paths")
 
     def test_skill_output_uses_at_path(self):
-        """Skill outputs must reference the target via {cf-constructor-path}/ not relative traversal."""
+        """Skill outputs must reference the target via {cf-studio-path}/ not relative traversal."""
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             (root / ".git").mkdir()
@@ -1443,37 +1443,35 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
 
             self._run_agents("windsurf", root, root)
 
-            skill = root / ".agents" / "skills" / "cf-constructor" / "SKILL.md"
+            skill = root / ".agents" / "skills" / "cf" / "SKILL.md"
             self.assertTrue(skill.exists())
             content = skill.read_text(encoding="utf-8")
-            self.assertIn("{cf-constructor-path}/", content, "Skill output must use {cf-constructor-path}/ path prefix")
+            self.assertIn("{cf-studio-path}/", content, "Skill output must use {cf-studio-path}/ path prefix")
             self.assertNotIn("../", content, "Skill output must not use relative traversal paths")
 
     def test_all_agents_use_at_path(self):
-        """All supported agents must generate files with {cf-constructor-path}/ paths, not relative traversal."""
+        """All supported agents must generate files with {cf-studio-path}/ paths, not relative traversal."""
         agents_and_files = {
             "windsurf": [
-                ".windsurf/workflows/cf-constructor-generate.md",
-                ".agents/skills/cf-constructor/SKILL.md",
-                ".windsurf/workflows/cf-constructor.md",
+                ".windsurf/workflows/cf-generate.md",
+                ".agents/skills/cf/SKILL.md",
             ],
             "claude": [
-                ".claude/skills/cf-constructor/SKILL.md",
-                ".claude/skills/cf-constructor-generate/SKILL.md",
+                ".claude/skills/cf/SKILL.md",
+                ".claude/skills/cf-generate/SKILL.md",
             ],
             "copilot": [
-                ".agents/skills/cf-constructor/SKILL.md",
+                ".agents/skills/cf/SKILL.md",
                 ".github/copilot-instructions.md",
-                ".github/prompts/cf-constructor.prompt.md",
-                ".github/prompts/cf-constructor-generate.prompt.md",
+                ".github/prompts/cf.prompt.md",
             ],
             "cursor": [
-                ".cursor/commands/cf-constructor-generate.md",
-                ".agents/skills/cf-constructor/SKILL.md",
-                ".cursor/commands/cf-constructor.md",
+                ".cursor/commands/cf-generate.md",
+                ".agents/skills/cf/SKILL.md",
+                ".cursor/commands/cf.md",
             ],
             "openai": [
-                ".agents/skills/cf-constructor/SKILL.md",
+                ".agents/skills/cf/SKILL.md",
             ],
         }
 
@@ -1491,12 +1489,12 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
                     fpath = root / rel_path
                     self.assertTrue(fpath.exists(), f"{agent}: {rel_path} not created")
                     content = fpath.read_text(encoding="utf-8")
-                    # Every generated file that has an ALWAYS open instruction must use {cf-constructor-path}/
+                    # Every generated file that has an ALWAYS open instruction must use {cf-studio-path}/
                     if "ALWAYS open and follow" in content:
                         self.assertIn(
-                            "{cf-constructor-path}/",
+                            "{cf-studio-path}/",
                             content,
-                            f"{agent}: {rel_path} must use {{cf-constructor-path}}/ prefix — got:\n{content}",
+                            f"{agent}: {rel_path} must use {{cf-studio-path}}/ prefix — got:\n{content}",
                         )
                         self.assertNotIn(
                             "../",
@@ -1519,7 +1517,7 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
         (cypilot_root / "AGENTS.md").write_text("# AGENTS\n", encoding="utf-8")
 
     def test_cypilot_outside_project_root_no_escape(self):
-        """When cypilot root is outside the project, files are copied into cypilot/ and proxies use {cf-constructor-path}/ paths."""
+        """When cypilot root is outside the project, files are copied into cypilot/ and proxies use {cf-studio-path}/ paths."""
         with TemporaryDirectory() as project_tmpdir, TemporaryDirectory() as cypilot_tmpdir:
             root = Path(project_tmpdir)
             cypilot_root = Path(cypilot_tmpdir)
@@ -1531,45 +1529,45 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
                 exit_code = main(["generate-agents", "--agent", "windsurf", "--root", str(root), "--cf-constructor-root", str(cypilot_root)])
             self.assertEqual(exit_code, 0)
 
-            # cypilot/ must have been created inside the project (default name)
-            local_dot = root / "cypilot"
-            self.assertTrue(local_dot.is_dir(), "cypilot/ must exist")
-            self.assertTrue((local_dot / ".core" / "workflows").is_dir(), "cypilot/.core/workflows/ must exist")
+            # studio/ must have been created inside the project (default name)
+            local_dot = root / "studio"
+            self.assertTrue(local_dot.is_dir(), "studio/ must exist")
+            self.assertTrue((local_dot / ".core" / "workflows").is_dir(), "studio/.core/workflows/ must exist")
 
             # JSON output must report the copy
             out = json.loads(stdout.getvalue())
-            self.assertEqual(out.get("cypilot_copy", {}).get("action"), "copied")
+            self.assertEqual(out.get("studio_copy", {}).get("action"), "copied")
 
-            # Proxy must use {cf-constructor-path}/... paths, not absolute paths
-            proxy = root / ".windsurf" / "workflows" / "cf-constructor-generate.md"
+            # Proxy must use {cf-studio-path}/... paths, not absolute paths
+            proxy = root / ".windsurf" / "workflows" / "cf-generate.md"
             self.assertTrue(proxy.exists())
             content = proxy.read_text(encoding="utf-8")
-            self.assertIn("{cf-constructor-path}/", content, "Proxy must use {cf-constructor-path}/ path")
+            self.assertIn("{cf-studio-path}/", content, "Proxy must use {cf-studio-path}/ path")
             self.assertNotRegex(content, r"\.\./.\.\.", "Must not use ../../ style path escape")
             # No absolute paths anywhere
             self.assertNotRegex(content, r"`/[a-zA-Z/]", "Must not contain absolute paths in backticks")
 
     def test_cypilot_outside_no_copy_when_existing(self):
-        """When cypilot/ already has valid markers, skip copy."""
+        """When studio/ already has valid markers, skip copy."""
         with TemporaryDirectory() as project_tmpdir, TemporaryDirectory() as cypilot_tmpdir:
             root = Path(project_tmpdir)
             cypilot_root = Path(cypilot_tmpdir)
             (root / ".git").mkdir()
             self._setup_external_cypilot(cypilot_root)
 
-            # Pre-populate cypilot/ with valid markers (needs AGENTS.md + requirements/ + workflows/ for _is_cypilot_root)
-            local_dot = root / "cypilot"
+            # Pre-populate studio/ with valid markers (needs AGENTS.md + requirements/ + workflows/ for _is_studio_root)
+            local_dot = root / "studio"
             (local_dot / "workflows").mkdir(parents=True, exist_ok=True)
             (local_dot / "requirements").mkdir(parents=True, exist_ok=True)
             (local_dot / "AGENTS.md").write_text("# Existing\n", encoding="utf-8")
             # Also need skills for the agents command to work
-            (local_dot / "skills" / "cypilot").mkdir(parents=True, exist_ok=True)
-            (local_dot / "skills" / "cypilot" / "SKILL.md").write_text(
-                "---\nname: cypilot\ndescription: Local cypilot\n---\n# Cypilot\n",
+            (local_dot / "skills" / "studio").mkdir(parents=True, exist_ok=True)
+            (local_dot / "skills" / "studio" / "SKILL.md").write_text(
+                "---\nname: studio\ndescription: Local studio\n---\n# Studio\n",
                 encoding="utf-8",
             )
             (local_dot / "workflows" / "generate.md").write_text(
-                "---\ncypilot: true\ntype: workflow\nname: cypilot-generate\ndescription: Generate\n---\n# Generate\n",
+                "---\ntype: workflow\nname: cf-generate\ndescription: Generate\n---\n# Generate\n",
                 encoding="utf-8",
             )
 
@@ -1580,8 +1578,8 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
 
             out = json.loads(stdout.getvalue())
             # Copy should be skipped — action "none" with reason
-            self.assertEqual(out["cypilot_copy"]["action"], "none")
-            self.assertEqual(out["cypilot_copy"]["reason"], "existing_installation")
+            self.assertEqual(out["studio_copy"]["action"], "none")
+            self.assertEqual(out["studio_copy"]["reason"], "existing_installation")
 
             # Original file must be unchanged
             self.assertEqual(
@@ -1604,10 +1602,10 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
             self.assertEqual(exit_code, 0)
 
             out = json.loads(stdout.getvalue())
-            self.assertEqual(out.get("cypilot_copy", {}).get("action"), "would_copy")
+            self.assertEqual(out.get("studio_copy", {}).get("action"), "would_copy")
 
             # No files should have been written
-            self.assertFalse((root / "cypilot").exists(), "cypilot/ must not be created in dry-run")
+            self.assertFalse((root / "studio").exists(), "studio/ must not be created in dry-run")
 
     def test_cypilot_outside_submodule_not_overwritten(self):
         """When cypilot/.git exists (submodule), do not overwrite."""
@@ -1617,19 +1615,19 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
             (root / ".git").mkdir()
             self._setup_external_cypilot(cypilot_root)
 
-            # Simulate submodule: cypilot/.git exists
-            local_dot = root / "cypilot"
+            # Simulate submodule: studio/.git exists
+            local_dot = root / "studio"
             local_dot.mkdir(parents=True, exist_ok=True)
-            (local_dot / ".git").write_text("gitdir: ../.git/modules/cypilot\n", encoding="utf-8")
+            (local_dot / ".git").write_text("gitdir: ../.git/modules/studio\n", encoding="utf-8")
             # Also need skills for the agents command to work
-            (local_dot / "skills" / "cypilot").mkdir(parents=True, exist_ok=True)
-            (local_dot / "skills" / "cypilot" / "SKILL.md").write_text(
-                "---\nname: cypilot\ndescription: Submodule cypilot\n---\n# Cypilot\n",
+            (local_dot / "skills" / "studio").mkdir(parents=True, exist_ok=True)
+            (local_dot / "skills" / "studio" / "SKILL.md").write_text(
+                "---\nname: studio\ndescription: Submodule studio\n---\n# Studio\n",
                 encoding="utf-8",
             )
             (local_dot / "workflows").mkdir(parents=True, exist_ok=True)
             (local_dot / "workflows" / "generate.md").write_text(
-                "---\ncypilot: true\ntype: workflow\nname: cypilot-generate\ndescription: Generate\n---\n# Generate\n",
+                "---\ntype: workflow\nname: cf-generate\ndescription: Generate\n---\n# Generate\n",
                 encoding="utf-8",
             )
 
@@ -1640,8 +1638,8 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
 
             out = json.loads(stdout.getvalue())
             # Copy should be skipped — action "none" with reason
-            self.assertEqual(out["cypilot_copy"]["action"], "none")
-            self.assertEqual(out["cypilot_copy"]["reason"], "existing_submodule")
+            self.assertEqual(out["studio_copy"]["action"], "none")
+            self.assertEqual(out["studio_copy"]["reason"], "existing_submodule")
 
     def test_cypilot_inside_project_no_copy(self):
         """When cypilot_root is anywhere inside project_root, no copy must happen."""
@@ -1672,19 +1670,19 @@ class TestCLIAgentsAtPathFormat(unittest.TestCase):
                     self.assertEqual(exit_code, 0, f"Failed for {rel}: {stdout.getvalue()}")
 
                     out = json.loads(stdout.getvalue())
-                    # cypilot_copy action must be "none" — no copy needed for internal path
+                    # studio_copy action must be "none" — no copy needed for internal path
                     self.assertEqual(
-                        out["cypilot_copy"]["action"], "none",
+                        out["studio_copy"]["action"], "none",
                         f"No copy should happen when cypilot is at {rel} inside project",
                     )
-                    # Proxies must use {cf-constructor-path}/... paths, not absolute
-                    proxy = root / ".windsurf" / "workflows" / "cf-constructor-generate.md"
+                    # Proxies must use {cf-studio-path}/... paths, not absolute
+                    proxy = root / ".windsurf" / "workflows" / "cf-generate.md"
                     self.assertTrue(proxy.exists(), f"Proxy not created for {rel}")
                     content = proxy.read_text(encoding="utf-8")
                     self.assertIn(
-                        "{cf-constructor-path}/",
+                        "{cf-studio-path}/",
                         content,
-                        f"Proxy must use {{cf-constructor-path}}/ path — got:\n{content}",
+                        f"Proxy must use {{cf-studio-path}}/ path — got:\n{content}",
                     )
                     self.assertNotRegex(
                         content,
@@ -1753,7 +1751,7 @@ class TestCLITraceabilityCommands(unittest.TestCase):
             _bootstrap_registry(
                 root,
                 entries=[
-                    {"kind": "DESIGN", "system": "Test", "path": "architecture/DESIGN.md", "format": "Cypilot", "traceability_enabled": True},
+                    {"kind": "DESIGN", "system": "Test", "path": "architecture/DESIGN.md", "format": "CFS", "traceability_enabled": True},
                 ],
             )
 
@@ -1788,7 +1786,7 @@ class TestCLITraceabilityCommands(unittest.TestCase):
             _bootstrap_registry(
                 root,
                 entries=[
-                    {"kind": "DESIGN", "system": "Test", "path": "architecture/DESIGN.md", "format": "Cypilot", "traceability_enabled": True},
+                    {"kind": "DESIGN", "system": "Test", "path": "architecture/DESIGN.md", "format": "CFS", "traceability_enabled": True},
                 ],
             )
 
@@ -1800,20 +1798,20 @@ class TestCLITraceabilityCommands(unittest.TestCase):
 
 class TestCLICoreHelpers(unittest.TestCase):
     def test_render_template_missing_variable_raises_system_exit(self):
-        from cypilot.commands.agents import _render_template
+        from studio.commands.agents import _render_template
 
         with self.assertRaises(SystemExit):
             _render_template(["{missing}"], {})
 
     def test_list_workflow_files_missing_dir_returns_empty(self):
-        from cypilot.commands.agents import _list_workflow_files
+        from studio.commands.agents import _list_workflow_files
 
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             self.assertEqual(_list_workflow_files(root), [])
 
     def test_list_workflow_files_filters_and_handles_read_error(self):
-        from cypilot.commands.agents import _list_workflow_files
+        from studio.commands.agents import _list_workflow_files
 
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1843,7 +1841,7 @@ class TestCLICoreHelpers(unittest.TestCase):
             self.assertEqual(names, ["ok.md"])
 
     def test_list_workflow_files_iterdir_error_returns_empty(self):
-        from cypilot.commands.agents import _list_workflow_files
+        from studio.commands.agents import _list_workflow_files
 
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1861,7 +1859,7 @@ class TestCLICoreHelpers(unittest.TestCase):
                 self.assertEqual(_list_workflow_files(root), [])
 
     def test_resolve_user_path_relative_uses_base(self):
-        from cypilot.commands.init import _resolve_user_path
+        from studio.commands.init import _resolve_user_path
 
         with TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
@@ -1869,14 +1867,14 @@ class TestCLICoreHelpers(unittest.TestCase):
             self.assertEqual(out, (base / "foo").resolve())
 
     def test_prompt_path_returns_user_input_over_default(self):
-        from cypilot.commands.init import _prompt_path
+        from studio.commands.init import _prompt_path
 
         with unittest.mock.patch("builtins.input", return_value="abc"):
             out = _prompt_path("Q?", "def")
         self.assertEqual(out, "abc")
 
     def test_load_json_file_invalid_json_returns_none(self):
-        from cypilot.commands.agents import _load_json_file
+        from studio.commands.agents import _load_json_file
 
         with TemporaryDirectory() as tmpdir:
             p = Path(tmpdir) / "x.json"
@@ -1906,7 +1904,7 @@ class TestCLIErrorHandling(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         out = json.loads(stdout.getvalue())
-        self.assertIn("cfc", out["usage"])
+        self.assertIn("cfs", out["usage"])
         self.assertIn("validate", out["commands"])
 
 
@@ -1958,7 +1956,7 @@ class TestCLIAdapterInfo(unittest.TestCase):
             root = Path(tmpdir)
             (root / ".git").mkdir()
             (root / "AGENTS.md").write_text(
-                '<!-- @cf:root-agents -->\n```toml\ncf-constructor-path = "missing-adapter"\n```\n',
+                '<!-- @cf:root-agents -->\n```toml\ncf-studio-path = "missing-adapter"\n```\n',
                 encoding="utf-8",
             )
 
@@ -2036,7 +2034,7 @@ class TestCLIAdapterInfo(unittest.TestCase):
 
             # Point AGENTS.md TOML block outside the project.
             (root / "AGENTS.md").write_text(
-                '<!-- @cf:root-agents -->\n```toml\ncf-constructor-path = "../outside-adapter"\n```\n',
+                '<!-- @cf:root-agents -->\n```toml\ncf-studio-path = "../outside-adapter"\n```\n',
                 encoding="utf-8",
             )
 
@@ -2054,7 +2052,7 @@ def _bootstrap_registry_new_format(project_root: Path, *, systems: list, kits: d
     """Bootstrap registry with new format (systems instead of artifacts)."""
     (project_root / ".git").mkdir(exist_ok=True)
     (project_root / "AGENTS.md").write_text(
-        '<!-- @cf:root-agents -->\n```toml\ncf-constructor-path = "adapter"\n```\n',
+        '<!-- @cf:root-agents -->\n```toml\ncf-studio-path = "adapter"\n```\n',
         encoding="utf-8",
     )
     adapter_dir = project_root / "adapter"
@@ -2067,10 +2065,10 @@ def _bootstrap_registry_new_format(project_root: Path, *, systems: list, kits: d
     registry = {
         "version": "1.0",
         "project_root": "..",
-        "kits": kits if kits is not None else {"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+        "kits": kits if kits is not None else {"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
         "systems": systems,
     }
-    from cypilot.utils import toml_utils
+    from studio.utils import toml_utils
     toml_utils.dump(registry, adapter_dir / "config" / "artifacts.toml")
 
 
@@ -2123,7 +2121,7 @@ cypilot-template:
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2208,7 +2206,7 @@ class TestCLIValidateKitsCommand(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot-sdlc": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot-sdlc": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[],
             )
 
@@ -2236,7 +2234,7 @@ class TestCLIValidateKitsCommand(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[],
             )
 
@@ -2264,7 +2262,7 @@ class TestCLIValidateKitsCommand(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[],
             )
 
@@ -2293,7 +2291,7 @@ class TestCLIValidateKitsCommand(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot-sdlc": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot-sdlc": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[],
             )
 
@@ -2321,7 +2319,7 @@ class TestCLIValidateKitsCommand(unittest.TestCase):
             write_constraints_toml(root / "kits" / "sdlc", {"PRD": {"identifiers": {"flow": {"to_code": True}}}})
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[],
             )
 
@@ -2367,7 +2365,7 @@ class TestCLIValidateKitsCommand(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[],
             )
 
@@ -2450,7 +2448,7 @@ Login feature requirement
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2500,7 +2498,7 @@ gamma
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2550,7 +2548,7 @@ outro
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2601,7 +2599,7 @@ ccc
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2653,7 +2651,7 @@ text
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2707,7 +2705,7 @@ ccc
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2762,7 +2760,7 @@ See also `cpt-test-ref-1` in text.
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2806,7 +2804,7 @@ text
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2848,7 +2846,7 @@ text
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2899,7 +2897,7 @@ text
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2915,7 +2913,7 @@ text
             try:
                 os.chdir(str(root))
                 stdout = io.StringIO()
-                with unittest.mock.patch("cypilot.commands.self_check.run_self_check_from_meta", return_value=_sc_pass):
+                with unittest.mock.patch("studio.commands.self_check.run_self_check_from_meta", return_value=_sc_pass):
                     with redirect_stdout(stdout):
                         exit_code = main(["validate", "--artifact", str(prd_path), "--skip-code", "--verbose"])
             finally:
@@ -2952,7 +2950,7 @@ text
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -2965,7 +2963,7 @@ text
             try:
                 os.chdir(str(root))
                 stdout = io.StringIO()
-                with unittest.mock.patch("cypilot.commands.self_check.run_self_check_from_meta", return_value=_sc_pass):
+                with unittest.mock.patch("studio.commands.self_check.run_self_check_from_meta", return_value=_sc_pass):
                     with redirect_stdout(stdout):
                         exit_code = main(["validate", "--artifact", str(prd_path), "--skip-code", "--verbose"])
             finally:
@@ -3005,7 +3003,7 @@ text
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -3021,7 +3019,7 @@ text
             try:
                 os.chdir(str(root))
                 stdout = io.StringIO()
-                with unittest.mock.patch("cypilot.commands.self_check.run_self_check_from_meta", return_value=_sc_pass):
+                with unittest.mock.patch("studio.commands.self_check.run_self_check_from_meta", return_value=_sc_pass):
                     with redirect_stdout(stdout):
                         exit_code = main(["validate", "--artifact", str(prd_path), "--skip-code", "--verbose"])
             finally:
@@ -3066,7 +3064,7 @@ text
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -3083,7 +3081,7 @@ text
             try:
                 os.chdir(str(root))
                 stdout = io.StringIO()
-                with unittest.mock.patch("cypilot.commands.self_check.run_self_check_from_meta", return_value=_sc_pass):
+                with unittest.mock.patch("studio.commands.self_check.run_self_check_from_meta", return_value=_sc_pass):
                     with redirect_stdout(stdout):
                         exit_code = main(["validate", "--artifact", str(prd_path), "--verbose"])
             finally:
@@ -3173,7 +3171,7 @@ cypilot-template:
 
     _bootstrap_registry_new_format(
         root,
-        kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+        kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
         systems=[{
             "name": "Test",
             "kits": "cypilot",
@@ -3976,7 +3974,7 @@ class TestCLIValidateTemplatesVerbose(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "templates"}},
+                kits={"cypilot": {"format": "CFS", "path": "templates"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -4448,7 +4446,7 @@ class TestCLIValidateCommandBranches(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "templates"}},
+                kits={"cypilot": {"format": "CFS", "path": "templates"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -4541,7 +4539,7 @@ class TestCLIListIdsFilters(unittest.TestCase):
                 os.chdir(str(root))
                 stdout = io.StringIO()
                 with redirect_stdout(stdout):
-                    exit_code = main(["list-ids", "--pattern", "cypilot.*1", "--regex"])
+                    exit_code = main(["list-ids", "--pattern", "studio.*1", "--regex"])
                 self.assertEqual(exit_code, 0)
                 out = json.loads(stdout.getvalue())
                 self.assertIn("ids", out)
@@ -4596,7 +4594,7 @@ cypilot-template:
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -4732,7 +4730,7 @@ cypilot-template:
     # Bootstrap registry with codebase entry
     _bootstrap_registry_new_format(
         root,
-        kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+        kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
         systems=[{
             "name": "Test",
             "kit": "cypilot",
@@ -4759,7 +4757,7 @@ def _setup_cypilot_project_with_markerless_cdsl_missing_block(root: Path) -> Non
 
     _bootstrap_registry_new_format(
         root,
-        kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+        kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
         systems=[{
             "name": "Test",
             "kit": "cypilot",
@@ -4786,7 +4784,7 @@ def _setup_cypilot_project_with_cdsl_to_code_missing_block(root: Path) -> None:
 
     _bootstrap_registry_new_format(
         root,
-        kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+        kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
         systems=[{
             "name": "Test",
             "kit": "cypilot",
@@ -5013,7 +5011,7 @@ cypilot-template:
             # Bootstrap registry with nested systems
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Parent",
                     "kits": "cypilot",
@@ -5060,7 +5058,7 @@ cypilot-template:
             # Bootstrap with codebase pointing to nonexistent directory
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -5212,7 +5210,7 @@ cypilot-template:
             # Bootstrap registry with codebase entry
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -5416,7 +5414,7 @@ class TestCLIValidateCrossRef(unittest.TestCase):
 
             _bootstrap_registry_new_format(
                 root,
-                kits={"cypilot": {"format": "Cypilot", "path": "kits/sdlc"}},
+                kits={"cypilot": {"format": "CFS", "path": "kits/sdlc"}},
                 systems=[{
                     "name": "Test",
                     "kits": "cypilot",
@@ -5463,9 +5461,9 @@ class TestCLIAgentsBugFixes(unittest.TestCase):
         Uses an external cypilot-root (separate from project root) to exercise the
         original mutation path where _ensure_cypilot_local would have triggered a copy.
         """
-        with TemporaryDirectory() as project_dir, TemporaryDirectory() as cypilot_dir:
+        with TemporaryDirectory() as project_dir, TemporaryDirectory() as studio_dir:
             root = Path(project_dir)
-            cypilot_ext = Path(cypilot_dir)
+            cypilot_ext = Path(studio_dir)
             (root / ".git").mkdir()
             self._write_minimal_cypilot_skill(root)
             # Make cypilot_ext a recognisable cypilot root (needs skills/cypilot/SKILL.md)
@@ -5580,7 +5578,7 @@ class TestCLIAgentsBugFixes(unittest.TestCase):
             self._write_minimal_cypilot_skill(root)
             self._write_workflows_with_frontmatter(root)
 
-            agents_toml_dir = root / "skills" / "cypilot"
+            agents_toml_dir = root / "skills" / "studio"
             agents_toml_dir.mkdir(parents=True, exist_ok=True)
             # TOML list value for prompt_file — this would crash path ops if not type-guarded
             (agents_toml_dir / "agents.toml").write_text(

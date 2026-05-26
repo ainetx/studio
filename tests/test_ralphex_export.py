@@ -14,9 +14,9 @@ import textwrap
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "studio" / "scripts"))
 
-from cypilot.ralphex_export import (
+from studio.ralphex_export import (
     _resolve_paths,
     compile_delegation_plan,
     extract_validation_commands,
@@ -441,7 +441,7 @@ class TestGenerateReviewArtifacts:
     """Tests for generate_review_artifacts() — derived review override generation."""
 
     def _make_project(self, tmp: str) -> tuple[str, str]:
-        """Create a minimal project with plan dir and canonical Cypilot sources."""
+        """Create a minimal project with plan dir and canonical Constructor Studio sources."""
         repo_root = Path(tmp) / "repo"
         repo_root.mkdir()
         (repo_root / ".git").mkdir()
@@ -492,7 +492,7 @@ class TestGenerateReviewArtifacts:
         return str(repo_root), str(plan_dir)
 
     def test_generates_review_override_file(self):
-        """generate_review_artifacts() creates .ralphex/prompts/cypilot-review-override.md."""
+        """generate_review_artifacts() creates .ralphex/prompts/studio-review-override.md."""
         with TemporaryDirectory() as tmp:
             repo_root, plan_dir = self._make_project(tmp)
             result = generate_review_artifacts(plan_dir, repo_root)
@@ -519,7 +519,7 @@ class TestGenerateReviewArtifacts:
             assert r1["artifacts"] == r2["artifacts"]
 
     def test_artifact_references_canonical_sources(self):
-        """Generated review override references Cypilot canonical sources."""
+        """Generated review override references Constructor Studio canonical sources."""
         with TemporaryDirectory() as tmp:
             repo_root, plan_dir = self._make_project(tmp)
             generate_review_artifacts(plan_dir, repo_root)
@@ -544,8 +544,8 @@ class TestGenerateReviewArtifacts:
             for relative_path in REVIEW_PROMPT_RELATIVES:
                 prompt_path = Path(repo_root) / relative_path
                 content = prompt_path.read_text(encoding="utf-8")
-                assert "<!-- @cpt-begin:cypilot-review-override -->" in content
-                assert "<!-- @cpt-end:cypilot-review-override -->" in content
+                assert "<!-- @cpt-begin:studio-review-override -->" in content
+                assert "<!-- @cpt-end:studio-review-override -->" in content
                 assert "load and follow" in content
 
     def test_rewrites_existing_managed_override_block(self):
@@ -557,9 +557,9 @@ class TestGenerateReviewArtifacts:
                     """\
                     # first review prompt
 
-                    <!-- @cpt-begin:cypilot-review-override -->
+                    <!-- @cpt-begin:studio-review-override -->
                     stale override
-                    <!-- @cpt-end:cypilot-review-override -->
+                    <!-- @cpt-end:studio-review-override -->
 
                     Original first review body.
                     """
@@ -568,7 +568,7 @@ class TestGenerateReviewArtifacts:
             )
             generate_review_artifacts(plan_dir, repo_root)
             content = prompt_path.read_text(encoding="utf-8")
-            assert content.count("<!-- @cpt-begin:cypilot-review-override -->") == 1
+            assert content.count("<!-- @cpt-begin:studio-review-override -->") == 1
             assert "stale override" not in content
             assert "Original first review body." in content
 
@@ -581,8 +581,8 @@ class TestGenerateReviewArtifacts:
             content = prompt_path.read_text(encoding="utf-8")
             assert "REVIEW_DONE" in content
             assert "nothing to fix" in content
-            assert "CYPILOT_ANALYZE_START:" in content
-            assert "CYPILOT_ANALYZE_DONE: no_findings" in content
+            assert "STUDIO_ANALYZE_START:" in content
+            assert "STUDIO_ANALYZE_DONE: no_findings" in content
 
     def test_artifact_routes_code_to_analyze_and_bug_finding(self):
         """Code review branch references analyze.md and bug-finding.md by path."""
@@ -613,7 +613,7 @@ class TestGenerateReviewArtifacts:
                     """\
                     <!-- @cf:root-agents -->
                     ```toml
-                    cf-constructor-path = "cypilot"
+                    cf-studio-path = "cypilot"
                     ```
                     <!-- /@cf:root-agents -->
                     """

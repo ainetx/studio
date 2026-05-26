@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
 
-from cypilot.utils.artifacts_meta import (
+from studio.utils.artifacts_meta import (
     Artifact,
     ArtifactsMeta,
     AutodetectRule,
@@ -24,20 +24,20 @@ from cypilot.utils.artifacts_meta import (
 
 class TestKit(unittest.TestCase):
     def test_kit_from_dict(self):
-        data = {"format": "Cypilot", "path": "templates"}
+        data = {"format": "CFS", "path": "templates"}
         kit = Kit.from_dict("test-kit", data)
         self.assertEqual(kit.kit_id, "test-kit")
-        self.assertEqual(kit.format, "Cypilot")
+        self.assertEqual(kit.format, "CFS")
         self.assertEqual(kit.path, "templates")
 
-    def test_kit_is_cypilot_format(self):
-        kit = Kit("id", "Cypilot", "path")
-        self.assertTrue(kit.is_cypilot_format())
+    def test_kit_is_cfs_format(self):
+        kit = Kit("id", "CFS", "path")
+        self.assertTrue(kit.is_cfs_format())
         kit2 = Kit("id", "OTHER", "path")
-        self.assertFalse(kit2.is_cypilot_format())
+        self.assertFalse(kit2.is_cfs_format())
 
     def test_kit_get_template_path(self):
-        kit = Kit("id", "Cypilot", "kits/sdlc")
+        kit = Kit("id", "CFS", "kits/sdlc")
         self.assertEqual(kit.get_template_path("PRD"), "kits/sdlc/artifacts/PRD/template.md")
         self.assertEqual(kit.get_template_path("UNKNOWN"), "kits/sdlc/artifacts/UNKNOWN/template.md")
 
@@ -113,7 +113,7 @@ class TestArtifactsMeta(unittest.TestCase):
         data = {
             "version": "1.0",
             "project_root": "..",
-            "kits": {"cypilot": {"format": "Cypilot", "path": "templates"}},
+            "kits": {"cypilot": {"format": "CFS", "path": "templates"}},
             "systems": [{"name": "Test", "kit": "cypilot", "artifacts": [{"path": "PRD.md", "kind": "PRD"}]}],
         }
         meta = ArtifactsMeta.from_dict(data)
@@ -127,7 +127,7 @@ class TestArtifactsMeta(unittest.TestCase):
         data = {
             "version": "1.0",
             "project_root": "..",
-            "kits": {"cypilot": {"format": "Cypilot", "path": "templates"}},
+            "kits": {"cypilot": {"format": "CFS", "path": "templates"}},
             "systems": [{"name": "Test", "kit": "cypilot", "artifacts": [{"path": "architecture/PRD.md", "kind": "PRD"}]}],
         }
         meta = ArtifactsMeta.from_dict(data)
@@ -207,7 +207,7 @@ class TestArtifactsMeta(unittest.TestCase):
             data = {
                 "version": "1.1",
                 "project_root": "..",
-                "kits": {"k": {"format": "Cypilot", "path": "kits/sdlc"}},
+                "kits": {"k": {"format": "CFS", "path": "kits/sdlc"}},
                 "systems": [
                     {
                         "name": "App",
@@ -243,7 +243,7 @@ class TestArtifactsMeta(unittest.TestCase):
             data = {
                 "version": "1.1",
                 "project_root": "..",
-                "kits": {"k": {"format": "Cypilot", "path": "kits/sdlc"}},
+                "kits": {"k": {"format": "CFS", "path": "kits/sdlc"}},
                 "systems": [
                     {
                         "name": "App",
@@ -275,7 +275,7 @@ class TestArtifactsMeta(unittest.TestCase):
             data = {
                 "version": "1.1",
                 "project_root": "..",
-                "kits": {"k": {"format": "Cypilot", "path": "kits/sdlc"}},
+                "kits": {"k": {"format": "CFS", "path": "kits/sdlc"}},
                 "systems": [
                     {
                         "name": "Fabric",
@@ -486,6 +486,36 @@ class TestCreateBackup(unittest.TestCase):
             finally:
                 shutil.copy2 = orig
 
+    def test_create_backup_filename_format_pins_timestamp_shape(self):
+        """Pin the {name}.YYYYMMDD-HHMMSS.backup format.
+
+        A regression switching the strftime to ISO 8601 (with ":" separators)
+        would silently break on Windows filesystems and bypass every other
+        existing TestCreateBackup assertion. This test fails if the timestamp
+        segment changes shape.
+        """
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "data.json"
+            path.write_text("{}", encoding="utf-8")
+            backup = create_backup(path)
+            self.assertIsNotNone(backup)
+            self.assertRegex(
+                backup.name,
+                r"^data\.json\.\d{8}-\d{6}\.backup$",
+            )
+
+    def test_create_backup_directory_filename_format_pins_timestamp_shape(self):
+        """Same format pin, but for directory inputs (copytree path)."""
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mydir"
+            path.mkdir()
+            backup = create_backup(path)
+            self.assertIsNotNone(backup)
+            self.assertRegex(
+                backup.name,
+                r"^mydir\.\d{8}-\d{6}\.backup$",
+            )
+
 
 class TestGenerateDefaultRegistry(unittest.TestCase):
     def test_generate_default_registry(self):
@@ -611,7 +641,7 @@ class TestExtractSystemSlugCandidates(unittest.TestCase):
     """Tests for extract_system_slug_candidates."""
 
     def setUp(self):
-        from cypilot.utils.artifacts_meta import extract_system_slug_candidates
+        from studio.utils.artifacts_meta import extract_system_slug_candidates
         self.extract = extract_system_slug_candidates
 
     def test_non_cpt_id_returns_empty(self):
@@ -722,7 +752,7 @@ class TestLoadArtifactsMetaMissing(unittest.TestCase):
 class TestKitFromDictEdgeCases(unittest.TestCase):
     def test_invalid_artifact_kind_skipped(self):
         data = {
-            "format": "Cypilot",
+            "format": "CFS",
             "path": "templates",
             "artifacts": {
                 "": {"template": "t.md", "examples": "e/"},
@@ -735,7 +765,7 @@ class TestKitFromDictEdgeCases(unittest.TestCase):
 
     def test_non_dict_artifact_spec_skipped(self):
         data = {
-            "format": "Cypilot",
+            "format": "CFS",
             "path": "templates",
             "artifacts": {
                 "PRD": "not-a-dict",
@@ -757,7 +787,7 @@ class TestCheckChildSlugConsistency(unittest.TestCase):
         )
 
     def _call(self, child, all_def_ids, has_ids, kind_tokens, parent_prefix=""):
-        from cypilot.utils.artifacts_meta import _check_child_slug_consistency
+        from studio.utils.artifacts_meta import _check_child_slug_consistency
         errors: list = []
         _check_child_slug_consistency(child, all_def_ids, has_ids, kind_tokens, parent_prefix, errors)
         return errors

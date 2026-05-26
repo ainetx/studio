@@ -1,12 +1,50 @@
-"""Shared test helpers for Cypilot tests."""
+"""Shared test helpers for Constructor Studio tests."""
 from __future__ import annotations
 
 import io
 import json
 import os
+import sys
 from contextlib import redirect_stdout
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
+
+
+def _make_agent(**kwargs) -> "Any":
+    """Create an AgentEntry with safe defaults for every field.
+
+    Covers all current AgentEntry fields (id, description, prompt_file,
+    source, agents, append, mode, isolation, model, tools, disallowed_tools,
+    skills, color, memory_dir, role, target, provider, reasoning_effort,
+    context_window).  Pass keyword arguments to override any default.
+    """
+    from studio.utils.manifest import AgentEntry
+
+    defaults: Dict[str, Any] = {
+        "id": "test-agent",
+        "description": "A test agent",
+        "prompt_file": "",
+        "source": "",
+        "agents": ["claude"],
+        "append": None,
+        "mode": "readwrite",
+        "isolation": False,
+        "model": "",
+        "tools": [],
+        "disallowed_tools": [],
+        "skills": [],
+        "color": "",
+        "memory_dir": "",
+        "role": "any",
+        "target": "any",
+        "provider": "anthropic",
+        "reasoning_effort": None,
+        "context_window": None,
+    }
+    defaults.update(kwargs)
+    return AgentEntry(**defaults)
 
 
 def write_constraints_toml(path: Path, data: Dict[str, Any]) -> None:
@@ -16,7 +54,7 @@ def write_constraints_toml(path: Path, data: Dict[str, Any]) -> None:
     *data* maps artifact kinds to their constraint dicts, e.g.
     ``{"PRD": {"identifiers": {"fr": {"required": True}}}}``.
     """
-    from cypilot.utils.toml_utils import dumps
+    from studio.utils.toml_utils import dumps
     (path / "constraints.toml").write_text(
         dumps({"artifacts": data}), encoding="utf-8",
     )
@@ -36,7 +74,7 @@ def make_test_cache(cache_dir: Path) -> None:
         "<!-- @cpt:heading -->\n# Product Requirements\n<!-- /@cpt:heading -->\n",
         encoding="utf-8",
     )
-    from cypilot.utils import toml_utils
+    from studio.utils import toml_utils
     toml_utils.dump({"version": 1, "blueprints": {"prd": 1}}, cache_dir / "kits" / "sdlc" / "conf.toml")
 
 
@@ -46,12 +84,12 @@ def bootstrap_test_project(
     *,
     systems: List[Dict[str, str]] | None = None,
 ) -> Path:
-    from cypilot.utils import toml_utils
+    from studio.utils import toml_utils
 
     root.mkdir(parents=True, exist_ok=True)
     (root / ".git").mkdir(exist_ok=True)
     (root / "AGENTS.md").write_text(
-        f'<!-- @cf:root-agents -->\n```toml\ncf-constructor-path = "{adapter_rel}"\n```\n<!-- /@cf:root-agents -->\n',
+        f'<!-- @cf:root-agents -->\n```toml\ncf-studio-path = "{adapter_rel}"\n```\n<!-- /@cf:root-agents -->\n',
         encoding="utf-8",
     )
     adapter = root / adapter_rel
@@ -78,11 +116,11 @@ def write_registered_sdlc_config(
     artifacts_kit_path: str = "config/kits/sdlc",
     version: str = "2.0",
 ) -> None:
-    from cypilot.utils import toml_utils
+    from studio.utils import toml_utils
 
     config_dir.mkdir(parents=True, exist_ok=True)
     core_kit: Dict[str, Any] = {
-        "format": "Cypilot",
+        "format": "CFS",
         "path": core_kit_path,
         "version": version,
     }
@@ -97,7 +135,7 @@ def write_registered_sdlc_config(
         "version": "1.0",
         "project_root": "..",
         "kits": {
-            "sdlc": {"format": "Cypilot", "path": artifacts_kit_path},
+            "sdlc": {"format": "CFS", "path": artifacts_kit_path},
         },
         "systems": [{"name": "Test", "slug": "test", "kit": "sdlc"}],
     }, config_dir / "artifacts.toml")
@@ -106,8 +144,8 @@ def write_registered_sdlc_config(
 
 def run_cli_in_project(root: Path, args: List[str]) -> Tuple[int, dict]:
     """Run CLI main() in *root*, return (exit_code, parsed_json_output)."""
-    from cypilot.cli import main
-    from cypilot.utils.ui import is_json_mode, set_json_mode
+    from studio.cli import main
+    from studio.utils.ui import is_json_mode, set_json_mode
 
     cwd = os.getcwd()
     saved_json_mode = is_json_mode()

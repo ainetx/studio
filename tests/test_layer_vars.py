@@ -11,8 +11,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "cypilot" / "scripts"))
 
-from cypilot.commands.resolve_vars import add_layer_variables, assemble_component
-from cypilot.utils.manifest import (
+from studio.commands.resolve_vars import add_layer_variables, assemble_component
+from studio.utils.manifest import (
     AgentEntry,
     ManifestLayer,
     ManifestLayerState,
@@ -149,13 +149,13 @@ class TestLayerVarsDoNotOverrideSystem:
     def test_other_system_vars_preserved(self):
         """Unrelated system variables (cypilot_path, project_root) are untouched."""
         existing_vars = {
-            "cf-constructor-path": "/project/.bootstrap",
+            "cf-studio-path": "/project/.bootstrap",
             "project_root": "/project",
         }
         layers = [_make_repo_layer("/project/.bootstrap")]
         repo_root = Path("/project")
         result = add_layer_variables(existing_vars, layers, repo_root)
-        assert result["cf-constructor-path"] == "/project/.bootstrap"
+        assert result["cf-studio-path"] == "/project/.bootstrap"
         assert result["project_root"] == "/project"
 
 

@@ -1,3 +1,7 @@
+# promptfoo cf-ux pilot — local eval cache only (sandboxes live in $TMPDIR)
+tests/prompts/cf-ux/.promptfoo/
+tests/prompts/cf-ux/promptfoo-output.*
+
 # Dependencies
 node_modules/
 package-lock.json
@@ -38,6 +42,9 @@ logs/
 *.log
 npm-debug.log*
 
+# Lock files
+*.lock
+
 # Testing
 coverage/
 .nyc_output/
@@ -56,6 +63,7 @@ Spaider.code-workspace
 .bootstrap/.plans/.archive/
 .bootstrap/.plans/analyze-path-skills-cypilot-scripts-cypilot/
 .bootstrap/.plans/analyze-path-current-branch-vs-main-comprehensive/
+.bootstrap/.plans/implement-thin-orchestrator-workflows/
 
 # Artifacts
 .prs/*
@@ -74,3 +82,12 @@ coverage.xml
 
 # Superpowers brainstorming/planning specs (local-only)
 docs/superpowers/
+
+# uv lockfile — project does not adopt uv as canonical lock manager yet
+uv.lock
+
+# cfc map generated artifacts (local-only)
+md-map.html
+md-map.html.js
+md-map.json
+.claude/scheduled_tasks.lock
