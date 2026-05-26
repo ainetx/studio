@@ -16,6 +16,7 @@ purpose: Guide cfs map workflow from pre-flight through validation
 - [Phase 2: Configure](#phase-2-configure)
 - [Phase 3: Generate](#phase-3-generate)
 - [Phase 4: Validate](#phase-4-validate)
+- [Phase Config-Assist](#phase-config-assist)
 - [Quick Reference](#quick-reference)
 - [Next Steps](#next-steps)
 
@@ -30,6 +31,9 @@ PURPOSE:
 DO:
   REQUIRE {cf-studio-path}/config/AGENTS.md is loaded and followed FIRST
   REQUIRE {cf-studio-path}/.gen/AGENTS.md is loaded and followed after config/AGENTS.md
+  EMIT_MENU MapIntentRouter
+  WAIT user.reply
+  STOP_TURN
 
 NOTES:
   Type: Operation. Role: Any. Output: Interactive HTML map or JSON graph export.
@@ -44,13 +48,21 @@ PURPOSE:
   Define map workflow routing by user intent.
 
 MENU MapIntentRouter:
-  TITLE: Route by user intent (machine reference)
+  TITLE: >
+    What would you like to do with the map tool?
+    Reply with the option number or the full option text.
   OPTIONS:
-    Generate map of current project -> CONTINUE MapPhase1
-    Analyze map for dangling cpts   -> LOAD analyze.md with map target
-    Export map data for tooling     -> Use JSON format via --format json
+    1 Generate map of current project ->
+      CONTINUE MapPhase1
+    2 Analyze map for dangling cpts ->
+      LOAD analyze.md with map target
+    3 Export map data for tooling ->
+      SET map.format = json
+      CONTINUE MapPhase1
+    4 Generate or refine md-map.toml config ->
+      CONTINUE MapPhaseConfigAssist
   INVALID:
-    EMIT "Unrecognised intent. Reply with: Generate map of current project, Analyze map for dangling cpts, or Export map data for tooling."
+    EMIT "Unrecognised intent. Reply with 1, 2, 3, or 4."
     WAIT user.reply
     STOP_TURN
 
@@ -134,7 +146,13 @@ MENU MapConfigMenu:
     Suggested defaults: HTML output to ./md-map.html, auto-detect categories, keep data separate.
   OPTIONS:
     approve ->
-      CONTINUE MapPhase3
+      WHEN map.scope != markdown-only AND ./md-map.toml does NOT exist:
+        EMIT "No md-map.toml detected. Want help generating one before scanning?"
+        EMIT_MENU ConfigAssistOfferMenu
+        WAIT user.reply
+        STOP_TURN
+      OTHERWISE:
+        CONTINUE MapPhase3
     field edits ->
       SET map.config_pending_edits = user.named_fields
       RE-EMIT updated proposal with map.config_pending_edits applied
@@ -144,6 +162,28 @@ MENU MapConfigMenu:
     EMIT "Reply with approve or list fields to change."
     WAIT user.reply
     STOP_TURN
+
+MENU ConfigAssistOfferMenu:
+  TITLE: >
+    Would you like to generate an md-map.toml config before scanning?
+    A prior map run with JSON output is needed; if none exists, one will be run first.
+    Reply with 1 or 2.
+  OPTIONS:
+    1 yes ->
+      CONTINUE MapPhaseConfigAssist
+    2 no ->
+      CONTINUE MapPhase3
+  INVALID:
+    EMIT "Reply with 1 or 2."
+    WAIT user.reply
+    STOP_TURN
+
+NOTES:
+  The config-assist offer is skipped for markdown-only scope because category
+  overrides are typically only useful when source-code nodes are present.
+  When the user picks "yes", MapPhaseConfigAssist will run MapPhase3 internally
+  (if a JSON artifact is missing) and then return control to MapPhase3 after
+  writing the config.
 ```
 
 ## Phase 3: Generate
@@ -156,11 +196,11 @@ PURPOSE:
 
 DO:
   WHEN map.scope == single-repo:
-    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map --local-only [--out PATH] [--format html|json]
+    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map --local-only [--out PATH] [--format html|json] [--config PATH]
   WHEN map.scope == with-workspace:
-    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map [--out PATH] [--format html|json]
+    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map [--out PATH] [--format html|json] [--config PATH]
   WHEN map.scope == markdown-only:
-    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map --no-source [--out PATH] [--format html|json]
+    RUN python3 {cf-studio-path}/.core/skills/studio/scripts/studio.py --json map --no-source [--out PATH] [--format html|json] [--config PATH]
   VERIFY output file exists and size is reasonable
   IF format == html:
     EMIT file path; note that it opens in a browser
@@ -187,6 +227,176 @@ DO:
   CONTINUE MapNextSteps
 ```
 
+## Phase Config-Assist
+
+```text
+UNIT MapPhaseConfigAssist
+
+PURPOSE:
+  Help the user generate or refine ./md-map.toml from an existing map run.
+
+PREREQUISITES:
+  A JSON map artifact must exist for this project. If not, run MapPhase3 first
+  with --format json (or both html+json side-by-side) to produce ./md-map.json
+  (or read the existing ./md-map.html.js sidecar — same JSON shape).
+
+DO:
+  1. LOCATE the JSON payload:
+       - prefer ./md-map.json if it exists,
+       - else ./md-map.html.js (strip the leading `window.MAP_DATA = ` if present
+         and trailing `;`).
+       - If neither exists:
+           EMIT "No JSON map artifact found. Running MapPhase3 with --format json first."
+           CONTINUE MapPhase3 with --format json
+           (after MapPhase3 completes, resume from step 2 here)
+  2. PARSE nodes; collect candidates: nodes where category_origin == "parent-dir".
+  3. GROUP candidates by top-2 path segments (e.g. `src/studio`, `docs/architecture`).
+     For each group capture: prefix, node_count, sample 3 rel_paths.
+  4. FILTER groups: keep only those with node_count >= 5.
+  5. SORT by node_count descending; take top 10.
+  6. PROPOSE one [[categories]] entry per group with:
+       - name = "" (placeholder — user must fill; emit reminder)
+       - paths = [<group_prefix> + "/**"]
+       - style.color / style.background = picked from palette (see step 7).
+  7. EMIT_MENU PaletteMenu
+     WAIT user.reply
+     STOP_TURN
+  8. After palette chosen, emit the full proposed TOML block in chat
+     (rendered, with placeholder names "category-1", "category-2", ...).
+  9. EMIT_MENU ConfigAssistActionMenu
+     WAIT user.reply
+     STOP_TURN
+  10. On approve:
+        a. EMIT "About to write ./md-map.toml ({N} categories). Reply `yes` to confirm."
+        b. WAIT user.reply
+           STOP_TURN
+        c. If reply == "yes":
+             write ./md-map.toml (orchestrator-write, gate released_for_orchestrator_write)
+        d. After write:
+             EMIT "Re-running map with new config..."
+             CONTINUE MapPhase3 with `--config ./md-map.toml` appended to the RUN line
+  11. On edit-names:
+        WAIT user.reply with renames
+        STOP_TURN
+        RE-EMIT updated TOML; loop back to step 9
+  12. On add-manual:
+        WAIT user.reply for one or more manual {name, paths, style?} entries
+        STOP_TURN
+        APPEND to proposed config; loop back to step 9
+  13. On skip:
+        CONTINUE MapNextSteps
+
+MENU PaletteMenu:
+  TITLE: >
+    Pick a color palette for the proposed categories. Reply with 1 or 2.
+  OPTIONS:
+    1 fixed ->
+      SET palette = fixed-tailwind-500
+      (10 colors, Tailwind-500 series, contrast-safe on light AND dark backgrounds)
+      Colors in order:
+        #ef4444 / #fee2e2   (red-500    / red-50)
+        #f97316 / #ffedd5   (orange-500 / orange-50)
+        #f59e0b / #fffbeb   (amber-500  / amber-50)
+        #eab308 / #fefce8   (yellow-500 / yellow-50)
+        #84cc16 / #f7fee7   (lime-500   / lime-50)
+        #22c55e / #f0fdf4   (green-500  / green-50)
+        #14b8a6 / #f0fdfa   (teal-500   / teal-50)
+        #06b6d4 / #ecfeff   (cyan-500   / cyan-50)
+        #3b82f6 / #eff6ff   (blue-500   / blue-50)
+        #6366f1 / #eef2ff   (indigo-500 / indigo-50)
+    2 theme ->
+      EMIT_MENU ThemePickerMenu
+      WAIT user.reply
+      STOP_TURN
+  INVALID:
+    EMIT "Reply with 1 or 2."
+    WAIT user.reply
+    STOP_TURN
+
+MENU ThemePickerMenu:
+  TITLE: >
+    Pick a theme. Reply with light, dark, pastel, or neon.
+  OPTIONS:
+    light ->
+      SET palette = theme-light
+      (Tailwind-200 series — muted mid-tone fills, paired with -50 backgrounds)
+      Colors in order:
+        #fca5a5 / #fee2e2   (red-300    / red-50    — lighter for light themes)
+        #fdba74 / #ffedd5   (orange-300 / orange-50)
+        #fcd34d / #fffbeb   (amber-300  / amber-50)
+        #fde047 / #fefce8   (yellow-300 / yellow-50)
+        #bef264 / #f7fee7   (lime-300   / lime-50)
+        #86efac / #f0fdf4   (green-300  / green-50)
+        #5eead4 / #f0fdfa   (teal-300   / teal-50)
+        #67e8f9 / #ecfeff   (cyan-300   / cyan-50)
+        #93c5fd / #eff6ff   (blue-300   / blue-50)
+        #a5b4fc / #eef2ff   (indigo-300 / indigo-50)
+    dark ->
+      SET palette = theme-dark
+      (Tailwind-700 series — deep fills, paired with -900 backgrounds)
+      Colors in order:
+        #b91c1c / #450a0a   (red-700    / red-950)
+        #c2410c / #431407   (orange-700 / orange-950)
+        #b45309 / #451a03   (amber-700  / amber-950)
+        #a16207 / #422006   (yellow-700 / yellow-950)
+        #4d7c0f / #1a2e05   (lime-700   / lime-950)
+        #15803d / #052e16   (green-700  / green-950)
+        #0f766e / #042f2e   (teal-700   / teal-950)
+        #0e7490 / #083344   (cyan-700   / cyan-950)
+        #1d4ed8 / #172554   (blue-700   / blue-950)
+        #4338ca / #1e1b4b   (indigo-700 / indigo-950)
+    pastel ->
+      SET palette = theme-pastel
+      (Tailwind-100 series — very soft fills, paired with white-equivalent backgrounds)
+      Colors in order:
+        #fee2e2 / #fff5f5   (red-100    / red-50  near-white)
+        #ffedd5 / #fff8f0   (orange-100 / orange-50 near-white)
+        #fef3c7 / #fffdf0   (amber-100  / amber-50 near-white)
+        #fef9c3 / #fffeeb   (yellow-100 / yellow-50 near-white)
+        #ecfccb / #f9ffe8   (lime-100   / lime-50  near-white)
+        #dcfce7 / #f0fdf4   (green-100  / green-50)
+        #ccfbf1 / #f0fdfa   (teal-100   / teal-50)
+        #cffafe / #ecfeff   (cyan-100   / cyan-50)
+        #dbeafe / #eff6ff   (blue-100   / blue-50)
+        #e0e7ff / #eef2ff   (indigo-100 / indigo-50)
+    neon ->
+      SET palette = theme-neon
+      (fluorescent / saturated set — bright fills on near-black backgrounds)
+      Colors in order:
+        #ff073a / #1a0005   (neon red    / near-black)
+        #ff6d00 / #1a0d00   (neon orange / near-black)
+        #ffe600 / #1a1800   (neon yellow / near-black)
+        #39ff14 / #021a00   (neon green  / near-black)
+        #00ffcc / #001a16   (neon teal   / near-black)
+        #00e5ff / #001a1f   (neon cyan   / near-black)
+        #1b9aff / #00101a   (neon blue   / near-black)
+        #b400ff / #0d001a   (neon purple / near-black)
+        #ff00c8 / #1a0016   (neon pink   / near-black)
+        #ffffff / #0d0d0d   (white       / near-black — neutral contrast anchor)
+  INVALID:
+    EMIT "Reply with light, dark, pastel, or neon."
+    WAIT user.reply
+    STOP_TURN
+
+MENU ConfigAssistActionMenu:
+  TITLE: >
+    Review the proposed TOML above. What would you like to do?
+    Reply with: approve, edit-names, add-manual, or skip.
+  OPTIONS:
+    approve ->
+      (proceed to step 10 — write confirmation)
+    edit-names ->
+      (proceed to step 11 — rename loop)
+    add-manual ->
+      (proceed to step 12 — append manual entries)
+    skip ->
+      CONTINUE MapNextSteps
+  INVALID:
+    EMIT "Reply with approve, edit-names, add-manual, or skip."
+    WAIT user.reply
+    STOP_TURN
+```
+
 ## Quick Reference
 
 | Intent | Flags |
@@ -194,7 +404,7 @@ DO:
 | Markdown-only quick map | `cfs map --no-source` |
 | Single-repo map (skip federation) | `cfs map --local-only` |
 | Machine-readable graph | `cfs map --format json --out map.json` |
-| Custom categories | `cfs map --config md-map.toml` |
+| Custom categories | `cfs map --config md-map.toml` (use `/cf-map` → option 4 "Generate or refine md-map.toml config" to scaffold) |
 | Self-contained HTML (no sidecar) | `cfs map --inline-data` |
 | Debug layout | `cfs map -v` or `cfs map --verbose` |
 
@@ -224,7 +434,7 @@ MENU MapNextStepsMenu:
     3 ->
       EMIT "Check for dangling cpts — run cfs where-used <cpt-id> to diagnose phantom references."
     4 ->
-      EMIT "Update categorization — create or refine md-map.toml for better node grouping."
+      CONTINUE MapPhaseConfigAssist
     5 ->
       WAIT user description of next map action
   INVALID:
@@ -237,6 +447,6 @@ NOTES:
   - Use HTML viewer to explore architecture visually or export images for documentation
   - Export JSON and pipe to downstream tools (e.g., GraphQL queries, traceability reports)
   - For dangling cpts, use `cfs where-used <cpt-id>` to find missing definitions
-  - Update md-map.toml if categorization needs adjustment
+  - Update md-map.toml if categorization needs adjustment (option 4 scaffolds the file)
   - Share the map with team for architecture review
 ```
