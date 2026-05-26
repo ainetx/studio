@@ -106,6 +106,17 @@ def cmd_map(argv: List[str]) -> int:
         "skip_dirs": sorted(skip_dirs_for_meta(primary_root)),
     }
 
+    # Build per-category style dict from the override config so the JSON legend
+    # reflects user-defined colors from md-map.toml [categories.style].
+    category_styles = {}
+    if override is not None:
+        for oc in override.categories:
+            if oc.color is not None:
+                entry: dict = {"color": oc.color}
+                if oc.background is not None:
+                    entry["background"] = oc.background
+                category_styles[oc.name] = entry
+
     json_payload = render_json(RenderJsonInput(
         nodes=nodes_all,
         edges=edges,
@@ -114,6 +125,7 @@ def cmd_map(argv: List[str]) -> int:
         vis_nodes=vis_nodes,
         bucket_rects=bucket_rects,
         category_bands=category_bands,
+        category_styles=category_styles or None,
     ))
 
     sidecar_path = None

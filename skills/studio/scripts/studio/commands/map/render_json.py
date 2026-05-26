@@ -24,6 +24,10 @@ class RenderJsonInput:
     vis_nodes: Optional[list] = None
     bucket_rects: Optional[dict] = None
     category_bands: Optional[dict] = None
+    # Per-category style overrides from md-map.toml [categories.style].
+    # Maps category name → {"color": str, "background": str}.
+    # When present and the name matches, overrides _deterministic_style.
+    category_styles: Optional[Dict[str, dict]] = None
 
 
 def render_json(inp: RenderJsonInput) -> str:
@@ -31,7 +35,7 @@ def render_json(inp: RenderJsonInput) -> str:
     nodes_sorted = sorted([n.to_dict() for n in inp.nodes], key=lambda d: d["id"])
     edges_sorted = sorted([e.to_dict() for e in inp.edges], key=lambda d: d["id"])
     dangling = _dangling_section(inp.nodes, inp.edges)
-    categories = _categories_section(inp.nodes)
+    categories = _categories_section(inp.nodes, inp.category_styles)
     payload = {
         "version": "1.0",
         "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -75,7 +79,10 @@ def _dangling_section(nodes: Sequence[Node], edges: Sequence[Edge]) -> List[dict
     # @cpt-end:cpt-studio-algo-map-render-json:p1:inst-dangling-section
 
 
-def _categories_section(nodes: Sequence[Node]) -> Dict[str, dict]:
+def _categories_section(
+    nodes: Sequence[Node],
+    category_styles: Optional[Dict[str, dict]] = None,
+) -> Dict[str, dict]:
     # @cpt-begin:cpt-studio-algo-map-render-json:p1:inst-categories-section
     cats: Dict[str, Dict[str, int]] = {}
     origins: Dict[str, Counter] = {}
@@ -85,6 +92,15 @@ def _categories_section(nodes: Sequence[Node]) -> Dict[str, dict]:
         origins.setdefault(n.category, Counter())[n.category_origin] += 1
     out: Dict[str, dict] = {}
     for cat, info in cats.items():
+        # Prefer user-defined style from md-map.toml [categories.style] when
+        # the override entry has a color set; fall back to _deterministic_style.
+        override_style = (category_styles or {}).get(cat)
+        if override_style and override_style.get("color"):
+            style = dict(override_style)
+            # When background is absent, omit the key and let CSS handle it.
+            style = {k: v for k, v in style.items() if v is not None}
+        else:
+            style = _deterministic_style(cat)
         out[cat] = {
             "node_count": info["count"],
             "origin_counts": {
@@ -93,7 +109,7 @@ def _categories_section(nodes: Sequence[Node]) -> Dict[str, dict]:
                 "parent-dir": origins[cat].get("parent-dir", 0),
                 "phantom": origins[cat].get("phantom", 0),
             },
-            "style": _deterministic_style(cat),
+            "style": style,
         }
     return out
     # @cpt-end:cpt-studio-algo-map-render-json:p1:inst-categories-section
