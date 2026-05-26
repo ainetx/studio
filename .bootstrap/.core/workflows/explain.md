@@ -7,4 +7,15 @@ version: 1.0
 purpose: Standalone explain command; pass-through to analyze.md with EXPLAIN mode
 ---
 
-LOAD skill `cf` IN ANALYZE + EXPLAIN mode, EXPLAIN_MODE=true
+```text
+UNIT ExplainProxy
+
+PURPOSE:
+  Pass through to analyze.md with EXPLAIN mode active.
+
+DO:
+  LOAD skill `cf` IN ANALYZE + EXPLAIN mode, EXPLAIN_MODE=true
+
+ON_ERROR:
+  load_failed -> EMIT "Cannot load target workflow — check that {cf-studio-path} is correctly set." STOP_TURN
+```

@@ -13,120 +13,239 @@ description: Invoke when the deterministic gate is PASS (or SKIPPED with proof) 
 
 ### Phase 5.2: Semantic Reviewers
 
-Requires: `workflows/shared/inline-fallback-probe.md` before any `cf-*` sub-agent dispatch.
-
-Select reviewer sub-agent(s) by KIND and the current rules' preferences. This generate-side matrix covers the same review axes as `workflows/analyze/phase-3-semantic.md` (artifact / code / consistency / bug-finding). When both `PROMPT_REVIEW=true` and `PROMPT_BUG_REVIEW=true`, both `cf-semantic-reviewer-prompt` and `cf-prompt-bug-finder` are dispatched in parallel. Dispatch in parallel.
-
-When `INLINE_FALLBACK=true` (set per `workflows/shared/inline-fallback-probe.md` — user replied `2` or host has no native sub-agent support) AND `MAX_ITER > INLINE_LOOP_WARNING_THRESHOLD` (where `INLINE_LOOP_WARNING_THRESHOLD = 2` per `workflows/generate/phase-5/index.md` § Pre-Phase-Setup), emit the long-loop context-exhaustion warning below before the first iteration of this phase runs (this file is the canonical source of the warning text):
-
 ```text
-⚠️ Inline mode detected with MAX_ITER={MAX_ITER}. Sequential inline review may exhaust context (each iteration loads the full reviewer prompt set + per-target reads in this orchestrator's context window). Recommend reducing MAX_ITER to 2 or splitting the run. Reply `reduce: N` (1 ≤ N ≤ current MAX_ITER) to lower MAX_ITER, or `continue` to proceed at risk.
+UNIT Phase52SemanticReviewers
+
+PURPOSE:
+  Select and dispatch matched semantic reviewer(s) in parallel based on KIND
+  and current rules' preferences.
+
+DO:
+  REQUIRE workflows/shared/inline-fallback-probe.md loaded before dispatch
+
+  DERIVE typed target sets from current review surface
+    (manifest.paths_written on normal generate entry; target_paths on
+     analyze→generate external entry):
+    prompt_targets = paths matching: workflows/**, skills/**/SKILL.md,
+      skills/studio/**/*.md, skills/**/agents/*.md, requirements/**/*.md,
+      AGENTS.md, and prompt config files
+    code_targets = paths matching code/test/build files owned by code reviewer
+      methodology, EXCLUDING any path already in prompt_targets
+    artifact_targets = paths NOT in prompt_targets and NOT in code_targets
+
+  DETERMINE PROMPT_REVIEW:
+    SET PROMPT_REVIEW = true WHEN:
+      KIND's artifacts.toml marks kind with is_prompt_document = true
+      OR any written path is: workflows/**, skills/**/SKILL.md,
+        skills/studio/**/*.md, skills/**/agents/*.md, AGENTS.md,
+        or agent/workflow prompt config
+
+  RESOLVE traceability_mode:
+    READ [systems.<system>] traceability from {cf-studio-path}/config/artifacts.toml
+    DEFAULT to FULL when unset
+
+  DISPATCH reviewers in parallel per decision priority (first match wins for
+    artifact/code axis; consistency and bug-finder rows may be additive):
+    1. PROMPT_REVIEW=true (overrides artifact/code rows):
+         DISPATCH cf-semantic-reviewer-prompt WITH prompt_targets
+    2. TARGET_TYPE==artifact AND NOT PROMPT_REVIEW:
+         DISPATCH cf-semantic-reviewer-artifact WITH artifact_targets
+    3. TARGET_TYPE==code AND NOT PROMPT_REVIEW:
+         DISPATCH cf-semantic-reviewer-code WITH code_targets
+    4. CODE_BUG_REVIEW=true (additive on code branch):
+         DISPATCH cf-code-bug-finder WITH code_targets
+    5. PROMPT_BUG_REVIEW=true (additive when PROMPT_REVIEW=true;
+         standalone when PROMPT_REVIEW=false):
+         DISPATCH cf-prompt-bug-finder WITH prompt_targets
+    6. rules.md requests consistency review AND len(target_paths) >= 2 (additive):
+         DISPATCH cf-semantic-reviewer-consistency
+         IF len(target_paths) < 2:
+           SKIP consistency dispatch
+           LOG "consistency-skipped: single-target" to iteration trace
+
+  BOTH PROMPT_REVIEW=true AND PROMPT_BUG_REVIEW=true:
+    DISPATCH cf-semantic-reviewer-prompt AND cf-prompt-bug-finder in parallel
+
+RULES:
+  - Prompt reviewers and prompt bug-finders MUST receive ONLY prompt_targets
+  - Code reviewers and code bug-finders MUST receive ONLY code_targets
+  - Artifact reviewers MUST receive ONLY artifact_targets
+  - Each reviewer's dispatch contract lives in its prompt file under
+    {cf-studio-path}/.core/skills/studio/agents/
+  - MUST supply exact JSON fields each reviewer declares
+  - MUST NOT skip dispatch for registered reviewers when trigger condition matches
 ```
 
-On `reduce: N` validate `1 ≤ N ≤ current MAX_ITER`; on out-of-range reply re-prompt with `reduce: N must satisfy 1 ≤ N ≤ {current MAX_ITER}; reply again or `continue`.` and do not change `MAX_ITER` until a valid value is provided. On valid `reduce: N` set `MAX_ITER = N` and continue; on `continue` proceed with the original `MAX_ITER`. (Bound parallels `workflows/generate/phase-5/phase-5.4-approval.md` § `extend: <M>` which requires `M > current MAX_ITER`.)
+```text
+UNIT Phase52InlineFallbackWarning
 
-A stop token at this warning prompt is handled by
-`workflows/shared/stop-token-policy.md`. It always cancels the current Phase 5
-entry before any validator/reviewer/author dispatch for this review-loop run.
-When `manifest.paths_written` is non-empty (a file-writing generate run already
-completed Phase 4 or a prior fix iteration), do NOT route this stop through
-`workflows/generate/phase-6/index.md` because no valid `Validation Results`
-body exists yet. Instead emit the sanctioned terminal handoff below and end the
-generate run. When no files have been written yet (for example an
-analyze→generate external entry), return control to the user without Phase 6.
+PURPOSE:
+  Emit long-loop context-exhaustion warning when inline mode detected with
+  high MAX_ITER.
+
+DO:
+  IF INLINE_FALLBACK == true AND MAX_ITER > INLINE_LOOP_WARNING_THRESHOLD (2):
+    EMIT exactly (before first iteration of this phase runs):
+---
+⚠️ Inline mode detected with MAX_ITER={MAX_ITER}. Sequential inline review may
+exhaust context (each iteration loads the full reviewer prompt set + per-target
+reads in this orchestrator's context window). Recommend reducing MAX_ITER to 2
+or splitting the run. Reply `reduce: N` (1 ≤ N ≤ current MAX_ITER) to lower
+MAX_ITER, or `continue` to proceed at risk.
+---
+    WAIT user.reply
+    STOP_TURN
+
+MENU InlineFallbackWarningMenu:
+  TITLE: Inline mode long-loop warning
+  OPTIONS:
+    reduce: N (1 <= N <= current MAX_ITER, valid) ->
+      SET MAX_ITER = N
+      CONTINUE
+    reduce: N (out-of-range) ->
+      EMIT "reduce: N must satisfy 1 ≤ N ≤ {current MAX_ITER}; reply again or `continue`."
+      WAIT user.reply
+      STOP_TURN
+    continue ->
+      CONTINUE with original MAX_ITER
+    stop_token ->
+      LOAD workflows/shared/stop-token-policy.md
+      CANCEL current Phase 5 entry before any validator/reviewer/author dispatch
+      IF manifest.paths_written is non-empty (file-writing generate run with Phase 4 complete):
+        EMIT Pre-Review Warning Handoff block (below)
+      IF no files written (e.g. analyze→generate external entry):
+        RETURN control to user without Phase 6
+```
 
 #### Pre-Review Warning Handoff
 
-Emit this block only for the file-writing stop path above:
-
 ```text
+UNIT Phase52PreReviewWarningHandoff
+
+PURPOSE:
+  Emit terminal handoff when user stops at inline warning after files were written.
+
+DO:
+  EMIT exactly:
+---
 Pre-Review Warning Handoff
-Files were already written, but automatic review did not run because you stopped at the inline long-loop warning before any validator, reviewer, or author dispatch.
+Files were already written, but automatic review did not run because you stopped
+at the inline long-loop warning before any validator, reviewer, or author dispatch.
 
 Suggested next step: run `/cf-analyze` on the written files when you want review coverage.
 You may also resume `/cf-generate(mode=fix)` later if you want to continue the review/fix loop from these files.
+---
+
+RULES:
+  - MUST emit ONLY on the file-writing stop path (manifest.paths_written non-empty)
+  - MUST NOT route through workflows/generate/phase-6/index.md
+    (no valid Validation Results body exists yet)
+  - This is the canonical source of the Pre-Review Warning Handoff text
 ```
 
-`PROMPT_REVIEW=true` is set on the generate-side when the kit's `artifacts.toml`
-marks the kind with `is_prompt_document = true` OR when any written path is a
-current prompt/instruction target: `workflows/**`, `skills/**/SKILL.md`,
-`skills/studio/**/*.md`, `skills/**/agents/*.md`, `AGENTS.md`, or
-agent/workflow prompt config. Intent verbs still route through analyze-side
-mode detection.
+```text
+UNIT Phase52ReviewerDispatchContracts
 
-Before dispatching reviewers, derive typed target sets from the current review
-surface (`manifest.paths_written` on normal generate entry, or `target_paths`
-on analyze→generate external entry):
+PURPOSE:
+  Define per-reviewer orchestrator-supplied dispatch values.
 
-- `prompt_targets` = review-surface paths matching prompt/workflow/instruction
-  files (`workflows/**`, `skills/**/SKILL.md`, `skills/studio/**/*.md`,
-  `skills/**/agents/*.md`, `requirements/**/*.md`, `AGENTS.md`, and prompt
-  config files)
-- `code_targets` = review-surface paths matching code/test/build files owned by
-  the code reviewer methodology, excluding any path already classified into
-  `prompt_targets`
-- `artifact_targets` = review-surface paths not in `prompt_targets` and not in
-  `code_targets`
+NOTES:
+  cf-semantic-reviewer-artifact:
+    target_paths = artifact_targets
+    kit_rules_path = resolved from rules.md (null in RELAXED non-kit)
+    checklist_path = {kit_path}/artifacts/{KIND}/checklist.md (null when no kit)
+    template_path = {kit_path}/artifacts/{KIND}/template.md (null when unavailable)
+    example_path = {kit_path}/artifacts/{KIND}/examples/example.md (null when unavailable)
+    cross_ref_paths = parent/sibling artifacts from phase-0.5-clarify.md
+    rules_mode = {STRICT|RELAXED}
+    traceability_mode = from artifacts.toml
 
-Prompt reviewers and prompt bug-finders MUST receive only `prompt_targets`.
-Code reviewers and code bug-finders MUST receive only `code_targets`. Artifact
-reviewers MUST receive only `artifact_targets`.
+  cf-semantic-reviewer-code:
+    design_artifact_path = from phase-0.5-clarify.md
+    code_paths = code_targets
+    cross_ref_paths, rules_mode, traceability_mode
+    kit_rules_path = resolved from rules.md
 
-Decision priority (top-to-bottom; first match wins for the artifact/code axis, plus consistency and bug-finder rows may be additive):
+  cf-semantic-reviewer-prompt:
+    target_paths = prompt_targets
+    kit_rules_path = resolved from rules.md (when loaded)
+    rules_mode, cross_ref_paths
 
-| Condition | Dispatched sub-agent |
-|---|---|
-| `PROMPT_REVIEW=true` (overrides artifact/code rows) | `cf-semantic-reviewer-prompt` |
-| `TARGET_TYPE == artifact` and not `PROMPT_REVIEW` | `cf-semantic-reviewer-artifact` |
-| `TARGET_TYPE == code` and not `PROMPT_REVIEW` | `cf-semantic-reviewer-code` |
-| `CODE_BUG_REVIEW=true` | `cf-code-bug-finder` (additive on the code branch) |
-| `PROMPT_BUG_REVIEW=true` | `cf-prompt-bug-finder` (additive when PROMPT_REVIEW=true; standalone when PROMPT_REVIEW=false) |
-| `rules.md` requests consistency review AND `len(target_paths) ≥ 2` | `cf-semantic-reviewer-consistency` (additive on any branch above) |
+  cf-semantic-reviewer-consistency:
+    target_paths = artifact_targets for artifact-only checks;
+                   full review surface when consistency rule explicitly spans
+                   prompt/workflow targets
+    baseline_path = resolved baseline from rules.md or user-specified or null
+    kit_rules_path (when loaded), rules_mode
+    namespace_prefix = "Rcons"
 
-Consistency precondition: `cf-semantic-reviewer-consistency` requires `len(target_paths) ≥ 2`. When the trigger matches but the precondition is unmet, skip the consistency dispatch and log `consistency-skipped: single-target` to the iteration trace; the other reviewer(s) still run normally.
+  cf-code-bug-finder:
+    design_artifact_path = from phase-0.5-clarify.md
+    code_paths = code_targets
+    cross_ref_paths, rules_mode
+    kit_rules_path = resolved from rules.md
+    Only dispatched when CODE_BUG_REVIEW=true
 
-Each reviewer's dispatch contract lives in its prompt file under `{cf-studio-path}/.core/skills/studio/agents/`. The orchestrator MUST supply the exact JSON fields each reviewer declares (mirrors `workflows/generate/phase-5/phase-5.1-det-gate.md` § validator dispatch). Per-reviewer enumeration:
+  cf-prompt-bug-finder:
+    target_paths = prompt_targets
+    kit_rules_path = resolved from rules.md (when loaded)
+    rules_mode, cross_ref_paths
+    Only dispatched when PROMPT_BUG_REVIEW=true
+```
 
-- `cf-semantic-reviewer-artifact` — supply: `target_paths = artifact_targets`, `kit_rules_path` = resolved from `rules.md` (`null` in RELAXED non-kit), `checklist_path` = `{kit_path}/artifacts/{KIND}/checklist.md` (`null` when no kit applies), `template_path` = `{kit_path}/artifacts/{KIND}/template.md` (`null` when unavailable), `example_path` = `{kit_path}/artifacts/{KIND}/examples/example.md` (`null` when unavailable), `cross_ref_paths` = parent/sibling artifacts identified in `workflows/generate/phase-0.5-clarify.md`, `rules_mode = {STRICT|RELAXED}`, `traceability_mode` from `artifacts.toml`.
-- `cf-semantic-reviewer-code` — supply: `design_artifact_path` from `workflows/generate/phase-0.5-clarify.md`, `code_paths = code_targets`, `cross_ref_paths`, `rules_mode`, `traceability_mode` from `artifacts.toml`, `kit_rules_path` resolved from `rules.md`.
-- `cf-semantic-reviewer-prompt` — supply: `target_paths = prompt_targets`, `kit_rules_path` resolved from `rules.md` (when loaded), `rules_mode`, `cross_ref_paths`.
-- `cf-semantic-reviewer-consistency` — supply: `target_paths = artifact_targets` for artifact-only consistency checks, otherwise the full review surface when the consistency rule explicitly spans prompt/workflow targets; `baseline_path` (always supplied; value is the resolved baseline path from `rules.md` or the user-specified baseline, or `null` when no baseline applies), `kit_rules_path` (when loaded), `rules_mode`, `namespace_prefix = "Rcons"`.
-- `cf-code-bug-finder` — supply: `design_artifact_path` from `workflows/generate/phase-0.5-clarify.md`, `code_paths = code_targets`, `cross_ref_paths`, `rules_mode`, `kit_rules_path` resolved from `rules.md`. Only dispatched when `CODE_BUG_REVIEW=true`.
-- `cf-prompt-bug-finder` — supply: `target_paths = prompt_targets`, `kit_rules_path` resolved from `rules.md` (when loaded), `rules_mode`, `cross_ref_paths`. Only dispatched when `PROMPT_BUG_REVIEW=true`.
+```text
+UNIT Phase52ReviewerReturnHandling
 
-`traceability_mode` resolution: read `[systems.<system>] traceability` from `{cf-studio-path}/config/artifacts.toml`; default to `FULL` when unset. Thread it into every reviewer dispatch whose agent contract declares it.
+PURPOSE:
+  Handle reviewer returns and merge findings with namespacing.
 
-Reviewer return handling:
+DO:
+  FOR each reviewer return:
+    IF review_result.type == "VALIDATION_REPORT":
+      REQUIRE the reviewer-owned Validation Report — <Section> block and findings JSON
+    IF checkpoint.type == "PARTIAL_CHECKPOINT":
+      REQUIRE reviewer-owned Partial Checkpoint — <Section> block,
+        checkpoint JSON, and findings JSON
+      STORE checkpoint under semantic_partial_checkpoints
+      SET SEMANTIC_REVIEW_PARTIAL = true
+      MERGE only findings backed by already-covered evidence
+      MUST NOT require Validation Report — <Section> block for that reviewer
+      MUST NOT treat its absence as dispatch failure
+      NOTE: PARTIAL_CHECKPOINT only supported by reviewers whose contract declares it
 
-- `review_result.type = "VALIDATION_REPORT"`: require the reviewer-owned
-  `Validation Report — <Section>` block and findings JSON.
-- `checkpoint.type = "PARTIAL_CHECKPOINT"`: require the reviewer-owned
-  `Partial Checkpoint — <Section>` block, checkpoint JSON, and findings JSON.
-  Store the checkpoint under `semantic_partial_checkpoints`, set
-  `SEMANTIC_REVIEW_PARTIAL=true`, and merge only findings backed by already
-  covered evidence. Do not require a `Validation Report — <Section>` block for
-  that reviewer, and do not treat its absence as a dispatch failure.
+  IF any reviewer returns PARTIAL_CHECKPOINT:
+    APPEND checkpoint to iteration trace
+    SKIP author auto-fix for the checkpoint itself
+    HAND control to phase-5.3-findings.md WITH all_findings containing only
+      validator/reviewer findings backed by already-covered evidence
+    NOTE: Phase 5.3 / Phase 6 MUST preserve separate partial-checkpoint state,
+          keep run non-clean, set remaining_findings non-empty or surface partial
+          semantic coverage before exit
 
-`PARTIAL_CHECKPOINT is supported only by reviewers whose contract declares it`.
-For reviewers without that contract, return handling is limited to
-`VALIDATION_REPORT` or dispatch failure; do not synthesize a checkpoint shape.
+  NAMESPACE findings:
+    validator: V-NNN
+    artifact-reviewer: Ra-NNN
+    code-reviewer: Rc-NNN
+    code-bug-finder: Rcb-NNN
+    prompt-reviewer: Rp-NNN
+    prompt-bug-finder: Rpb-NNN
+    consistency-reviewer: Rcons-NNN
+  RE-NUMBER within each namespace starting from 001
+  REWRITE id field on every finding before partitioning
+  SET all_findings = det_findings + sum(reviewer findings)
 
-When any reviewer returns `PARTIAL_CHECKPOINT`, the iteration has incomplete
-coverage. Append the checkpoint to the iteration trace, keep
-`semantic_partial_checkpoints` as a distinct state collection, skip author
-auto-fix for the checkpoint itself, and hand control to
-`workflows/generate/phase-5/phase-5.3-findings.md` with `all_findings`
-containing only validator/reviewer findings backed by already covered evidence.
-Phase 5.3 / Phase 6 MUST preserve the separate partial-checkpoint state, keep
-the run non-clean, and set `remaining_findings` non-empty or otherwise surface
-the partial semantic coverage before exit unless the caller immediately resumes
-the checkpoint with the provided `resume_inputs`.
+  APPEND one phase5_dispatch_evidence record per semantic reviewer dispatch:
+    phase = "5.2"
+    agent_id = reviewer agent id
+    target_paths = reviewer target_paths
+    result_marker = returned review report marker
+    FOR PARTIAL_CHECKPOINT: also set
+      result_marker = "Partial Checkpoint — <Section>" block name
+      status = "PARTIAL"
+      reviewer name from checkpoint JSON
 
-Merge findings, namespacing each source: validator findings keep `V-NNN`, artifact-reviewer findings become `Ra-NNN`, code-reviewer `Rc-NNN`, code-bug-finder `Rcb-NNN`, prompt-reviewer `Rp-NNN`, prompt-bug-finder `Rpb-NNN`, consistency-reviewer `Rcons-NNN`. Re-number within each namespace starting from `001` and rewrite the `id` field on every finding before partitioning. After namespacing: `all_findings = det_findings + sum(reviewer findings)`. The `workflows/generate/phase-5/phase-5.4-approval.md` user dialog references these namespaced IDs.
-
-Append one `phase5_dispatch_evidence` record per semantic reviewer dispatch
-with `phase = "5.2"`, `agent_id`, `target_paths`, and the returned review
-report marker before handing `all_findings` to Phase 5.3. For
-`PARTIAL_CHECKPOINT`, set `result_marker` to the `Partial Checkpoint —
-<Section>` block name and include `status = "PARTIAL"` plus the reviewer name
-from the checkpoint JSON.
+RULES:
+  - MUST NOT synthesize PARTIAL_CHECKPOINT shape for reviewers without that contract
+  - MUST merge findings with namespacing before handing to Phase 5.3
+  - MUST append dispatch evidence record per reviewer dispatch before handing to Phase 5.3
+```

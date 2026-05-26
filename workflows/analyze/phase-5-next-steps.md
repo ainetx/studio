@@ -6,6 +6,53 @@ loaded_by: workflows/analyze.md
 version: 1.0
 ---
 
+```text
+UNIT AnalyzePhase5NextSteps
+
+PURPOSE:
+  Offer applicable next steps from rules.md after a PASS result.
+
+WHEN:
+  overall result is PASS AND EXPLAIN_MODE == false
+
+DO:
+  IF EXPLAIN_MODE == true:
+    STOP (skip this phase entirely)
+  IF actionable findings exist:
+    STOP (Remediation Handoff menu in Phase 4 is the next-step selector)
+  Read "## Next Steps" from rules.md.
+  EMIT_MENU NextStepsMenu
+  WAIT user.reply
+  STOP_TURN
+
+MENU NextStepsMenu:
+  TITLE: "What would you like to do next?"
+  OPTIONS:
+    1 {option from rules Next Steps for success} ->
+        State why and what happens next (suggested when clearest continuation)
+    2 {option from rules Next Steps} ->
+        State what this does next
+    3 Other -> Say what you want to change or do next
+  INVALID:
+    EMIT "Reply 1, 2, or 3, or describe what you want to do next."
+    WAIT user.reply
+    STOP_TURN
+
+RULES:
+  - MUST skip this phase entirely when EXPLAIN_MODE=true
+    (Storytelling Output already emits Suggested Next Steps)
+  - MUST_NOT emit a separate menu when actionable findings exist (FAIL path);
+    Phase 4 Remediation Handoff IS the next-step selector for failure cases
+  - MUST_NOT duplicate or paraphrase the Remediation Handoff menu here
+  - MUST_NOT ask whether the handoff menu should be generated
+  - MUST_NOT defer the handoff menu to a later user turn
+
+NOTES:
+  EXPLAIN_MODE was set in preamble.md; no re-load of phase-0-dependencies.md needed.
+  For the EXPLAIN_MODE skip-list see:
+    {cf-studio-path}/.core/requirements/storytelling.md § Agent Instructions
+```
+
 ## Phase 5: Offer Next Steps
 
 When `EXPLAIN_MODE=true`, **skip this phase entirely** — the Storytelling Output schema (`workflows/analyze/phase-4-output/output-storytelling.md`) already emits a contextual `Suggested Next Steps` section, so running this sub-file would produce a redundant menu. (EXPLAIN_MODE was set in `preamble.md`; no re-load of `phase-0-dependencies.md` needed. Open, load, and follow `{cf-studio-path}/.core/requirements/storytelling.md` § Agent Instructions for the full skip-list.)

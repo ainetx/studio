@@ -6,60 +6,64 @@ loaded_by: workflows/analyze/phase-0-dependencies.md
 version: 1.0
 ---
 
-When `CHANGE_REVIEW=true`, dispatch sub-agent
-`cf-diff-scope-resolver` immediately after the inline-fallback-probe
-(`workflows/shared/inline-fallback-probe.md`) and before Phase 1 file checks.
+```text
+UNIT ChangeReviewScopeResolver
 
-Supply:
-- `worktree_path` = explicit repo/worktree path, or resolved workspace source
-- `commit_sha` = requested commit SHA, or `null`
-- `base_ref` = explicit base, or `null` (agent uses `<commit_sha>^`)
-- `include_uncommitted` = `true` for worktree/dirty/staged/unstaged changes
-- `direct_targets` = explicit paths named by the user
-- `review_intent` = original review request text
+PURPOSE:
+  Dispatch cf-diff-scope-resolver and derive typed target sets from the
+  returned diff_scope before Phase 1 file checks.
 
-Store returned JSON as `diff_scope`. `diff_scope` schema (fields consumed
-downstream): `review_targets: string[]`, `base_ref: string|null`,
-`head_ref: string|null`, `commits: object[]`, `changed_files: object[]`.
-Downstream consumers may use `diff_scope.review_targets` for the full diff
-surface, but semantic methodology routing MUST derive typed target sets from
-`diff_scope.changed_files`, not from raw `review_targets`.
+WHEN:
+  CHANGE_REVIEW == true
 
-Set `{PATHS} = diff_scope.review_targets` for downstream file checks and
-change-review bookkeeping. If empty, stop and report no reviewable targets.
+DO:
+  REQUIRE inline-fallback-probe has run (workflows/shared/inline-fallback-probe.md)
+  DISPATCH cf-diff-scope-resolver with:
+    worktree_path   = explicit repo/worktree path OR resolved workspace source
+    commit_sha      = requested commit SHA OR null
+    base_ref        = explicit base OR null (agent uses <commit_sha>^)
+    include_uncommitted = true for worktree/dirty/staged/unstaged changes
+    direct_targets  = explicit paths named by the user
+    review_intent   = original review request text
+  SET diff_scope = returned JSON
+  IF diff_scope.review_targets is empty:
+    EMIT "No reviewable targets found."
+    STOP_TURN
+  SET {PATHS} = diff_scope.review_targets
+  Derive typed target sets from diff_scope.changed_files:
+    SET prompt_targets  = paths matching prompt/workflow/instruction patterns
+    SET code_targets    = paths matching code/test/build patterns, excluding prompt_targets
+    SET artifact_targets = diff_scope.review_targets minus prompt_targets minus code_targets
+  IF prompt_targets is non-empty:
+    SET PROMPT_REVIEW = true
+    IF review_intent is change-review, defect-oriented, or generic review/audit:
+      SET PROMPT_BUG_REVIEW = true
+  IF code_targets is non-empty:
+    SET CODE_REVIEW = true
+  IF code_targets is non-empty AND review_intent is defect-oriented:
+    SET CODE_BUG_REVIEW = true
 
-After `diff_scope` is stored, from `diff_scope.changed_files`, derive prompt_targets, code_targets, and artifact_targets based on each file's classification (described below):
+RULES:
+  - MUST dispatch cf-diff-scope-resolver immediately after inline-fallback-probe
+    and before Phase 1 file checks
+  - MUST derive methodology flags from diff_scope.changed_files typed sets, not
+    from raw review_targets
+  - MUST_NOT silently enable CODE_REVIEW or CODE_BUG_REVIEW for prompt-only or
+    artifact-only diffs
+  - MUST surface mismatch if user requests a code bug hunt but diff contains no
+    code_targets; do not reuse prompt or artifact files as code-review inputs
+  - MUST_NOT run git diff, changed-file triage, hotspot mapping, or semantic
+    search over the diff; those belong to the resolver and downstream reviewers
 
-- `prompt_targets` from `diff_scope.changed_files[].path` matching
-  `workflows/**`, `skills/studio/**/*.md`, `requirements/**/*.md`,
-  `skills/**/SKILL.md`, `skills/**/agents/*.md`, `AGENTS.md`, `SKILL.md`,
-  `.github/prompts/**`, `.cursor/agents/**`, `.codex/agents/**`, or prompt
-  config files.
-- `code_targets` from `diff_scope.changed_files[].path` matching code/test/build
-  surfaces owned by the code reviewer methodology (`*.py`, `*.ts`, `*.tsx`,
-  `*.js`, `*.jsx`, `*.go`, `*.rs`, `*.java`, `*.kt`, `*.rb`, `*.php`,
-  `*.sh`, `Dockerfile`, `Makefile`, `pyproject.toml`, `package.json`,
-  `Cargo.toml`, `go.mod`, `go.sum`, and equivalent source-local build files),
-  excluding any path already classified into prompt_targets.
-- `artifact_targets` = `diff_scope.review_targets` minus `prompt_targets` minus
-  `code_targets`.
-
-Methodology flags for change review are then derived from those typed sets:
-
-- if `prompt_targets` is non-empty, set `PROMPT_REVIEW=true`
-- if `prompt_targets` is non-empty and `review_intent` is change-review,
-  defect-oriented, or generic review/audit wording, set
-  `PROMPT_BUG_REVIEW=true`
-- set `CODE_REVIEW=true` only when `code_targets` is non-empty
-- set `CODE_BUG_REVIEW=true` only when `code_targets` is non-empty and
-  `review_intent` is defect-oriented (`bug`, `defect`, `regression`,
-  `root cause`, `crash`, `broken`, `hunt`)
-
-Prompt-only or artifact-only diffs MUST NOT silently enable `CODE_REVIEW` or
-`CODE_BUG_REVIEW`. If the user explicitly asks for a code bug hunt but the diff
-contains no `code_targets`, surface that mismatch during scope clarification;
-do not reuse prompt or artifact files as code-review inputs.
-
-The orchestrator MUST NOT run `git diff`, changed-file triage, hotspot mapping,
-or semantic search over the diff itself; those operations belong to the
-resolver and downstream semantic reviewer agents.
+NOTES:
+  prompt_targets match: workflows/**, skills/studio/**/*.md,
+    requirements/**/*.md, skills/**/SKILL.md, skills/**/agents/*.md,
+    AGENTS.md, SKILL.md, .github/prompts/**, .cursor/agents/**,
+    .codex/agents/**, and prompt config files.
+  code_targets match: *.py, *.ts, *.tsx, *.js, *.jsx, *.go, *.rs, *.java,
+    *.kt, *.rb, *.php, *.sh, Dockerfile, Makefile, pyproject.toml,
+    package.json, Cargo.toml, go.mod, go.sum, and equivalent source-local
+    build files — excluding any path already in prompt_targets.
+  diff_scope schema fields consumed downstream: review_targets, base_ref,
+    head_ref, commits, changed_files.
+```

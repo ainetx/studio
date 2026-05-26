@@ -6,6 +6,117 @@ loaded_by: workflows/analyze.md
 version: 1.0
 ---
 
+```text
+UNIT AnalyzePreamble
+
+PURPOSE:
+  Initialize per-run analyze flags, perform route-only methodology selection,
+  and handle storytelling trigger detection before any phase executes.
+
+STATE:
+  SEMANTIC_ONLY: false | true
+    default: false
+    reset: start of workflow run
+  CHANGE_REVIEW: false | true
+    default: false
+  CODE_REVIEW: false | true
+    default: false
+  CODE_BUG_REVIEW: false | true
+    default: false
+  CONSISTENCY_REVIEW: false | true
+    default: false
+  PROMPT_REVIEW: false | true
+    default: false
+  PROMPT_BUG_REVIEW: false | true
+    default: false
+  EXPLAIN_MODE: false | true
+    default: false
+  ARTIFACT_REVIEW: false | true
+    default: false
+  CF_PHASE_GATE: armed
+    default: armed
+    reset: start of workflow run
+  enforceRemediationPrompts: true | false
+    default: true
+    reset: start of workflow run
+
+DO:
+  ALWAYS load {cf-studio-path}/.core/skills/studio/SKILL.md WHEN {cfs_mode} == off
+  ALWAYS load skills/studio/protocol.md FIRST
+  Initialize all flags to their defaults (listed in STATE above)
+  Match methodology flags from user request:
+    IF code/codebase/implementation analysis:
+      SET CODE_REVIEW = true
+      FORBID opening code-checklist.md or bug-finding.md in the orchestrator
+    IF bug hunting / logic bug / edge-case / regression / root-cause / "all bugs":
+      SET CODE_BUG_REVIEW = true
+      FORBID opening bug-finding.md in the orchestrator
+    IF documentation/artifact consistency / contradiction / cross-document alignment:
+      SET CONSISTENCY_REVIEW = true
+      FORBID opening consistency-checklist.md in the orchestrator
+    IF instruction targets (system prompts, agent prompts, LLM prompts, agent
+       instructions/guidelines, skills, workflows, methodologies, AGENTS.md,
+       navigation rules, AI-agent instruction docs) OR user mentions
+       "prompt engineering review", "prompt bug review", "prompt bugs",
+       "instruction quality":
+      SET PROMPT_REVIEW = true
+      FORBID opening prompt-engineering.md in the orchestrator
+    IF defect-oriented prompt/instruction request (prompt bug review, prompt bugs,
+       hidden failure modes, unsafe behavior, regressions, instruction conflicts,
+       routing defects, root-cause search):
+      SET PROMPT_BUG_REVIEW = true
+      FORBID opening prompt-bug-finding.md in the orchestrator
+  IF multiple methodology flags are true:
+    Phase 3 dispatches multiple sub-agents
+  IF explicit pedagogical/storytelling intent:
+    LOAD {cf-studio-path}/.core/requirements/storytelling.md
+    SET EXPLAIN_MODE = true
+    FORBID Phase 2 deterministic gate
+    FORBID Phase 3 standard semantic checklist
+    REQUIRE Storytelling Output schema in Phase 4
+    FORBID Phase 5 (Storytelling Output emits Suggested Next Steps)
+    SET enforceRemediationPrompts = false
+    FORBID emitting Fix Prompt / Plan Prompt
+  IF EXPLAIN_MODE == true AND PROMPT_REVIEW intent also detected:
+    EMIT_MENU StorytellingVsPromptReviewMenu
+    WAIT user.reply
+    STOP_TURN
+
+MENU StorytellingVsPromptReviewMenu:
+  TITLE: "Your request combines storytelling and prompt-review intent. Which should I run?"
+  OPTIONS:
+    1 -> SET EXPLAIN_MODE = true; proceed with storytelling walkthrough
+    2 -> SET PROMPT_REVIEW = true; SET EXPLAIN_MODE = false; proceed with prompt engineering review
+  INVALID:
+    EMIT "Reply `1` or `2`."
+    WAIT user.reply
+    STOP_TURN
+
+INVARIANTS:
+  - MUST initialize ALL flags before Phase 0 runs
+  - Phase 0 (phase-0-dependencies.md) MUST_NOT re-initialize flags to false
+  - MUST_NOT auto-enter EXPLAIN_MODE for ordinary review/audit/inspect requests
+    (review my changes, review this PR, review this diff, audit this design,
+     inspect this code, check what changed, find bugs in X) — those continue
+     through the standard analyze contract
+  - WHEN EXPLAIN_MODE=true: the NEXT user-visible assistant message MUST be the
+    E0/E1 explain-session opener; any direct explanation/summary/walkthrough
+    emitted before the four E1 gates resolve is INVALID (see storytelling.md AP-#0)
+  - MUST set enforceRemediationPrompts=false ONLY when EXPLAIN_MODE=true
+  - Each methodology is loaded by exactly one matched sub-agent; the orchestrator
+    only routes and merges outputs
+
+NOTES:
+  Storytelling mode-coupled review requires explicit storytelling intent:
+    "explain this PR review-style", "walk me through this PR with panel feedback",
+    "storytelling review of X", or any explain-family verb followed by a
+    review-mode pick at the always-ask prompt.
+  When the prompt-engineering sub-agent runs: compact-prompts optimization is
+    a HIGH-priority requirement; interaction UX is a CRITICAL requirement.
+  Plain analyze intent stays in standard analyze: ordinary review/audit/inspection
+    MUST NOT auto-enter EXPLAIN_MODE.
+```
+
 ALWAYS open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` WHEN {cfs_mode} is `off`
 
 **Type**: Analysis

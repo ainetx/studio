@@ -12,6 +12,19 @@ version: 1.0
 
 <!-- /toc -->
 
+```text
+UNIT AnalyzeStateSummary
+
+PURPOSE:
+  Declare the target-type × template / checklist / design usage matrix
+  for all analyze modes.
+
+NOTES:
+  This unit is a reference table; it is not executable behavior.
+  Load it when finalizing the response to confirm the correct template,
+  checklist, and design artifact are in scope for the active mode.
+```
+
 ## State Summary
 
 | State | TARGET_TYPE | Uses Template | Uses Checklist | Uses Design |

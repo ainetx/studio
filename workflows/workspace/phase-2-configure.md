@@ -13,41 +13,103 @@ description: "Invoke when the workspace workflow enters Phase 2 to confirm selec
 
 ## Phase 2: Configure
 
-**Goal**: confirm workspace structure.
-
-For each selected source, confirm `name`, relative `path` or `url`, `role`,
-and `adapter` (auto-discovered or explicit). Also confirm:
-
-- `cross_repo` (default yes)
-- `resolve_remote_ids` (default yes; both settings must be true to include
-  remote IDs)
-- workspace location: standalone `.studio-workspace.toml` or inline
-  `[workspace]` in `config/core.toml`
-
-Primary source is always determined by the current working directory; no
-`primary` field exists.
-
-Track confirmation per source. Do not enter Phase 3 until **every** selected
-source is confirmed and the workspace location choice is final. Set
-`WORKSPACE_ALL_SOURCES_CONFIRMED=true` only after that gate passes.
-
-Use one batched confirmation prompt per source:
-
 ```text
-Why this input is needed: confirm the exact source settings before writing workspace configuration.
-Reply with `approve` to accept the proposed source settings, or list only the fields to change.
-Suggested defaults: keep the detected `adapter`, keep `cross_repo = yes`, and keep `resolve_remote_ids = yes` unless the user wants stricter local-only behavior.
-- `approve` → keep the proposed source settings and continue.
-- field edits → update only the named fields, then re-show the proposal.
+UNIT WorkspaceConfigure
+
+PURPOSE:
+  Confirm all selected source settings and workspace location before allowing Phase 3 to proceed.
+
+STATE:
+  WORKSPACE_ALL_SOURCES_CONFIRMED: unset | true
+    default: unset
+    scope: workflow_run
+    reset: any source edit re-requires re-confirmation of that source
+
+RULES:
+  - cross_repo defaults to yes
+  - resolve_remote_ids defaults to yes
+  - MUST have both cross_repo == yes AND resolve_remote_ids == yes to include remote IDs
+
+DO:
+  FOR each selected source (sequentially):
+    EMIT batched confirmation prompt for source
+    WAIT user.reply
+    STOP_TURN
+
+MENU SourceConfirmationPrompt:
+  TITLE: |
+    Why this input is needed: confirm the exact source settings before writing workspace configuration.
+    Reply with `approve` to accept the proposed source settings, or list only the fields to change.
+    Suggested defaults: keep the detected `adapter`, keep `cross_repo = yes`, and keep `resolve_remote_ids = yes` unless the user wants stricter local-only behavior.
+    - `approve` → keep the proposed source settings and continue.
+    - field edits → update only the named fields, then re-show the proposal.
+  OPTIONS:
+    approve ->
+      Mark source as confirmed
+      IF more unconfirmed sources remain:
+        CONTINUE WorkspaceConfigure (next source)
+      ELSE:
+        CONTINUE WorkspaceConfigureCompletionGate
+    field edits ->
+      Apply edits to named fields
+      IF edit targets workspace location:
+        CONTINUE WorkspaceConfigureLocationUpdate
+      ELSE:
+        Re-show updated source proposal
+        WAIT user.reply
+        STOP_TURN
+  STOP_TOKEN:
+    cancel before writing workspace config; no files written
+  INVALID:
+    EMIT "Reply `approve` or list fields to change."
+    WAIT user.reply
+    STOP_TURN
+
+RULES:
+  - MUST confirm: name, relative path or url, role, adapter, cross_repo, resolve_remote_ids, workspace location
+  - MUST track confirmation per source individually
+  - MUST_NOT enter Phase 3 until every selected source is confirmed and workspace location is final
+  - Primary source is always determined by the current working directory; no `primary` field exists
 ```
 
-(per `workflows/shared/stop-token-policy.md`)
+```text
+UNIT WorkspaceConfigureLocationUpdate
 
-If the reply edits workspace location (`standalone` vs `inline`), update the
-global location choice before re-showing the current source proposal. If any
-source uses a URL, reject `inline` and ask for a standalone location instead.
+PURPOSE:
+  Handle workspace location edits and URL constraints when user changes standalone vs inline.
 
-After each source approval, continue to the next unconfirmed source. Only after
-all selected sources are confirmed and the workspace location is still valid
-for the whole set may the workflow continue to
-`workflows/workspace/phase-3-generate.md`.
+DO:
+  IF reply changes location to inline AND any source uses a URL:
+    EMIT "inline config does not support Git URL sources — a standalone location is required."
+    Reset location to standalone
+    Re-show current source proposal
+    WAIT user.reply
+    STOP_TURN
+  ELSE:
+    Update global location choice
+    Re-show current source proposal
+    WAIT user.reply
+    STOP_TURN
+```
+
+```text
+UNIT WorkspaceConfigureCompletionGate
+
+PURPOSE:
+  Gate entry to Phase 3 — only pass when all sources confirmed and location valid.
+
+DO:
+  Verify all selected sources are confirmed
+  Verify final workspace location is valid for the whole source set
+  IF valid:
+    SET WORKSPACE_ALL_SOURCES_CONFIRMED = true
+    CONTINUE workflows/workspace/phase-3-generate.md
+  ELSE:
+    EMIT summary of remaining unconfirmed sources or location conflict
+    CONTINUE WorkspaceConfigure (resume at first unconfirmed source)
+
+NOTES:
+  See workflows/shared/stop-token-policy.md for stop-token routing.
+  Workspace location choices: standalone (.studio-workspace.toml) or inline ([workspace] in config/core.toml).
+  Git URL sources are incompatible with inline mode; reject inline and require standalone in that case.
+```

@@ -13,58 +13,97 @@ description: "Invoke when the workspace workflow enters Phase 3 to write standal
 
 ## Phase 3: Generate
 
-**Goal**: write the workspace config.
+```text
+UNIT WorkspaceGenerate
 
-Prerequisite: `WORKSPACE_ALL_SOURCES_CONFIRMED=true`. If the flag is unset,
-fail-stop and route back to `workflows/workspace/phase-2-configure.md`; Phase 3
-MUST NOT infer confirmation from partially edited source proposals.
+PURPOSE:
+  Write the workspace config via CLI after all confirmation gates pass.
 
-Also require a valid final workspace location for the selected sources before
-invoking the CLI:
+NOTES:
+  CF_PHASE_GATE is defined session-scoped in SKILL.md § Phase-Skip Gate; only armed and released_for_orchestrator_write are used here.
 
-- standalone mode → `{project_root}/.studio-workspace.toml` must be the
-  final confirmed destination
-- inline mode → `{project_root}/config/core.toml` must be the final confirmed
-  destination and no selected source may use a Git URL
+WHEN:
+  WORKSPACE_ALL_SOURCES_CONFIRMED == true
+  AND final workspace location is resolved and valid
 
-If the final location is unresolved or invalid for the selected source set,
-fail-stop and route back to `workflows/workspace/phase-2-configure.md`. Do NOT
-attempt Phase 3 with `--inline` against a Git URL source set.
+DO:
+  Resolve workspace_config_path:
+    standalone mode -> {project_root}/.studio-workspace.toml
+    inline mode    -> {project_root}/config/core.toml
+  SET CF_PHASE_GATE = released_for_orchestrator_write
+    scope: {workspace_config_path}
+  Invoke CLI:
+    Initialize: `{cfs_cmd} --json workspace-init [--root <super-root>] [--output <path>] [--inline] [--force] [--dry-run]`
+    Add source:  `{cfs_cmd} --json workspace-add --name <name> (--path <path> | --url <url>) [--branch <branch>] [--role <role>] [--adapter <path>] [--inline]`
+  SET CF_PHASE_GATE = armed
+  IF CLI succeeded:
+    CONTINUE workflows/workspace/phase-4-validate.md
+  ELSE:
+    CONTINUE WorkspaceGenerateFailureMenu
 
-Set CF_PHASE_GATE=released_for_orchestrator_write with scope =
-`{workspace_config_path}` before invoking the workspace CLI.
+RULES:
+  - MUST check WORKSPACE_ALL_SOURCES_CONFIRMED == true before invoking CLI
+  - MUST check final workspace location is resolved and valid for selected source set before invoking CLI
+  - MUST_NOT attempt Phase 3 with --inline against a Git URL source set
+  - MUST SET CF_PHASE_GATE = released_for_orchestrator_write with named scope before CLI invocation
+  - MUST SET CF_PHASE_GATE = armed immediately after CLI returns (success or failure)
+  - The logical [workspace] TOML section is part of the inline write target; it is NOT a valid gate scope
+  - MUST_NOT infer WORKSPACE_ALL_SOURCES_CONFIRMED from partially edited source proposals
+```
 
-`workspace_config_path` is always a file path or path-prefix accepted by the
-gate:
+```text
+UNIT WorkspaceGeneratePrerequisiteCheck
 
-- standalone mode → `{project_root}/.studio-workspace.toml`
-- inline mode → `{project_root}/config/core.toml`
+PURPOSE:
+  Fail-stop Phase 3 entry when confirmation gate or location is not satisfied.
 
-The logical `[workspace]` TOML section is part of the inline write target, but
-it is **not** itself a valid gate scope.
+WHEN:
+  WORKSPACE_ALL_SOURCES_CONFIRMED != true
+  OR final workspace location is unresolved or invalid
 
-| Action | Command |
-|---|---|
-| Initialize workspace | `{cfs_cmd} --json workspace-init [--root <super-root>] [--output <path>] [--inline] [--force] [--dry-run]` |
-| Add one source | `{cfs_cmd} --json workspace-add --name <name> (--path <path> \| --url <url>) [--branch <branch>] [--role <role>] [--adapter <path>] [--inline]` |
+DO:
+  EMIT summary of missing prerequisite
+  CONTINUE workflows/workspace/phase-2-configure.md
 
-`workspace-init` writes standalone config by default; `--inline` writes
-`[workspace]` into `config/core.toml`. `workspace-add` auto-detects workspace
-type unless `--inline` forces inline mode. Git URL sources are not supported
-inline.
+RULES:
+  - MUST_NOT proceed to CLI invocation under any prerequisite failure
+```
 
-Reset CF_PHASE_GATE=armed immediately after the CLI returns — success or
-failure.
+```text
+UNIT WorkspaceGenerateFailureMenu
 
-**On CLI failure**: Report the CLI exit code and error message to the user. Do NOT continue to `workflows/workspace/phase-4-validate.md`. Offer the user a structured choice:
+PURPOSE:
+  Offer structured recovery choices after CLI failure.
 
-| Option | Action |
-|---|---|
-| 1 | Retry the workspace generate CLI command (suggested for transient failures) |
-| 2 | Reconfigure — return to Phase 2 to adjust the workspace config |
-| 3 | Stop workspace setup |
+DO:
+  Report CLI exit code and error message
+  EMIT_MENU GenerateFailureMenu
+  WAIT user.reply
+  STOP_TURN
 
-Suggested: 1 if the error message mentions a path collision or locked file (transient); Suggested: 2 if the error references invalid config values or missing required fields.
+MENU GenerateFailureMenu:
+  TITLE: |
+    Reply 1, 2, or 3.
+    Suggested: 1 if the error mentions a path collision or locked file (transient);
+               2 if the error references invalid config values or missing required fields.
+  OPTIONS:
+    1 -> Retry the workspace generate CLI command
+         CONTINUE WorkspaceGenerate
+    2 -> Return to Phase 2 to adjust the workspace config
+         CONTINUE workflows/workspace/phase-2-configure.md
+    3 -> Stop workspace setup
+         STOP_TURN
+  STOP_TOKEN:
+    treat as option 3; leave partial state for user inspection
+  INVALID:
+    EMIT "Reply with 1, 2, or 3."
+    WAIT user.reply
+    STOP_TURN
 
-Reply `1`, `2`, or `3` (per `workflows/shared/stop-token-policy.md`). No
-manual partial-write rollback is needed — the CLI is responsible for atomicity.
+NOTES:
+  See workflows/shared/stop-token-policy.md for stop-token routing.
+  No manual partial-write rollback is needed — the CLI is responsible for atomicity.
+  workspace-init writes standalone config by default; --inline writes [workspace] into config/core.toml.
+  workspace-add auto-detects workspace type unless --inline forces inline mode.
+  Git URL sources are not supported inline.
+```

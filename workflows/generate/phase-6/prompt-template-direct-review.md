@@ -17,6 +17,21 @@ final prompt usable in a fresh chat" contract. Open, load, and follow `workflows
 for the diff summary.
 -->
 
+```text
+UNIT DirectReviewPromptEmission
+
+PURPOSE:
+  Emit self-contained Direct Review Prompt as the FINAL section on W2.
+
+RULES:
+  - MUST verify Validation Results body is present and complete before emitting
+  - MUST begin with "Invoke skill cf"
+  - MUST embed inline: changed file paths, what changed, kind/target,
+    completed Validation Results body, remaining_findings when non-empty
+  - MUST NOT reference "previous chat" or content outside the prompt itself
+  - MUST NOT ask next agent to regenerate or re-implement changes
+```
+
 #### `Direct Review Prompt` template (emitted on `W2`)
 
 ```text

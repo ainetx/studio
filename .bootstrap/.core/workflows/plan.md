@@ -24,83 +24,208 @@ purpose: Universal workflow for generating execution plans with phased delivery
 
 <!-- /toc -->
 
-> **⛔ CRITICAL CONSTRAINTS** — enforced in the phase sub-files below; do NOT duplicate the full constraint text here.
->
-> | Constraint | Authoritative file |
-> |---|---|
-> | This workflow ONLY generates execution plans (does not implement) | workflows/plan/phase-2-decompose.md |
-> | Complete coverage, compact loading | workflows/plan/phase-1-assess.md |
-> | Kit rules are law | workflows/plan/phase-1-assess.md |
-> | Deterministic first | workflows/plan/phase-3-compile.md |
-> | Interactive questions completeness | workflows/plan/phase-1-assess.md |
-> | Brief before compile | workflows/plan/phase-3-compile.md |
+```text
+UNIT PlanBootstrap
 
-Bootstrap order:
+PURPOSE:
+  Load required files in order before any phase work begins.
 
-1. Open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md`
-   first when `{cfs_mode}` is `off`.
-2. Then open and follow `{cf-studio-path}/.core/skills/studio/protocol.md`
-   before any workflow-local phase work.
-3. Then open and follow `workflows/shared/stop-token-policy.md` before any
-   prompt that relies on stop-token behavior.
+DO:
+  IF {cfs_mode} == off:
+    REQUIRE {cf-studio-path}/.core/skills/studio/SKILL.md is loaded and followed FIRST
+  REQUIRE {cf-studio-path}/.core/skills/studio/protocol.md is loaded and followed
+    before any workflow-local phase work
+  REQUIRE workflows/shared/stop-token-policy.md is loaded and followed
+    before any prompt that relies on stop-token behavior
 
-**Type**: Operation
+RULES:
+  - MUST load SKILL.md first when cfs_mode is off
+  - MUST load protocol.md before any phase work
+  - MUST load stop-token-policy.md before any stop-token-dependent prompt
+  - MUST load {cf-studio-path}/.core/requirements/plan-template.md WHEN compiling phase files
+  - MUST load {cf-studio-path}/.core/requirements/plan-decomposition.md WHEN decomposing tasks into phases
+  - MUST load {cf-studio-path}/.core/requirements/prompt-engineering.md WHEN compiling phase files
+    (phase files ARE agent instructions)
+  - MUST load {cf-studio-path}/.core/requirements/plan-checklist.md WHEN validating plans
+    (Phase 4.1 self-validation or /cf-analyze on plan)
 
-ALWAYS open and follow `{cf-studio-path}/.core/requirements/plan-template.md` WHEN compiling phase files
-
-ALWAYS open and follow `{cf-studio-path}/.core/requirements/plan-decomposition.md` WHEN decomposing tasks into phases
-
-OPEN and follow `{cf-studio-path}/.core/requirements/prompt-engineering.md` WHEN compiling phase files (phase files ARE agent instructions)
-
-OPEN and follow `{cf-studio-path}/.core/requirements/plan-checklist.md` WHEN validating plans (Phase 4.1 self-validation or /cf-analyze on plan)
-
-For context compaction recovery during multi-phase workflows, follow
-`{cf-studio-path}/.core/skills/studio/protocol.md` Section "Compaction Recovery".
+NOTES:
+  Type: Operation.
+  Constraint summary (authoritative sources in phase sub-files):
+    This workflow ONLY generates execution plans (does not implement) — phase-2-decompose.md
+    Complete coverage, compact loading — phase-1-assess.md
+    Kit rules are law — phase-1-assess.md
+    Deterministic first — phase-3-compile.md
+    Interactive questions completeness — phase-1-assess.md
+    Brief before compile — phase-3-compile.md
+  For context compaction recovery during multi-phase workflows, follow
+  {cf-studio-path}/.core/skills/studio/protocol.md § Compaction Recovery.
+```
 
 ## Overview
 
-This workflow generates execution plans, not direct results. Use it when work exceeds a single-context window, requires a long checklist, or involves multi-block implementation. Do **not** use it for small edits, direct execution, or work that fits in ~500 compiled lines. Output: `plan.toml` + `N` phase files in `{cf-studio-path}/.plans/{task-slug}/`.
+```text
+UNIT PlanOverview
+
+PURPOSE:
+  Define when and how to use the plan workflow.
+
+RULES:
+  - MUST use this workflow when work exceeds a single-context window, requires a long
+    checklist, or involves multi-block implementation
+  - MUST NOT use for small edits, direct execution, or work that fits in ~500 compiled lines
+  - Output: plan.toml + N phase files in {cf-studio-path}/.plans/{task-slug}/
+```
 
 ## Context Budget & Overflow Prevention (CRITICAL)
 
-- Open every applicable dependency file to inspect required sections, but do NOT retain full file bodies once the needed slices are extracted.
-- Do NOT load all kit dependencies at once; load incrementally per phase.
-- Do NOT hold all phase files in context simultaneously; compile and write one at a time.
-- If a phase compilation would exceed current context budget, checkpoint and use Compaction Recovery.
-- The plan manifest (`plan.toml`) is the recovery checkpoint and MUST be written before compilation.
-- If the raw task input itself exceeds `500` lines, materialize it under `{cf-studio-path}/.plans/{task-slug}/input/`, chunk it to `<= 300` lines per file, and treat the resulting chunk files as the authoritative raw-input package for the plan. When the source includes direct prompt text, preserve that raw prompt as `input/direct-prompt.md` before chunking. (Open, load, and follow `{cf-studio-path}/.core/requirements/raw-input-overflow.md` for the shared overflow rule.)
+```text
+UNIT PlanContextBudget
 
-Budget targets: Phase 0-1 `~200` lines, Phase 2 `~300`, Phase 3 `~500` per phase file, Phase 4 `~50`. The reference appendices below are runtime guidance only and do not consume plan-generation budget unless the user explicitly asks about execution behavior.
+PURPOSE:
+  Enforce context budget across all plan phases.
+
+RULES:
+  - MUST open every applicable dependency file to inspect required sections,
+    but MUST NOT retain full file bodies once needed slices are extracted
+  - MUST NOT load all kit dependencies at once; load incrementally per phase
+  - MUST NOT hold all phase files in context simultaneously; compile and write one at a time
+  - MUST checkpoint and use Compaction Recovery if a phase compilation would exceed context budget
+  - MUST write plan.toml (recovery checkpoint) before compilation
+  - IF raw task input > 500 lines:
+      materialize under {cf-studio-path}/.plans/{task-slug}/input/
+      chunk to <= 300 lines per file
+      treat resulting chunk files as authoritative raw-input package
+      IF source includes direct prompt text:
+        preserve raw prompt as input/direct-prompt.md before chunking
+      REQUIRE {cf-studio-path}/.core/requirements/raw-input-overflow.md is loaded and followed
+
+NOTES:
+  Budget targets: Phase 0-1 ~200 lines, Phase 2 ~300, Phase 3 ~500 per phase file, Phase 4 ~50.
+  Reference appendices below are runtime guidance only and do not consume plan-generation
+  budget unless the user explicitly asks about execution behavior.
+```
 
 ## Phase 0: Resolve Variables & Discover Tools
 
-Open, load, and follow `workflows/plan/phase-0-discover.md` to resolve runtime variables and build the dynamic tool map from the CLISPEC.
+```text
+UNIT PlanPhase0
+
+PURPOSE:
+  Resolve runtime variables and build the dynamic tool map from the CLISPEC.
+
+DO:
+  REQUIRE workflows/plan/phase-0-discover.md is loaded and followed
+```
 
 ## Phase 1: Assess Scope
 
-Open, load, and follow `workflows/plan/phase-1-assess.md` to identify task type, extract target-workflow navigation rules, estimate compiled size, scan for all user interaction points, and identify the target artifact and its slug.
+```text
+UNIT PlanPhase1
+
+PURPOSE:
+  Identify task type, extract target-workflow navigation rules, estimate compiled
+  size, scan for all user interaction points, and identify the target artifact and slug.
+
+DO:
+  REQUIRE workflows/plan/phase-1-assess.md is loaded and followed
+```
 
 ## Phase 2: Decompose
 
-Open, load, and follow `workflows/plan/phase-2-decompose.md` to select the plan lifecycle, run intermediate-results analysis, add review gates, and predict execution-context budget per phase.
+```text
+UNIT PlanPhase2
+
+PURPOSE:
+  Select plan lifecycle, run intermediate-results analysis, add review gates,
+  and predict execution-context budget per phase.
+
+DO:
+  REQUIRE workflows/plan/phase-2-decompose.md is loaded and followed
+```
 
 ## Phase 3: Compile Phase Files
 
-Open, load, and follow `workflows/plan/phase-3-compile.md` to write the plan manifest (`plan.toml`), generate compilation briefs, present the post-brief choice menu, produce phase files or phase-generation prompts, and validate compiled phase files. The Phase 3.3 dispatch payload MUST include `git_commit_mode`, `contributing_guide`, and `git_constraint` as specified in `phase-3-compile.md` § 3.3.
+```text
+UNIT PlanPhase3
+
+PURPOSE:
+  Write plan manifest, generate compilation briefs, present post-brief choice menu,
+  produce phase files or phase-generation prompts, and validate compiled phase files.
+
+DO:
+  REQUIRE workflows/plan/phase-3-compile.md is loaded and followed
+
+RULES:
+  - Phase 3.3 dispatch payload MUST include git_commit_mode, contributing_guide,
+    and git_constraint as specified in phase-3-compile.md § 3.3
+```
 
 ## Phase 4: Finalize Plan
 
-Open, load, and follow `workflows/plan/phase-4-finalize.md` WHEN the user selected option `[1]` or `[3]` in Phase 3.2A and all `phase-*` files were produced. Contains Phase 4.1 self-validation, the gated Phase 4.2 next-steps menu (native-execution branch `[1]`–`[5]`, fallback branch `[1]`–`[4]`), and the New-Chat Startup Prompt.
+```text
+UNIT PlanPhase4
+
+PURPOSE:
+  Run self-validation and emit gated next-steps menu after all phase files are produced.
+
+WHEN:
+  user selected option [1] or [3] in Phase 3.2A
+  AND all phase-* files were produced
+  AND plan.execution_status != "prompts_emitted"
+
+DO:
+  REQUIRE workflows/plan/phase-4-finalize.md is loaded and followed
+
+NOTES:
+  Contains Phase 4.1 self-validation, gated Phase 4.2 next-steps menu
+  (native-execution branch [1]–[5], fallback branch [1]–[4]), and New-Chat Startup Prompt.
+```
 
 ## Plan Lifecycle
 
-Open and follow `workflows/plan/plan-lifecycle.md` WHEN Phase 2.1 requires the user to select a plan lifecycle strategy.
+```text
+UNIT PlanLifecycle
+
+PURPOSE:
+  Load lifecycle strategy when Phase 2.1 requires user selection.
+
+WHEN:
+  Phase 2.1 requires the user to select a plan lifecycle strategy
+
+DO:
+  REQUIRE workflows/plan/plan-lifecycle.md is loaded and followed
+```
 
 ## Plan Reference
 
-Open and follow `workflows/plan/plan-reference.md` WHEN the user asks about plan execution, status, storage format, or the execution log (post-plan-creation reference).
+```text
+UNIT PlanReference
+
+PURPOSE:
+  Load execution, status, storage format, or execution log reference on demand.
+
+WHEN:
+  user asks about plan execution, status, storage format, or the execution log
+  (post-plan-creation reference)
+
+DO:
+  REQUIRE workflows/plan/plan-reference.md is loaded and followed
+```
 
 ## Completion Invariants
 
-Open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` § Completion Invariants before ending any response.
-(A /cf-plan run that compiled phase files MUST end with the Phase 4 next-steps menu or the Phase 3 brief-checkpoint menu.)
+```text
+UNIT PlanCompletionInvariants
+
+PURPOSE:
+  Enforce terminal block requirement before ending any plan response.
+
+DO:
+  REQUIRE {cf-studio-path}/.core/skills/studio/SKILL.md § Completion Invariants
+    is loaded and followed before ending any response
+
+INVARIANTS:
+  - MUST end with Phase 4 next-steps menu OR Phase 3 brief-checkpoint menu
+    when a /cf-plan run compiled phase files
+```

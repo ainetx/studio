@@ -7,4 +7,15 @@ version: 1.0
 purpose: Standalone auto-config command; pass-through to generate.md with AUTO_CONFIG mode
 ---
 
-LOAD skill `cf` IN GENERATE + AUTO_CONFIG mode, AUTO_CONFIG=true
+```text
+UNIT AutoConfigProxy
+
+PURPOSE:
+  Pass through to generate.md with AUTO_CONFIG mode active.
+
+DO:
+  LOAD skill `cf` IN GENERATE + AUTO_CONFIG mode, AUTO_CONFIG=true
+
+ON_ERROR:
+  load_failed -> EMIT "Cannot load target workflow — check that {cf-studio-path} is correctly set." STOP_TURN
+```

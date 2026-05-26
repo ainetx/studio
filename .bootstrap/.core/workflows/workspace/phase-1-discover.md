@@ -15,73 +15,148 @@ description: "Invoke when the workspace workflow enters Phase 1 to discover cand
 
 ## Phase 1: Discover
 
-**Goal**: find candidate repos.
+```text
+UNIT WorkspaceDiscover
 
-| Step | Action |
-|---|---|
-| Identify root | `{cfs_cmd} --json info` |
-| Scan nested repos | `{cfs_cmd} --json workspace-init --dry-run` |
-| Present results | show repo name/path, adapter found or not, and inferred role |
+PURPOSE:
+  Find candidate repos and collect repo selection and storage mode from the user.
+
+DO:
+  Run `{cfs_cmd} --json info` to identify root
+  Run `{cfs_cmd} --json workspace-init --dry-run` to scan nested repos
+  Present results: repo name/path, adapter found or not, and inferred role
+  IF results == zero:
+    CONTINUE WorkspaceDiscoverZeroResults
+  ELSE:
+    CONTINUE WorkspaceDiscoverDecisionPoint
+```
 
 ### Zero Results
 
-If discovery returns zero candidate repos, do not proceed to configuration or
-write an empty workspace config. Emit:
-
 ```text
-No workspace sources were discovered under {root}.
+UNIT WorkspaceDiscoverZeroResults
 
-Reply with one of:
-1. Provide a parent directory to scan.
-2. Add a source manually with name + path or URL. (URL sources force `standalone`; inline config does not support Git URL sources.)
-3. Stop workspace setup.
+PURPOSE:
+  Handle the case where no candidate repos were found; do not proceed to configuration.
+
+DO:
+  EMIT exactly:
+    No workspace sources were discovered under {root}.
+
+    Reply with one of:
+    1. Provide a parent directory to scan.
+    2. Add a source manually with name + path or URL. (URL sources force `standalone`; inline config does not support Git URL sources.)
+    3. Stop workspace setup.
+  WAIT user.reply
+  STOP_TURN
+
+MENU ZeroResultsMenu:
+  TITLE: No workspace sources discovered (reply 1, 2, or 3)
+  OPTIONS:
+    1 -> Receive new scan root from user
+         Re-run scan under new root
+         IF results == zero:
+           CONTINUE WorkspaceDiscoverZeroResults
+         ELSE:
+           CONTINUE WorkspaceDiscoverDecisionPoint
+    2 -> Receive manual source (name + path or URL) from user
+         Add to candidate list
+         CONTINUE WorkspaceDiscoverDecisionPoint
+    3 -> STOP_TURN
+  STOP_TOKEN:
+    treat as option 3; preserve scan results in state; no files written; end cleanly
+  INVALID:
+    EMIT "Reply with 1, 2, or 3."
+    WAIT user.reply
+    STOP_TURN
+
+RULES:
+  - MUST_NOT proceed to Phase 2 or write any config when results are zero
+  - MUST_NOT infer sources from unrelated directories
+  - MUST repeat this branch if re-scan also returns zero results
 ```
-
-(per `workflows/shared/stop-token-policy.md`)
-
-Only continue after the user supplies a new scan root or at least one manual
-source. If the new scan also returns zero results, repeat the same branch; do
-not infer sources from unrelated directories.
 
 ### Decision Point
 
-After presenting discovered repos, ask two explicit sequential prompts — one per decision. Do not combine them.
-
-**Prompt 1 — Repo Selection** (hard interaction boundary — MUST NOT proceed until the user replies):
-
 ```text
-Why this input is needed: select which discovered repositories become workspace sources before deciding where to store the config.
+UNIT WorkspaceDiscoverDecisionPoint
 
-Which repositories should be included as workspace sources?
+PURPOSE:
+  Collect repo selection (Prompt 1) and storage mode (Prompt 2) as two sequential hard interaction boundaries.
 
-{numbered list of discovered repos with name, path, adapter found/missing, and inferred role}
+DO:
+  EMIT Prompt 1 (repo selection)
+  WAIT user.reply
+  STOP_TURN
 
-Suggested default: include all repos that have the expected adapter.
+MENU RepoSelectionPrompt:
+  TITLE: |
+    Why this input is needed: select which discovered repositories become workspace sources before deciding where to store the config.
 
-Reply with comma- or space-separated numbers, names, or the word `all`.
+    Which repositories should be included as workspace sources?
+
+    {numbered list of discovered repos with name, path, adapter found/missing, and inferred role}
+
+    Suggested default: include all repos that have the expected adapter.
+
+    Reply with comma- or space-separated numbers, names, or the word `all`.
+  OPTIONS:
+    <selection> ->
+      Parse selection into included repos list
+      CONTINUE WorkspaceDiscoverStorageModePrompt
+  STOP_TOKEN:
+    cancel workspace setup immediately; do not carry partial or provisional source selection into Phase 2
+  INVALID:
+    EMIT "Reply with comma- or space-separated numbers, names, or the word `all`."
+    WAIT user.reply
+    STOP_TURN
+
+RULES:
+  - MUST_NOT proceed to storage mode prompt until user has replied to repo selection
+  - MUST_NOT carry partial or provisional selection into Phase 2 on stop token
 ```
 
-A stop token at this prompt cancels workspace setup immediately; do not carry a
-partial or provisional source selection into Phase 2.
-
-After the user replies, parse the selection into a list of included repos. Then
-ask Prompt 2.
-
-**Prompt 2 — Storage Mode** (hard interaction boundary — MUST NOT proceed until the user replies):
-
 ```text
-Why this input is needed: the storage mode determines where the workspace config lives and whether it can track Git URL sources.
+UNIT WorkspaceDiscoverStorageModePrompt
 
-Use a standalone workspace file or an inline workspace config?
+PURPOSE:
+  Collect storage mode (standalone vs inline) as a hard interaction boundary after repo selection.
 
-- `standalone` → write `.studio-workspace.toml` and keep workspace config separate from `config/core.toml`.
-- `inline` → write `[workspace]` inside `config/core.toml`. Not available when any selected source is a Git URL.
+DO:
+  EMIT Prompt 2 (storage mode)
+  WAIT user.reply
+  STOP_TURN
 
-Suggested: `standalone` unless you specifically want workspace config inside `config/core.toml`.
+MENU StorageModePrompt:
+  TITLE: |
+    Why this input is needed: the storage mode determines where the workspace config lives and whether it can track Git URL sources.
 
-Reply `standalone` or `inline`.
+    Use a standalone workspace file or an inline workspace config?
+
+    - `standalone` → write `.studio-workspace.toml` and keep workspace config separate from `config/core.toml`.
+    - `inline` → write `[workspace]` inside `config/core.toml`. Not available when any selected source is a Git URL.
+
+    Suggested: `standalone` unless you specifically want workspace config inside `config/core.toml`.
+
+    Reply `standalone` or `inline`.
+  OPTIONS:
+    standalone -> CONTINUE workflows/workspace/phase-2-configure.md
+    inline ->
+      IF any selected repo is a Git URL:
+        EMIT "inline config does not support Git URL sources — reply standalone."
+        WAIT user.reply
+        STOP_TURN
+      ELSE:
+        CONTINUE workflows/workspace/phase-2-configure.md
+  STOP_TOKEN:
+    cancel workspace setup; no files written
+  INVALID:
+    EMIT "Reply `standalone` or `inline`."
+    WAIT user.reply
+    STOP_TURN
+
+NOTES:
+  See workflows/shared/stop-token-policy.md for stop-token routing.
+  Both prompts are hard interaction boundaries; the workflow MUST NOT proceed until each reply is received.
+  Git URL sources always force standalone mode.
 ```
-
-If any selected repo is specified by Git URL, reject `inline` with: `inline config does not support Git URL sources — reply standalone.` and ask again.
-
-(per `workflows/shared/stop-token-policy.md`)

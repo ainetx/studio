@@ -19,54 +19,175 @@ version: 1.0
 
 <!-- /toc -->
 
-Open and follow `{cf-studio-path}/.core/requirements/plan-decomposition.md`.
+```text
+UNIT Phase2Init
 
-Compilation is split to minimize context: write the manifest, write briefs, then compile one phase at a time.
+PURPOSE:
+  Load decomposition requirements and split compilation to minimize context.
+
+STATE:
+  task_type: generate | analyze | implement
+    scope: workflow_run
+
+  lifecycle: gitignore | cleanup | archive | manual
+    scope: workflow_run
+
+DO:
+  OPEN {cf-studio-path}/.core/requirements/plan-decomposition.md
+  FOLLOW plan-decomposition.md
+  CONTINUE Phase2LifecycleSelection
+
+NOTES:
+  Compilation is split to minimize context: write the manifest, write briefs,
+  then compile one phase at a time.
+```
 
 ## 2.1 Select Plan Lifecycle (before finalizing phases)
 
-OPEN and follow `workflows/plan/plan-lifecycle.md` WHEN selecting the plan lifecycle strategy — presents the lifecycle menu and defines per-strategy normative handling rules.
+```text
+UNIT Phase2LifecycleSelection
 
-Select a strategy based on task type:
-- **generate**: load the target template, list H2 sections, group them into phases of `2-4` sections, and record phase boundaries.
-- **analyze**: load the target checklist, list checklist categories, group them by validation pipeline order (structural → semantic → cross-ref → traceability → synthesis), and record phase boundaries.
-- **implement**: load the FEATURE spec, list CDSL blocks, assign one block + tests per phase, add scaffolding and final integration phases, and record boundaries.
+PURPOSE:
+  Select a lifecycle strategy before finalizing phase boundaries.
 
-Output a phase list containing phase number and title, covered sections / categories / blocks, dependencies, `input_files`, `output_files`, assigned interaction points, and intermediate results needed by later phases. If `lifecycle = cleanup`, append the reserved final Cleanup phase after all delivery phases and make it depend on the last non-cleanup phase.
+DO:
+  OPEN workflows/plan/plan-lifecycle.md
+  FOLLOW plan-lifecycle.md (presents lifecycle menu, records selection, defines normative rules)
+  CONTINUE Phase2DecomposeByStrategy
+```
 
-When an `input/manifest.json` package exists and its `input_signature` matches `plan.input_signature`, assign the relevant `input/*.md` chunk files into `input_files` for the phases that need them. If the full raw-input package would overflow one phase, add dedicated ingestion or consolidation phases instead of attaching every chunk everywhere.
+```text
+UNIT Phase2DecomposeByStrategy
+
+PURPOSE:
+  Group work into phases using a task-type-specific strategy.
+
+DO:
+  MATCH task_type:
+    generate ->
+      LOAD target template
+      LIST H2 sections
+      GROUP into phases of 2-4 sections
+      RECORD phase boundaries
+    analyze ->
+      LOAD target checklist
+      LIST checklist categories
+      GROUP by validation pipeline order:
+        structural → semantic → cross-ref → traceability → synthesis
+      RECORD phase boundaries
+    implement ->
+      LOAD FEATURE spec
+      LIST CDSL blocks
+      ASSIGN one block + tests per phase
+      ADD scaffolding and final integration phases
+      RECORD boundaries
+
+  IF lifecycle = cleanup:
+    APPEND reserved final Cleanup phase after all delivery phases
+    MAKE Cleanup phase depend on the last non-cleanup phase
+
+  OUTPUT phase list containing:
+    phase number and title
+    covered sections / categories / blocks
+    dependencies
+    input_files
+    output_files
+    assigned interaction points
+    intermediate results needed by later phases
+
+  IF input/manifest.json package exists AND its input_signature matches plan.input_signature:
+    ASSIGN relevant input/*.md chunk files into input_files for phases that need them
+    IF full raw-input package would overflow one phase:
+      ADD dedicated ingestion or consolidation phases
+      FORBID attaching every chunk to every phase
+```
 
 ## Intermediate Results Analysis
 
-Identify data flow between phases: incremental artifact output, extracted data, analysis notes, generated IDs, and decision logs.
+```text
+UNIT Phase2IntermediateResultsAnalysis
 
-Rules: if any later phase needs a phase result, save it to `{cf-studio-path}/.plans/{task-slug}/out/{filename}`; if only the final artifact depends on it, write directly to the project path; if the final phase assembles prior outputs, list ALL required `inputs`; use names like `out/phase-{NN}-{what}.md`.
+PURPOSE:
+  Map data flow between phases to define intermediate artifact storage.
+
+RULES:
+  - IF any later phase needs a phase result:
+      SAVE to {cf-studio-path}/.plans/{task-slug}/out/{filename}
+  - IF only the final artifact depends on a result:
+      WRITE directly to the project path
+  - IF the final phase assembles prior outputs:
+      LIST ALL required inputs
+  - MUST use names like out/phase-{NN}-{what}.md
+```
 
 ## Review Phases
 
-If the source workflow requires review before writing, add review gates inside the relevant phase: the Output Format must present content for inspection and the Acceptance Criteria must include user approval. If the source requires a major consolidated review, add a dedicated Review phase that loads prior outputs, asks the required review questions, and blocks further progress until approved.
+```text
+UNIT Phase2ReviewPhases
+
+PURPOSE:
+  Insert review gates when the source workflow requires user approval before writing.
+
+RULES:
+  - IF source workflow requires review before writing:
+      ADD review gates inside the relevant phase
+      Output Format MUST present content for inspection
+      Acceptance Criteria MUST include user approval
+  - IF source workflow requires a major consolidated review:
+      ADD a dedicated Review phase that:
+        loads prior outputs
+        asks required review questions
+        blocks further progress until approved
+```
 
 ## Execution Context Prediction
 
-For each phase, estimate `phase_file_lines + sum(input_files lines) + sum(inputs lines) + estimated_output_lines`. Flags: `> 2000` = OVERFLOW → MUST split further; `1501-2000` = WARNING. Budget is `2000` lines max per phase. Re-split overflow phases until all are within budget, then report:
 ```text
-Decomposition ({strategy} strategy):
-  Phase 1: {title} — ~{N} lines (phase: {P}, runtime: {R}) 
-  Phase 2: {title} — ~{N} lines (phase: {P}, runtime: {R}) 
-  Phase 3: {title} — ~{N} lines (phase: {P}, runtime: {R}) 
-  ...
-  Phase N: {title} — ~{N} lines (phase: {P}, runtime: {R}) 
-  
-  Total phases: {N}
-  Overflow phases: 0
-  Budget: 2000 lines max per phase
-  
-  Explicit confirmation is required before writing `plan.toml` and brief files to disk.
-  Proceed with manifest + brief generation after any required raw-input materialization? [y/n]
-Reply with `y` or `n`.
-`y` → Suggested when the decomposition looks correct; write `plan.toml` and the compilation briefs.
-`n` → Stop before writing the manifest or briefs. No files are created. Report: "Decomposition declined — rework the phase boundaries and re-run `/cf-plan` when ready." This is a valid completion state for `/cf-plan`.
-```
-Wait for user confirmation before proceeding.
+UNIT Phase2ExecutionContextPrediction
 
-Include plan raw-input chunks from `input/` in `sum(input_files lines)` exactly as they will be read at runtime; do NOT hide them inside vague estimates.
+PURPOSE:
+  Verify all phases fit within the 2000-line context budget and obtain
+  user confirmation before writing any files.
+
+DO:
+  FOR each phase:
+    COMPUTE estimated_lines = phase_file_lines + sum(input_files lines) + sum(inputs lines) + estimated_output_lines
+    INCLUDE plan raw-input chunks from input/ in sum(input_files lines) exactly as read at runtime
+    CLASSIFY:
+      > 2000 -> OVERFLOW (MUST split further)
+      1501-2000 -> WARNING
+
+  RE-SPLIT all overflow phases until all are within budget
+
+  EMIT:
+    Decomposition ({strategy} strategy):
+      Phase 1: {title} — ~{N} lines (phase: {P}, runtime: {R})
+      Phase 2: {title} — ~{N} lines (phase: {P}, runtime: {R})
+      ...
+      Phase N: {title} — ~{N} lines (phase: {P}, runtime: {R})
+
+      Total phases: {N}
+      Overflow phases: 0
+      Budget: 2000 lines max per phase
+
+  EMIT_MENU DecompositionConfirmMenu
+  WAIT user.reply
+  STOP_TURN
+
+MENU DecompositionConfirmMenu:
+  TITLE: Explicit confirmation is required before writing `plan.toml` and brief files to disk.
+  PREAMBLE:
+    Proceed with manifest + brief generation after any required raw-input materialization? [y/n]
+  OPTIONS:
+    y -> CONTINUE Phase3Compile
+    n -> EMIT "Decomposition declined — rework the phase boundaries and re-run /cf-plan when ready."
+         STOP_TURN  (valid completion state for /cf-plan; no files created)
+  INVALID:
+    EMIT "Reply with y or n."
+    WAIT user.reply
+    STOP_TURN
+
+RULES:
+  - MUST wait for user confirmation before proceeding to Phase 3
+  - MUST NOT hide raw-input chunk estimates inside vague totals
+```

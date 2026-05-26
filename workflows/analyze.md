@@ -34,59 +34,299 @@ purpose: Universal workflow for analysing any Constructor Studio artifact or cod
 <!-- /toc -->
 
 ## Preamble
-Open, load, and follow `workflows/analyze/preamble.md` FIRST — it is an instruction file, not a reference. It performs route-only methodology selection plus storytelling trigger handling; code, bug-finding, consistency, and prompt methodologies are loaded only inside matched Phase 3 sub-agents.
+
+```text
+UNIT AnalyzePreamble
+
+PURPOSE:
+  Load preamble before any other analyze phase work.
+
+DO:
+  REQUIRE workflows/analyze/preamble.md is loaded and followed FIRST
+```
+
+NOTES: preamble.md performs route-only methodology selection plus storytelling
+trigger handling; code, bug-finding, consistency, and prompt methodologies are
+loaded only inside matched Phase 3 sub-agents.
 
 ## Rules Mode Behavior
-ALWAYS open, load, and follow `workflows/shared/mode-resolution.md` for the canonical STRICT/RELAXED behavioral block.
-ALWAYS open, load, and follow `workflows/shared/stop-token-policy.md` for the canonical stop-token policy.
+
+```text
+UNIT AnalyzeRulesMode
+
+PURPOSE:
+  Load canonical STRICT/RELAXED and stop-token behavior before any phase.
+
+DO:
+  REQUIRE workflows/shared/mode-resolution.md is loaded and followed
+  REQUIRE workflows/shared/stop-token-policy.md is loaded and followed
+```
 
 ## Rules
-ALWAYS open, load, and follow `workflows/analyze/rules.md` — the completion contract and pre-output self-check are mandatory; this file is unconditionally required.
+
+```text
+UNIT AnalyzeRules
+
+PURPOSE:
+  Load completion contract and pre-output self-check.
+
+DO:
+  REQUIRE workflows/analyze/rules.md is loaded and followed
+
+RULES:
+  - MUST load workflows/analyze/rules.md — unconditionally required
+```
 
 ## Overview
-ALWAYS open, load, and follow `workflows/analyze/overview.md` — mode resolution, command surface, prompt-review trigger semantics, and the actionable-findings → Remediation Handoff contract MUST be known before any phase executes.
+
+```text
+UNIT AnalyzeOverview
+
+PURPOSE:
+  Load mode resolution, command surface, prompt-review trigger semantics,
+  and actionable-findings contract before any phase executes.
+
+DO:
+  REQUIRE workflows/analyze/overview.md is loaded and followed
+
+RULES:
+  - MUST load workflows/analyze/overview.md before any phase executes
+```
 
 ## Context Budget & Overflow Prevention (CRITICAL)
-Open, load, and follow `workflows/analyze/context-budget.md` WHEN Phase 0 is about to load large documents OR when the estimated total context would exceed 1200 lines.
+
+```text
+UNIT AnalyzeContextBudget
+
+PURPOSE:
+  Enforce context budget before loading large documents.
+
+WHEN:
+  Phase 0 is about to load large documents
+  OR estimated total context > 1200 lines
+
+DO:
+  REQUIRE workflows/analyze/context-budget.md is loaded and followed
+```
 
 ## Phase 0: Ensure Dependencies
-Open, load, and follow `workflows/analyze/phase-0-dependencies.md` for Phase 0 + Phase 0.5 dependency resolution and the Mode Detection matrix.
+
+```text
+UNIT AnalyzePhase0
+
+PURPOSE:
+  Resolve dependencies and run Mode Detection matrix.
+
+DO:
+  REQUIRE workflows/analyze/phase-0-dependencies.md is loaded and followed
+```
+
+NOTES: Phase 0 + Phase 0.5 dependency resolution and the Mode Detection matrix
+are fully defined in phase-0-dependencies.md.
 
 ## Phase 0.5: Clarify Analysis Scope
-`workflows/analyze/phase-0.5-scope.md` is the canonical scope-clarification file. It is loaded conditionally by `workflows/analyze/phase-0-dependencies.md` (after the plan-escalation gate resolves, when scope, traceability, registry consistency, cross-refs, or consistency paths are unclear); do not load independently from the router.
+
+```text
+UNIT AnalyzePhase05
+
+PURPOSE:
+  Clarify scope when required by Phase 0 dependency resolution.
+
+WHEN:
+  phase-0-dependencies.md routes scope clarification
+
+DO:
+  REQUIRE workflows/analyze/phase-0.5-scope.md is loaded and followed
+
+RULES:
+  - MUST NOT load workflows/analyze/phase-0.5-scope.md independently from the router
+  - MUST load it only when phase-0-dependencies.md triggers it (after plan-escalation
+    gate resolves, when scope/traceability/registry-consistency/cross-refs paths are unclear)
+```
 
 ## Phase 1: File Existence Check
-Open, load, and follow `workflows/analyze/phase-1-file-check.md` for the existence-check rule across `{PATHS}`.
+
+```text
+UNIT AnalyzePhase1
+
+PURPOSE:
+  Run existence check across {PATHS}.
+
+DO:
+  REQUIRE workflows/analyze/phase-1-file-check.md is loaded and followed
+```
 
 ## Phase 2: Deterministic Gate
-Open, load, and follow `workflows/analyze/phase-2-det-gate.md` for the deterministic-validator dispatch and gate behavior. Skipped when `SEMANTIC_ONLY=true` (sub-file enforces; router proceeds directly to Phase 3 semantic review).
+
+```text
+UNIT AnalyzePhase2
+
+PURPOSE:
+  Dispatch deterministic validators and enforce gate behavior.
+
+DO:
+  REQUIRE workflows/analyze/phase-2-det-gate.md is loaded and followed
+
+RULES:
+  - MUST skip Phase 2 when SEMANTIC_ONLY=true (sub-file enforces; router proceeds to Phase 3)
+```
 
 ## Phase 2.5: Reviewer Plan
-Open, load, and follow `workflows/analyze/phase-2.5-reviewer-plan.md` for the mandatory reviewer-decomposition step that runs when `SUB_AGENT_SESSION_APPROVED=true` AND `INLINE_FALLBACK=false`. The sub-file enforces its own auto-skip conditions (`INLINE_FALLBACK=true`, `EXPLAIN_MODE=true`, no active methodology flag). It produces `REVIEWER_EXECUTION_PLAN`, which Phase 3 consumes for parallel methodology × path-partition dispatch.
+
+```text
+UNIT AnalyzePhase25
+
+PURPOSE:
+  Produce REVIEWER_EXECUTION_PLAN for parallel dispatch in Phase 3.
+
+WHEN:
+  SUB_AGENT_SESSION_APPROVED == true
+  AND INLINE_FALLBACK == false
+
+DO:
+  REQUIRE workflows/analyze/phase-2.5-reviewer-plan.md is loaded and followed
+
+RULES:
+  - MUST auto-skip when INLINE_FALLBACK=true, EXPLAIN_MODE=true, or no active methodology flag
+    (sub-file enforces its own auto-skip conditions)
+
+NOTES:
+  SUB_AGENT_SESSION_APPROVED and INLINE_FALLBACK are declared in {cf-studio-path}/.core/skills/studio/SKILL.md § Session Sub-Agent Approval Gate.
+```
 
 ## Phase 3: Semantic Review (Conditional)
-Open, load, and follow `workflows/analyze/phase-3-semantic.md` for the reviewer dispatch matrix, namespaced finding IDs, rules-mode behavior, and the EXPLAIN_MODE boundary.
+
+```text
+UNIT AnalyzePhase3
+
+PURPOSE:
+  Run reviewer dispatch matrix, namespaced finding IDs, rules-mode behavior,
+  and EXPLAIN_MODE boundary.
+
+DO:
+  REQUIRE workflows/analyze/phase-3-semantic.md is loaded and followed
+```
 
 ## Phase 3 → Phase 4 Checkpoint
-Open, load, and follow `workflows/analyze/phase-3-to-4-checkpoint.md` for the context-budget recovery checkpoint between semantic review and output.
+
+```text
+UNIT AnalyzePhase3to4
+
+PURPOSE:
+  Run context-budget recovery checkpoint between semantic review and output.
+
+DO:
+  REQUIRE workflows/analyze/phase-3-to-4-checkpoint.md is loaded and followed
+```
 
 ## Phase 4: Output
-Open, load, and follow `workflows/analyze/phase-4-output/index.md` WHEN semantic review (or deterministic-gate FAIL) is ready to emit output; the dispatcher selects the schema sub-file by mode and routes the `Remediation Handoff` menu when actionable findings exist.
+
+```text
+UNIT AnalyzePhase4
+
+PURPOSE:
+  Emit output when semantic review or deterministic-gate FAIL is ready.
+
+WHEN:
+  semantic review is complete
+  OR deterministic gate returned FAIL
+
+DO:
+  REQUIRE workflows/analyze/phase-4-output/index.md is loaded and followed
+
+NOTES:
+  Dispatcher selects schema sub-file by mode and routes Remediation Handoff
+  menu when actionable findings exist.
+```
 
 ## Phase 5: Offer Next Steps
-Open, load, and follow `workflows/analyze/phase-5-next-steps.md` WHEN overall result is PASS and EXPLAIN_MODE=false.
+
+```text
+UNIT AnalyzePhase5
+
+PURPOSE:
+  Offer next steps when overall result is PASS and not in EXPLAIN mode.
+
+WHEN:
+  overall result == PASS
+  AND EXPLAIN_MODE == false
+
+DO:
+  REQUIRE workflows/analyze/phase-5-next-steps.md is loaded and followed
+```
 
 ## Terminal Block Invariant
-The analyze response MUST NOT end without one of: the `Remediation Handoff` menu (when actionable findings exist or deterministic gate FAIL) or the Phase 5 `next-steps` menu (PASS path, `EXPLAIN_MODE=false`). If neither `workflows/analyze/phase-4-output/index.md` nor `workflows/analyze/phase-5-next-steps.md` is loadable, STOP and surface the missing file before emitting any final response.
+
+```text
+UNIT AnalyzeTerminal
+
+PURPOSE:
+  Enforce that every analyze response ends with the correct terminal block.
+
+INVARIANTS:
+  - MUST NOT end response without one of:
+      Remediation Handoff menu (when actionable findings exist or deterministic gate FAIL)
+      Phase 5 next-steps menu (PASS path, EXPLAIN_MODE=false)
+  - IF workflows/analyze/phase-4-output/index.md OR workflows/analyze/phase-5-next-steps.md
+    is not loadable:
+      STOP and surface the missing file before emitting any final response
+```
 
 ## State Summary
-Open, load, and follow `workflows/analyze/state-summary.md` for the target-type × template / checklist / design matrix.
+
+```text
+UNIT AnalyzeStateSummary
+
+PURPOSE:
+  Load target-type × template / checklist / design matrix.
+
+DO:
+  REQUIRE workflows/analyze/state-summary.md is loaded and followed
+```
 
 ## Key Principles
-Open, load, and follow `workflows/analyze/key-principles.md` WHEN finalizing the response.
+
+```text
+UNIT AnalyzeKeyPrinciples
+
+PURPOSE:
+  Load key principles when finalizing the response.
+
+WHEN:
+  finalizing the response
+
+DO:
+  REQUIRE workflows/analyze/key-principles.md is loaded and followed
+```
 
 ## Agent Self-Test (STRICT mode — AFTER completing work)
-Open, load, and follow `workflows/analyze/agent-self-test.md` WHEN STRICT mode finalization must answer the canonical self-test questions (also referenced from Standard Analysis Output section 4).
+
+```text
+UNIT AnalyzeSelfTest
+
+PURPOSE:
+  Answer canonical self-test questions in STRICT mode after completing work.
+
+WHEN:
+  STRICT mode finalization requires self-test
+
+DO:
+  REQUIRE workflows/analyze/agent-self-test.md is loaded and followed
+```
+
+NOTES: Also referenced from Standard Analysis Output section 4.
 
 ## Validation Criteria
-Open, load, and follow `workflows/analyze/validation-criteria.md` WHEN the post-flight checklist must be verified before ending the response.
+
+```text
+UNIT AnalyzeValidation
+
+PURPOSE:
+  Verify post-flight checklist before ending the response.
+
+WHEN:
+  post-flight checklist must be verified before ending the response
+
+DO:
+  REQUIRE workflows/analyze/validation-criteria.md is loaded and followed
+```

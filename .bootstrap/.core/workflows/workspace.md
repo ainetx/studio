@@ -17,45 +17,94 @@ purpose: Guide workspace federation setup for cross-repo traceability
 
 <!-- /toc -->
 
-ALWAYS open and follow `{cf-studio-path}/config/AGENTS.md` FIRST.
-ALWAYS open and follow `{cf-studio-path}/.gen/AGENTS.md` after
-config/AGENTS.md.
-ALWAYS open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` FIRST WHEN cfs_mode is off.
-ALWAYS open and follow `workflows/shared/stop-token-policy.md` WHEN any workspace decision prompt is emitted.
-**Type**: Operation
-**Role**: Any
-**Output**: `.studio-workspace.toml` or inline `[workspace]` in
-`config/core.toml`
+```text
+UNIT WorkspaceBootstrap
+
+PURPOSE:
+  Load required files before any workspace phase work begins.
+
+DO:
+  REQUIRE {cf-studio-path}/config/AGENTS.md is loaded and followed FIRST
+  REQUIRE {cf-studio-path}/.gen/AGENTS.md is loaded and followed after config/AGENTS.md
+  IF {cfs_mode} == off:
+    REQUIRE {cf-studio-path}/.core/skills/studio/SKILL.md is loaded and followed FIRST
+  REQUIRE workflows/shared/stop-token-policy.md is loaded and followed
+    WHEN any workspace decision prompt is emitted
+
+RULES:
+  - MUST load config/AGENTS.md first
+  - MUST load .gen/AGENTS.md after config/AGENTS.md
+  - MUST load SKILL.md first when cfs_mode is off
+  - MUST load stop-token-policy.md before any workspace decision prompt
+
+NOTES:
+  Type: Operation. Role: Any.
+  Output: .studio-workspace.toml or inline [workspace] in config/core.toml
+```
 
 ## Overview
 
-Use this workflow to discover workspace sources, confirm roles/settings, write
-workspace config, and validate cross-repo traceability.
+```text
+UNIT WorkspaceOverview
 
-| User intent | Route |
-|---|---|
-| Create/configure workspace | `generate.md` → `workspace.md` |
-| Check workspace status | `analyze.md` with workspace target |
+PURPOSE:
+  Discover workspace sources, confirm roles/settings, write workspace config,
+  and validate cross-repo traceability.
 
-Direct workspace quick commands — `workspace-info`, `workspace-add`, `workspace-sync` invoked directly via {cfs_cmd} for read-only or single-source-add use — skip the full Protocol Guard chain (do not require {cf-studio-path}/.gen/AGENTS.md load); they still require write-confirmation when write-capable. The full workspace setup workflow (Phase 0–4) is unaffected and uses the standard Protocol Guard.
+RULES:
+  - Generate map of current project: route generate.md → workspace.md
+  - Check workspace status: route analyze.md with workspace target
+  - Direct workspace quick commands (workspace-info, workspace-add, workspace-sync)
+    invoked via {cfs_cmd} for read-only or single-source-add use:
+      MUST skip full Protocol Guard chain
+      MUST NOT require {cf-studio-path}/.gen/AGENTS.md load
+      MUST still require write-confirmation when write-capable
+  - Full workspace setup workflow (Phase 0–4) is unaffected and uses standard Protocol Guard
+```
 
 ## Phase 0: Router
 
-Load only the phase fragment needed for the current step:
+```text
+UNIT WorkspaceRouter
 
-| Phase | Load WHEN |
-|---|---|
-| `workflows/workspace/phase-1-discover.md` | discovering candidate repositories or presenting zero-results guidance |
-| `workflows/workspace/phase-2-configure.md` | confirming selected source settings and workspace location |
-| `workflows/workspace/phase-3-generate.md` | writing standalone or inline workspace configuration |
-| `workflows/workspace/phase-4-validate.md` | validating reachability, adapters, and cross-repo behavior |
-| `workflows/workspace/next-steps.md` | presenting post-setup next steps |
+PURPOSE:
+  Load only the phase fragment needed for the current step.
 
-Run phases in order for workspace setup. For status-only requests, route to the
-analyze workflow with the workspace target instead of loading all setup phases.
+MENU WorkspacePhaseRouter:
+  TITLE: Load phase by current step (machine reference — not a user-facing menu)
+  OPTIONS:
+    discovering candidate repositories or presenting zero-results guidance ->
+      LOAD workflows/workspace/phase-1-discover.md
+    confirming selected source settings and workspace location ->
+      LOAD workflows/workspace/phase-2-configure.md
+    writing standalone or inline workspace configuration ->
+      LOAD workflows/workspace/phase-3-generate.md
+    validating reachability, adapters, and cross-repo behavior ->
+      LOAD workflows/workspace/phase-4-validate.md
+    presenting post-setup next steps ->
+      LOAD workflows/workspace/next-steps.md
+
+  INVALID:
+    EMIT "Unrecognised phase step. Reply with one of: discovering candidate repositories, confirming selected source settings, writing workspace configuration, validating reachability, or presenting post-setup next steps."
+    WAIT user.reply
+    STOP_TURN
+
+RULES:
+  - MUST run phases in order for workspace setup
+  - MUST route to analyze workflow with workspace target for status-only requests
+    (do NOT load all setup phases)
+```
 
 ## Runtime Loading Rule
 
-This router must remain compact. Do not inline phase bodies here. If a future
-workspace phase grows, create or update a `workflows/workspace/phase-*.md`
-fragment and add only a router row above.
+```text
+UNIT WorkspaceRuntimeLoading
+
+PURPOSE:
+  Keep this router compact and prevent phase-body inlining.
+
+RULES:
+  - MUST NOT inline phase bodies in this router file
+  - MUST create or update a workflows/workspace/phase-*.md fragment for any new phase
+    and add only a router row in WorkspacePhaseRouter above
+```

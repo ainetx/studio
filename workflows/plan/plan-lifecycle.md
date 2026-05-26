@@ -18,29 +18,177 @@ version: 1.0
 
 ## Lifecycle Menu
 
-Ask how completed plans should be handled:
 ```text
-Plan files are stored in {cf-studio-path}/.plans/{task-slug}/.
-How should completed plans be handled?
-  [1] .gitignore — keep plan files in place and ensure .plans/ is gitignored
-  [2] Cleanup phase — add a final Cleanup phase that removes compiled plan artifacts after delivery phases pass
-  [3] Archive — move the plan directory to {cf-studio-path}/.plans/.archive/
-  [4] Manual — stop after execution and ask me what to do with the plan files
-Reply with `1`, `2`, `3`, or `4`.
-[1] Suggested default for most projects — keep plan files available locally and ensure `.plans/` stays gitignored.
-[2] Remove compiled plan artifacts automatically after successful delivery.
-[3] Keep the plan, but move it into the archive location after completion.
-[4] Ask again at the end instead of choosing a lifecycle strategy now.
+UNIT PlanLifecycleMenu
+
+PURPOSE:
+  Obtain the user's lifecycle strategy choice before phase boundaries are finalized.
+
+DO:
+  EMIT_MENU LifecycleChoiceMenu
+  WAIT user.reply
+  STOP_TURN
+
+MENU LifecycleChoiceMenu:
+  TITLE: How should completed plans be handled?
+  PREAMBLE:
+    Plan files are stored in {cf-studio-path}/.plans/{task-slug}/.
+  OPTIONS:
+    1 -> SET lifecycle = "gitignore"
+         CONTINUE PlanLifecycleGitignore
+         ([1] Suggested default for most projects — keep plan files available locally
+          and ensure .plans/ stays gitignored.)
+    2 -> SET lifecycle = "cleanup"
+         CONTINUE PlanLifecycleCleanup
+         ([2] Remove compiled plan artifacts automatically after successful delivery.)
+    3 -> SET lifecycle = "archive"
+         CONTINUE PlanLifecycleArchive
+         ([3] Keep the plan, but move it into the archive location after completion.)
+    4 -> SET lifecycle = "manual"
+         CONTINUE PlanLifecycleManual
+         ([4] Ask again at the end instead of choosing a lifecycle strategy now.)
+  PREAMBLE_REPLY: Reply with `1`, `2`, `3`, or `4`.
+  INVALID:
+    EMIT "Reply with 1, 2, 3, or 4."
+    WAIT user.reply
+    STOP_TURN
 ```
 
 ## Per-Strategy Normative Rules
 
-Record `lifecycle = "gitignore" | "cleanup" | "archive" | "manual"`. Lifecycle handling is deterministic and single-path:
-- `gitignore`: planning-time repository hygiene. Ensure `.plans/` is gitignored before or immediately after the first plan file write. The deterministic step is: inspect the active repo ignore targets (`.gitignore` first, then `.git/info/exclude` when project policy prefers local-only ignores), verify whether an existing `.plans/` rule already covers the plan directory, and add the narrowest acceptable ignore rule if not. Set `plan.lifecycle_status = "done"` as soon as the ignore rule exists. No post-completion plan-file lifecycle decision prompt is allowed (this does NOT prohibit pre-execution modification menus like Phase 4.2 [5] Modify plan).
-- `cleanup`: reserve a final Cleanup phase now so `total_phases`, dependencies, briefs, and budget estimates are structurally correct before `plan.toml` is written. After all non-lifecycle phases are `done`, set `plan.lifecycle_status = "ready"`, execute the Cleanup phase, then set `plan.lifecycle_status = "done"` only if cleanup succeeds. If cleanup fails (file removal error, permission error, or unexpected state), set `plan.lifecycle_status = "failed"`, report the specific error and affected paths, and offer manual intervention: list the files that could not be removed and ask the user to remove them manually or retry. Partial success (some files removed, others not) sets `plan.lifecycle_status = 'partial'`, lists the files that were removed AND the files that could not be removed, and asks the user to manually remove the residual files or retry. The orchestrator MUST distinguish 'partial' from 'failed' (cleanup never attempted) when reporting status. The Cleanup phase removes `brief-*`, `phase-*`, and `out/`; `plan.toml` remains as the terminal receipt. Those removed plan artifacts are intentional terminal lifecycle cleanup, not delivery regressions: later recovery/audit MUST treat them as exempt when `lifecycle = "cleanup"` and `plan.lifecycle_status = "done"`, and MUST NOT reopen delivery phases or replay Cleanup solely because those files are absent. No post-completion plan-file lifecycle decision prompt is allowed (this does NOT prohibit pre-execution modification menus like Phase 4.2 [5] Modify plan).
-- `archive`: after all phases are `done`, set `plan.lifecycle_status = "ready"`, move the plan directory to `{cf-studio-path}/.plans/.archive/{task-slug}/`, then update `plan.active_plan_dir` and set `plan.lifecycle_status = "done"` in the moved manifest. If the archive move target already exists, append a numeric suffix to the archive directory name (`-2`, `-3`, …) mirroring the active-plan collision rule, then complete the move. Set `plan.lifecycle_status = "done"` with the final archive path recorded. Only permission errors and disk errors set `plan.lifecycle_status = "failed"`. If the archive move fails with a permission error or disk error, report the specific error and source path, and offer manual intervention: ask the user to move the directory manually or choose a different lifecycle strategy. No post-completion plan-file lifecycle decision prompt is allowed (this does NOT prohibit pre-execution modification menus like Phase 4.2 [5] Modify plan).
-- `manual`: do nothing automatically. After all phases are `done`, set `plan.lifecycle_status = "manual_action_required"` and present exactly one keep/archive/delete choice. This is the only strategy that allows a post-completion plan-file decision prompt.
+```text
+UNIT PlanLifecycleGitignore
+
+PURPOSE:
+  Repository-hygiene lifecycle: ensure .plans/ is gitignored.
+
+DO:
+  INSPECT active repo ignore targets (.gitignore first, then .git/info/exclude)
+  VERIFY whether an existing .plans/ rule already covers the plan directory
+  IF no rule exists:
+    SET CF_PHASE_GATE = released_for_orchestrator_write
+      scope = {project_root}/.gitignore
+    ADD narrowest acceptable ignore rule
+    SET CF_PHASE_GATE = armed
+  SET plan.lifecycle_status = "done"
+
+RULES:
+  - MUST perform gitignore step before or immediately after the first plan file write
+  - MUST_NOT present a post-completion plan-file lifecycle decision prompt
+    (does NOT prohibit pre-execution modification menus like Phase 4.2 [5] Modify plan)
+```
+
+```text
+UNIT PlanLifecycleCleanup
+
+PURPOSE:
+  Reserve a Cleanup phase and execute it after all delivery phases complete.
+
+DO:
+  RESERVE a final Cleanup phase now so total_phases, dependencies, briefs, and
+  budget estimates are structurally correct before plan.toml is written
+
+  AFTER all non-lifecycle phases are done:
+    SET plan.lifecycle_status = "ready"
+    EXECUTE Cleanup phase (removes brief-*, phase-*, out/; plan.toml remains as terminal receipt)
+
+    IF cleanup succeeds:
+      SET plan.lifecycle_status = "done"
+
+    IF cleanup fails (file removal error, permission error, unexpected state):
+      SET plan.lifecycle_status = "failed"
+      EMIT specific error and affected paths
+      OFFER manual intervention: list files that could not be removed and ask user to remove manually or retry
+
+    IF partial success (some files removed, others not):
+      SET plan.lifecycle_status = "partial"
+      EMIT list of files removed AND list of files that could not be removed
+      ASK user to manually remove residual files or retry
+
+RULES:
+  - MUST distinguish "partial" from "failed" (failed = cleanup never attempted)
+  - MUST NOT present a post-completion plan-file lifecycle decision prompt
+    (does NOT prohibit pre-execution modification menus like Phase 4.2 [5] Modify plan)
+  - Cleanup removals of brief-*, phase-*, and out/ are intentional terminal lifecycle cleanup —
+    recovery/audit MUST treat them as exempt when lifecycle = "cleanup" AND plan.lifecycle_status = "done"
+  - MUST NOT reopen delivery phases or replay Cleanup solely because those files are absent
+```
+
+```text
+UNIT PlanLifecycleArchive
+
+PURPOSE:
+  Move the completed plan directory to the archive location.
+
+DO:
+  AFTER all phases are done:
+    SET plan.lifecycle_status = "ready"
+    MOVE plan directory to {cf-studio-path}/.plans/.archive/{task-slug}/
+
+    IF archive move target already exists:
+      APPEND numeric suffix to archive directory name (-2, -3, ...) mirroring active-plan collision rule
+      COMPLETE the move
+
+    SET plan.active_plan_dir = {final archive path}
+    SET plan.lifecycle_status = "done"  (with final archive path recorded in moved manifest)
+
+    IF archive move fails with permission error or disk error:
+      SET plan.lifecycle_status = "failed"
+      EMIT specific error and source path
+      OFFER manual intervention: ask user to move directory manually or choose a different lifecycle strategy
+
+RULES:
+  - Only permission errors and disk errors set plan.lifecycle_status = "failed"
+  - MUST NOT present a post-completion plan-file lifecycle decision prompt
+    (does NOT prohibit pre-execution modification menus like Phase 4.2 [5] Modify plan)
+```
+
+```text
+UNIT PlanLifecycleManual
+
+PURPOSE:
+  Defer lifecycle decision until after all phases complete.
+
+DO:
+  AFTER all phases are done:
+    SET plan.lifecycle_status = "manual_action_required"
+    PRESENT exactly one keep/archive/delete choice
+
+RULES:
+  - This is the ONLY strategy that allows a post-completion plan-file decision prompt
+```
 
 ### Interrupted Lifecycle Recovery
 
-If `plan.lifecycle_status = "in_progress"` is observed on resume (e.g., the agent was interrupted mid-cleanup or mid-archive), do NOT re-run the lifecycle action automatically. Instead, surface the residual state to the user per `workflows/plan/plan-reference.md` § 5.7 Abandoned Plan Recovery, and ask whether to (1) retry the lifecycle action, (2) mark it as `failed` and leave residual artifacts in place, or (3) leave `lifecycle_status` as `in_progress` for later manual handling. Cleanup partial-state: residual deletes are safe to retry; archive partial-state requires inspecting the destination before retry.
+```text
+UNIT PlanLifecycleInterruptedRecovery
+
+PURPOSE:
+  Handle lifecycle_status = "in_progress" observed on resume without re-running
+  the lifecycle action automatically.
+
+WHEN:
+  plan.lifecycle_status == "in_progress" on resume
+
+DO:
+  SURFACE residual state to user per workflows/plan/plan-reference.md § 5.7 Abandoned Plan Recovery
+  EMIT_MENU InterruptedLifecycleMenu
+  WAIT user.reply
+  STOP_TURN
+
+MENU InterruptedLifecycleMenu:
+  TITLE: Interrupted lifecycle detected — how to proceed?
+  OPTIONS:
+    1 -> RETRY the lifecycle action
+    2 -> SET plan.lifecycle_status = "failed"
+         LEAVE residual artifacts in place
+    3 -> LEAVE plan.lifecycle_status = "in_progress" for later manual handling
+  INVALID:
+    EMIT "Reply with 1, 2, or 3."
+    WAIT user.reply
+    STOP_TURN
+
+NOTES:
+  Cleanup partial-state: residual deletes are safe to retry.
+  Archive partial-state: inspect the destination before retry.
+```

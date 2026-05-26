@@ -6,6 +6,36 @@ loaded_by: workflows/analyze.md
 version: 1.0
 ---
 
+```text
+UNIT AnalyzePhase4OutputDispatcher
+
+PURPOSE:
+  Select the output schema sub-file matching the active mode and route the
+  remediation handoff when applicable.
+
+RULES:
+  - MUST print to chat only; MUST_NOT create files
+  - MUST load exactly one output sub-file
+  - MUST append remediation-handoff.md after the selected schema when actionable
+    findings exist AND EXPLAIN_MODE=false
+  - MUST_NOT emit Fix Prompt or Plan Prompt from this unit (those are emitted by
+    remediation-handoff.md on demand)
+  - MUST render Prompt Review Partial Checkpoint block (not full schema) when
+    PROMPT_REVIEW=true AND checkpoint.type=PARTIAL_CHECKPOINT
+  - MUST return to router after all sub-files emit output; continue with Phase 5,
+    Key Principles, Agent Self-Test, and Validation Criteria as applicable
+
+DO:
+  IF EXPLAIN_MODE == false AND PROMPT_REVIEW == false AND PROMPT_BUG_REVIEW == false:
+    LOAD workflows/analyze/phase-4-output/output-standard.md
+  IF PROMPT_REVIEW == true OR PROMPT_BUG_REVIEW == true:
+    LOAD workflows/analyze/phase-4-output/output-prompt-review.md
+  IF EXPLAIN_MODE == true:
+    LOAD workflows/analyze/phase-4-output/output-storytelling.md
+  IF actionable findings exist AND EXPLAIN_MODE == false:
+    LOAD workflows/analyze/phase-4-output/remediation-handoff.md
+```
+
 ## Phase 4: Output
 
 Print to chat only; create no files. This file is the mode → schema selector; load exactly one output sub-file plus the remediation handoff when applicable.

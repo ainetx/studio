@@ -101,59 +101,51 @@ version: 1.1
 }
 ```
 
-`round_count` is incremented by the orchestrator after every completed round
-(both `kind="topic"` and `kind="challenge"`). `BRAINSTORM_MAX_ROUNDS` defaults
-to `10`. It is configurable: when the user replies `yes:N` to the offer (e.g.
-`yes:15`), the orchestrator sets `BRAINSTORM_MAX_ROUNDS = N` before entering
-the round loop. The cap-check and cap-prompt behavior live in
-`workflows/generate/phase-0.7/round-loop.md` § Round loop.
+```text
+UNIT BrainstormStateRules
 
-`rules_loaded` is a boolean, not an implied constant. Set it to `true` only
-when `kit_rules_path` was resolved and loaded for this brainstorm session; set
-it to `false` for RELAXED/no-kit sessions or any chat-only exploratory run
-without kit rules. When dispatching brainstorm facilitator or expert agents,
-include `kit_rules_path` alongside `rules_loaded` so the receiver can
-distinguish "rules intentionally absent" from "rules required but missing".
+PURPOSE:
+  Define canonical rules for state field semantics and update behavior.
 
-`topic_current` is the full topic object used by the round-loop dispatch
-contract, or `null` before the first topic is chosen. Do not store only the
-topic id string; `topic_history` is the id-only history.
-
-`rounds[].kind` is `"topic"` (default) for normal exploratory rounds.
-`kind="challenge"` rounds re-open the immediately-preceding answer-writing round's
-decisions for cross-expert pushback. Challenge rounds may challenge the
-accepted/custom answers from a prior challenge round. Only `kind="topic"`
-rounds append to `topic_history` and refresh `next_topic_proposals`;
-`kind="challenge"` rounds reuse the same `topic` as the round they are
-challenging and leave `topic_history` untouched.
-
-`rounds[].answer_keys` lists the `decisions` keys whose value was actually
-written by that round (used by the next iteration to compute the challenge
-scope without re-walking the answers list). On `kind="challenge"` rounds,
-`answer_keys` lists ONLY keys overwritten by an `accept` / `<custom>` answer;
-`keep` / `skip` answers are excluded (the value was re-affirmed, not
-rewritten). On `kind="topic"` rounds, `skip` answers are excluded for the
-same reason (no write happened). The field is the empty list when the user
-skipped/kept every question, which suppresses option `C` on the next
-post-round menu.
-
-`rounds[].challenged_decisions` is set only on `kind="challenge"` rounds: a
-snapshot of `{ key: value }` pairs from `state.decisions` *at the moment the
-challenge round started*, scoped to the keys written by the immediately-preceding
-answer-writing round (i.e. `state.rounds[-1].answer_keys` when the user chose
-`C`). The snapshot is what the panel saw; later overwrites do not retro-edit it.
-
-`next_topic_proposals` is the deduped/merged list emitted by the most recent
-`kind="topic"` round. It survives subsequent `kind="challenge"` rounds so the
-post-round menu can keep offering the same next-topic options without
-re-dispatching the panel just to refresh proposals.
-
-Decision overwrite semantics: when a challenge-round's answer accepts a
-counter-proposal (or the user supplies a custom value), `state.decisions[key]`
-is **overwritten** in place — prior values are not versioned at the
-`decisions` level. The `rounds[]` array preserves the audit trail
-(every value the panel produced and the user accepted lives in
-`rounds[*].answers`).
+RULES:
+  round_count:
+    - MUST be incremented by orchestrator after every completed round
+      (both kind="topic" and kind="challenge")
+  BRAINSTORM_MAX_ROUNDS:
+    - default: 10
+    - configurable: SET to N when user replies yes:N to offer
+  rules_loaded:
+    - MUST be set true ONLY when kit_rules_path was resolved and loaded
+    - MUST be false for RELAXED/no-kit sessions or chat-only exploratory runs
+    - MUST include kit_rules_path alongside rules_loaded in every brainstorm
+      facilitator or expert dispatch
+  topic_current:
+    - MUST store full topic object {id, text, section}; MUST NOT store only id
+    - topic_history stores id-only history
+    - null before first topic is chosen
+  rounds[].kind:
+    - "topic": normal exploratory; appends to topic_history;
+      refreshes next_topic_proposals
+    - "challenge": re-opens preceding round's decisions; reuses same topic;
+      does NOT append to topic_history; does NOT refresh next_topic_proposals
+  rounds[].answer_keys:
+    - topic-rounds: lists decisions keys written (skip answers excluded)
+    - challenge-rounds: lists ONLY keys overwritten by accept/<custom>;
+      keep/skip excluded; empty list when user skipped/kept every question
+      (suppresses option C on next post-round menu)
+  rounds[].challenged_decisions:
+    - set ONLY on kind="challenge" rounds
+    - snapshot of {key: value} at challenge start, scoped to
+      state.rounds[-1].answer_keys (the preceding answer-writing round)
+    - later overwrites do NOT retro-edit it
+  next_topic_proposals:
+    - deduped/merged list from most recent kind="topic" round
+    - survives subsequent kind="challenge" rounds
+  decisions overwrite semantics:
+    - challenge-round accept/custom OVERWRITES state.decisions[key] in place
+    - prior values not versioned at decisions level
+    - rounds[] array preserves audit trail
+```
 
 ---
 
@@ -161,167 +153,205 @@ is **overwritten** in place — prior values are not versioned at the
 
 #### panel_mode (orchestration strategy)
 
-**Field:** `rounds[].panel_mode` (required, non-null)  
-**Type:** enum `{fan-out, single-agent}`  
-**Default:** `"single-agent"`
+```text
+UNIT BrainstormPanelModeField
 
-Controls how the orchestrator coordinates expert agents during a round:
+PURPOSE:
+  Define rounds[].panel_mode field semantics.
 
-- **`single-agent`** (default): Dispatch the `cf-brainstorm-panel` agent once per round (not per expert). One expert is designated primary; secondary experts deliberate inside the same agent and provide critique via the `protocol` field. One cohesive sub-agent context per round; host-independent (no native fan-out required); INLINE_FALLBACK is a no-op.
-- **`fan-out`**: Dispatch all relevant panel members in parallel using `cf-brainstorm-expert`. Each expert independently produces questions/contributions; the orchestrator collects all responses before aggregation. No inter-expert live communication. Requires a host with native sub-agent parallelism (otherwise degrades to sequential via INLINE_FALLBACK).
+STATE:
+  rounds[].panel_mode: fan-out | single-agent
+    default: single-agent
 
-The **single field** constraint means each round has exactly one orchestration strategy; mixed strategies within a single round are not supported. When `panel_mode` is `"fan-out"`, the `protocol` field must be `null`. When `panel_mode` is `"single-agent"`, the `protocol` field must be non-null (see § protocol below).
+RULES:
+  single-agent:
+    - MUST dispatch cf-brainstorm-panel once per round (not per expert)
+    - One expert is primary; secondary experts deliberate inside same agent
+    - One cohesive sub-agent context per round; host-independent; INLINE_FALLBACK is a no-op
+    - protocol field MUST be non-null
+  fan-out:
+    - MUST dispatch all relevant panel members in parallel via cf-brainstorm-expert
+    - No inter-expert live communication
+    - Requires host with native sub-agent parallelism
+    - protocol field MUST be null
+  INVARIANTS:
+    - MUST NOT mix strategies within a single round
+```
 
 #### protocol (single-agent interaction pattern)
 
-**Field:** `rounds[].protocol` (conditional, nullable)  
-**Type:** enum `{independent-then-critique, single-pass}` or `null`  
-**Constraint:** Non-null only when `panel_mode == "single-agent"`
+```text
+UNIT BrainstormProtocolField
 
-Specifies the interaction pattern when using single-agent orchestration:
+PURPOSE:
+  Define rounds[].protocol field semantics.
 
-- **`independent-then-critique`**: Primary expert produces questions and initial answers independently. Secondary panel members then review the primary's output and provide structured critique without modifying answers. Supports asynchronous, high-latency expert cycles.
-- **`single-pass`**: Primary expert produces full round output; secondary members have read-only visibility but do not produce critique. Minimal latency, suitable for time-sensitive or bandwidth-constrained scenarios.
-- **`null`**: Only valid when `panel_mode == "fan-out"`. Indicates no single-agent protocol is in effect.
+STATE:
+  rounds[].protocol: independent-then-critique | single-pass | null
 
-The orchestrator pre-canonicalizes block order before flattening multi-expert outputs (see § envelope below).
+RULES:
+  - Non-null ONLY when panel_mode == "single-agent"
+  - null ONLY when panel_mode == "fan-out"
+  independent-then-critique:
+    - Primary expert produces questions independently
+    - Secondary members review primary output and provide structured critique
+  single-pass:
+    - Primary expert produces full round output
+    - Secondary members have read-only visibility; do not produce critique
+    - Minimal latency; suitable for time-sensitive scenarios
+```
 
 #### status (round outcome)
 
-**Field:** `rounds[].status` (required, non-null)  
-**Type:** enum `{ok, degraded, skipped}`
+```text
+UNIT BrainstormStatusField
 
-Indicates the outcome and health of the completed round:
+PURPOSE:
+  Define rounds[].status field semantics.
 
-- **`ok`**: All experts completed their tasks within SLA (no timeouts, no errors). Primary output is canonical; no fallback or advisory needed.
-- **`degraded`**: One or more experts exceeded SLA (timeout, retry exhausted) but the round completed with partial or fallback output. Check the `health.reason` field for details. Round contributions may be incomplete; decisions should be reviewed before accepting.
-- **`skipped`**: Round was not executed (user skipped, max rounds reached before dispatch, or configuration prevented dispatch). No expert output; `contributions` array is empty or omitted.
+STATE:
+  rounds[].status: ok | degraded | skipped
+
+NOTES:
+  ok: all experts completed within SLA; no fallback needed
+  degraded: one or more experts exceeded SLA; round completed with partial output;
+    review health.reason before accepting decisions
+  skipped: round not executed; contributions array is empty or omitted
+```
 
 #### health (round resilience tracking)
 
-**Field:** `rounds[].health` (object with three sub-fields)  
-**Type:** `{ degraded: bool, reason: str|null, attempts_used: int }`  
-**Default:** `{ degraded: false, reason: null, attempts_used: 1 }`
+```text
+UNIT BrainstormHealthField
 
-Tracks round-level resilience metrics for troubleshooting and retry logic:
+PURPOSE:
+  Define rounds[].health field semantics for troubleshooting and retry logic.
 
-- **`degraded`** (boolean): `true` if one or more agents failed to complete within SLA; `false` if all completed normally. Mirrors the `status` field intent but provides structured access for automated decision-making.
-- **`reason`** (string or null): Human-readable explanation of degradation. Examples: `"Expert E2 timeout after 120s; used cached prior response"`, `"Token limit exceeded; critique phase skipped"`, `null` if `degraded == false`.
-- **`attempts_used`** (positive integer, default 1): Count of execution attempts for this round (1 = first try, 2 = one retry, etc.). Used by retry-budget logic to prevent infinite loops. Resets per round; does not accumulate across rounds.
+STATE:
+  rounds[].health:
+    degraded: bool
+    reason: string or null
+    attempts_used: positive integer
+    default: { degraded: false, reason: null, attempts_used: 1 }
 
-**Usage in retry/fallback:** The orchestrator may inspect `health.attempts_used` and `health.degraded` to decide whether to re-run the round (up to a configurable budget) or proceed with partial output. The `reason` field provides audit trail context for manual review.
+NOTES:
+  degraded: true if one or more agents failed within SLA
+  reason: human-readable explanation; null when degraded=false
+  attempts_used: count of execution attempts for this round; resets per round
+```
 
 #### envelope (wire-level blocks, orchestrator-internal)
 
-**Field:** NOT persisted in `rounds[]` — transient wire-level structure only  
-**Type:** Object with `kind` and `rows` fields  
-**Scope:** Orchestrator-to-agent RPC envelope, not stored in state.json
+```text
+UNIT BrainstormEnvelopeField
 
-The `envelope` is a transient wire-level data structure used during agent dispatch and response aggregation. It is **not persisted** in the `rounds[]` array. The orchestrator canonicalizes block order pre-flatten:
+PURPOSE:
+  Define the transient envelope wire structure used during agent dispatch.
 
-```json
-{
-  "kind": "independent",
-  "rows": [
-    { "expert_id": "E1", "block": "...", "metadata": {...} }
-  ]
-}
+RULES:
+  - MUST NOT persist envelope in rounds[] — transient wire-level only
+  - Orchestrator canonicalizes block order before flattening
+
+NOTES:
+  Envelope schema:
+    { "kind": "independent", "rows": [{ "expert_id": "E1", "block": "...", "metadata": {...} }] }
+    OR
+    { "kind": "critique", "rows": [{ "expert_id": "E2", "block": "...", "metadata": {...} }] }
+  kind "independent": primary contributions
+  kind "critique": secondary reviews
+  rows: flattened into contributions[] after canonicalization
 ```
-
-or
-
-```json
-{
-  "kind": "critique",
-  "rows": [
-    { "expert_id": "E2", "block": "...", "metadata": {...} }
-  ]
-}
-```
-
-- **`kind`** (`"independent"` | `"critique"`): Categorizes the block's role. `independent` blocks are primary contributions; `critique` blocks are secondary reviews.
-- **`rows`** (array): List of expert contributions with metadata (expert ID, timestamps, token usage, etc.). Each row is flattened into the `contributions[]` array after canonicalization.
-
-The envelope structure enables the orchestrator to manage block order, de-duplication, and fallback selection before persisting to `rounds[]`. It is **not** part of the saved state schema and should not be loaded from state.json.
 
 ---
 
 ### Loader Lazy-Normalization Rule
 
-When loading `state.json` (or a state checkpoint), the loader applies the following normalization logic **on next save**:
+```text
+UNIT BrainstormLoaderNormalization
 
-**If `rounds[].panel_mode` is missing (backward compatibility with pre-1.1 state files):**
-1. Set `rounds[].panel_mode = "fan-out"` (the default orchestration strategy).
-2. Set `rounds[].protocol = null` (matches fan-out mode).
-3. Leave all other fields unchanged.
+PURPOSE:
+  Normalize missing fields in loaded state.json on next save (backward compatibility).
 
-**If `rounds[].health` is missing:**
-1. Initialize `rounds[].health = { degraded: false, reason: null, attempts_used: 1 }`.
+DO:
+  IF rounds[].panel_mode is missing (pre-1.1 state files):
+    SET rounds[].panel_mode = "fan-out"
+    SET rounds[].protocol = null
 
-**If `rounds[].status` is missing:**
-1. Infer `status` from context:
-   - If `round_count > n`: set `status = "ok"` (round completed).
-   - If `round_count == n and contributions.length > 0`: set `status = "ok"`.
-   - If `contributions.length == 0`: set `status = "skipped"`.
+  IF rounds[].health is missing:
+    SET rounds[].health = { degraded: false, reason: null, attempts_used: 1 }
 
-This lazy approach ensures that old state files automatically upgrade on the next save, without requiring an explicit migration step. The orchestrator never loads a state with missing required fields; normalization always occurs before the state is operational.
+  IF rounds[].status is missing:
+    IF round_count > n: SET status = "ok"
+    ELIF round_count == n AND contributions.length > 0: SET status = "ok"
+    ELIF contributions.length == 0: SET status = "skipped"
+
+RULES:
+  - MUST apply normalization before state is operational
+  - MUST NOT load state with missing required fields without normalizing first
+```
 
 ---
 
 ### Run Config Sibling Pattern
 
-The orchestrator run configuration is split into a **sibling** `run_config.json` file, separate from the persisted `state.json`:
+```text
+UNIT BrainstormRunConfigPattern
 
-**File layout:**
+PURPOSE:
+  Define the run_config.json sibling file structure and panel mode fields.
+
+NOTES:
+  File layout:
+    {cf-studio-path}/.cache/brainstorm/{session_id}/
+    ├── state.json        # Persisted round-by-round state (this schema)
+    └── run_config.json   # Environment + execution config (separate schema)
+
+  Contents of run_config.json:
+    {
+      "environment": {
+        "cpt_path": "/path/to/.cf",
+        "python_version": "3.11",
+        "agent_timeout_seconds": 120,
+        "model": "claude-opus-4.1",
+        "temperature": 0.7
+      },
+      "session_metadata": {
+        "created_at": "2025-05-23T14:30:00Z",
+        "user_email": "user@example.com"
+      },
+      "PANEL_MODE_TOPIC": "single-agent",
+      "PANEL_MODE_CHALLENGE": "single-agent"
+    }
+
+  PANEL_MODE_TOPIC / PANEL_MODE_CHALLENGE:
+    enum {"single-agent", "fan-out"} or null
+    Set from offer reply; parsing contract owned by offer.md § Reply parsing.
+    null (or absent) means "no offer-time override"; round loop falls back to env
+    var then to workflow default "single-agent".
+    mode= modifier always sets both fields to same value;
+    use env vars to set independently.
+
+  Config drift detection:
+    Compare current runtime env against saved run_config.json.
+    DEFAULT: current environment wins; log drift for user inspection.
+    WITH --reconfigure flag: reload and use saved config.
 ```
-{cf-studio-path}/.cache/brainstorm/{session_id}/
-├── state.json           # Persisted round-by-round state (this schema)
-└── run_config.json      # Environment + execution config (separate schema)
-```
-
-**Contents of `run_config.json`:**
-```json
-{
-  "environment": {
-    "cpt_path": "/path/to/.cf",
-    "python_version": "3.11",
-    "agent_timeout_seconds": 120,
-    "model": "claude-opus-4.1",
-    "temperature": 0.7
-  },
-  "session_metadata": {
-    "created_at": "2025-05-23T14:30:00Z",
-    "user_email": "user@example.com"
-  },
-  "PANEL_MODE_TOPIC": "single-agent",
-  "PANEL_MODE_CHALLENGE": "single-agent"
-}
-```
-
-**Panel mode fields** (`PANEL_MODE_TOPIC`, `PANEL_MODE_CHALLENGE`): enum `{"single-agent", "fan-out"}` or `null`. Set by the orchestrator from the offer reply (`yes mode=fan-out` / `yes mode=single-agent`); the parsing contract is owned by `workflows/generate/phase-0.7/offer.md` § Reply parsing (open, load, and follow it for the canonical rules). `null` (or field absent) means "no offer-time override"; the round loop then falls back to the env var of the same name, then to the workflow default `"single-agent"`. The `mode=` offer modifier always sets both fields to the same value; to set them independently, use env vars.
-
-**Config drift detection:**
-
-The orchestrator compares the current runtime environment against the saved `run_config.json`:
-
-1. If environment variables or config values differ from the saved state, emit a `config_drift` event (logged to the session transcript).
-2. **By default:** Continue with current environment (current environment wins). Log the drift for user inspection.
-3. **With `--reconfigure` flag:** Reload and use the saved config from `run_config.json` instead of the current environment. Useful for resuming a brainstorm session with the exact same model, timeout, and environment settings.
-
-**Example drift scenario:**  
-User pauses brainstorm at round 5, then resumes later. Environment now has `agent_timeout_seconds=60` (different from the original `120`). The orchestrator:
-- Detects drift (timeout changed).
-- Emits `config_drift: {field: "agent_timeout_seconds", saved: 120, current: 60}`.
-- Uses current environment (`60`) unless user invokes `--reconfigure`.
-
-This pattern enables resumable, auditable brainstorm sessions with reproducible environment constraints.
 
 ---
 
 ### Default Location
 
-Kept in-memory by the orchestrator across rounds. Persist to
-`{cf-studio-path}/.cache/brainstorm/{session_id}/state.json` only when
-the user picked explicit `save` mode and the current output destination allows
-file writes. Chat-only/no-write sessions must use an in-chat checkpoint for
-compaction recovery and must not write cache artifacts.
+```text
+UNIT BrainstormStateLocation
+
+PURPOSE:
+  Define where brainstorm state is kept and when it is persisted.
+
+RULES:
+  - MUST keep state in-memory by orchestrator across rounds
+  - MUST persist to {cf-studio-path}/.cache/brainstorm/{session_id}/state.json
+    ONLY when user picked explicit save mode AND current output destination
+    allows file writes
+  - MUST NOT write cache artifacts for chat-only/no-write sessions
+  - MUST use in-chat checkpoint for compaction recovery in chat-only mode
+```

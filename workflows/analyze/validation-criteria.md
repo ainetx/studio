@@ -12,7 +12,20 @@ version: 1.0
 
 <!-- /toc -->
 
+```text
+UNIT AnalyzeValidationCriteria
 
+PURPOSE:
+  Post-flight checklist gate verified before ending the response.
+
+DO:
+  Verify ALL items below; MUST_NOT end the response until all applicable items pass.
+
+RULES:
+  - MUST verify every applicable item in this checklist before ending the response
+  - MUST_NOT claim PASS for any item that is not verified
+  - MUST_NOT end the response while any applicable item is unchecked
+```
 
 ## Validation Criteria
 

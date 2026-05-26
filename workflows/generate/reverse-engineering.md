@@ -7,29 +7,107 @@ description: Invoke when the project is BROWNFIELD (existing code present) and t
 
 ## Reverse Engineering Prerequisite (BROWNFIELD only)
 
-`GREENFIELD`: skip this section and proceed to Phase 0. `BROWNFIELD`: reverse-engineering may inform generated artifacts, code implementation, and code edits. ALWAYS SKIP this section WHEN GREENFIELD — nothing to reverse-engineer.
-
-For BROWNFIELD work:
-- Use Protocol Guard's matched WHEN-clause spec resolution for the current request; treat only task-matched, applicable project specs/rules as satisfying the brownfield rules gate.
-- If one or more project-specific specs/rules are matched for the current request, load and follow them before generating.
-- If no project-specific specs/rules are matched for the current brownfield request, offer auto-config even when unrelated files exist under `{cf-studio-path}/config/rules/` or unrelated specs are registered.
-- MUST NOT treat mere on-disk rules-file presence or any unrelated registered spec as sufficient to skip auto-config.
-- ALWAYS open and follow `{cf-studio-path}/.core/requirements/auto-config.md` WHEN user accepts auto-config.
-
 ```text
-Brownfield project detected — existing code found but no task-matched, applicable project-specific specs/rules were found for this request.
-Auto-config can scan your project and generate rules that teach Constructor Studio your conventions.
-This produces config/rules/, heading-level WHEN rules in config/AGENTS.md, navigation rules for existing project guides, and system entries in config/artifacts.toml.
+UNIT ReverseEngineeringPrerequisite
 
-→ Run auto-config now? [yes/no/skip]
-Reply with `yes`, `no`, or `skip`.
-"yes"  → Suggested for first-time setup; run auto-config now, then return to generation with task-matched project rules.
-"no"   → Cancel generation now.
-"skip" → Continue without task-matched project specs/rules (reduced quality for this run).
+PURPOSE:
+  Evaluate auto-config / storytelling-package gates for BROWNFIELD projects
+  before Phase 0.
+
+DO:
+  IF project is GREENFIELD:
+    SKIP this section
+    PROCEED to Phase 0
+    RETURN
+
+  # BROWNFIELD path:
+  IF project is BROWNFIELD:
+    USE Protocol Guard's matched WHEN-clause spec resolution for current request
+    TREAT ONLY task-matched, applicable project specs/rules as satisfying
+      the brownfield rules gate
+
+    IF one or more project-specific specs/rules matched for current request:
+      LOAD and follow them before generating
+
+    IF no project-specific specs/rules matched for current brownfield request:
+      OFFER auto-config even when unrelated files exist under
+        {cf-studio-path}/config/rules/ or unrelated specs are registered
+
+RULES:
+  - ALWAYS SKIP this section WHEN GREENFIELD — nothing to reverse-engineer
+  - MUST NOT treat mere on-disk rules-file presence or any unrelated registered spec
+    as sufficient to skip auto-config
+  - ALWAYS open and follow {cf-studio-path}/.core/requirements/auto-config.md
+    WHEN user accepts auto-config
+
+MENU BrownfieldAutoConfigOffer:
+  TITLE: Brownfield project detected — existing code found but no task-matched,
+    applicable project-specific specs/rules were found for this request.
+    Auto-config can scan your project and generate rules that teach Constructor Studio
+    your conventions. This produces config/rules/, heading-level WHEN rules in
+    config/AGENTS.md, navigation rules for existing project guides, and system entries
+    in config/artifacts.toml.
+  OPTIONS:
+    yes ->
+      NOTE: Suggested for first-time setup; run auto-config now, then return to
+            generation with task-matched project rules.
+      EXECUTE auto-config methodology (Phases 1→6)
+      RETURN to generate
+      CONTINUE workflows/generate/phase-0-dependencies.md
+    no ->
+      CANCEL the generate workflow
+    skip ->
+      PROCEED without task-matched project-specific specs/rules
+        (reduced quality for this run)
+      CONTINUE workflows/generate/phase-0-dependencies.md
+  INVALID:
+    EMIT "Reply with yes, no, or skip."
+    WAIT user.reply
+    STOP_TURN
+
+UNIT AutoConfigFastPath
+
+PURPOSE:
+  Define AUTO_CONFIG fast path behavior when invoked via /cf-auto-config.
+
+WHEN:
+  AUTO_CONFIG == true (set by /cf-auto-config thin entry point at workflows/auto-config.md)
+
+DO:
+  SKIP the yes/no/skip offer prompt above
+  RUN auto-config methodology ({cf-studio-path}/.core/requirements/auto-config.md)
+    Phases 1→6 directly
+  AFTER Phase 6 completes:
+    RETURN to generate ONLY if user explicitly asks to continue
+    OTHERWISE stop after auto-config
+  NOTE: thin entry point's terminal state is auto-config completion, not generation
+
+UNIT StorytellingPackageGate
+
+PURPOSE:
+  Trigger storytelling methodology for explanatory/educational/presentation
+  package write-to-disk requests.
+
+WHEN:
+  user requests explanatory/educational/presentation/guide/README/training-material
+  PACKAGE to be written to disk
+  (intent like: "generate guide for X", "make a README from X",
+   "export explain package", "create training material from X",
+   "build onboarding doc set for X", "write a how-to package about X",
+   or equivalents in any user language)
+
+DO:
+  ALWAYS open and follow {cf-studio-path}/.core/requirements/storytelling.md
+  SET EXPLAIN_MODE = true
+  SET EXPLAIN_EXPORT = true
+  NOTE: storytelling methodology handles plan + portion construction
+  NOTE: package is written under
+    {cf-studio-path}/.cache/explain/packages/{slug}-{ISO-timestamp}/
+  NOTE: standard generate.md write-permission gates apply
+    (user confirmation before writing files; MUST NOT add --yes/-y to
+     write-capable commands unless user explicitly requested non-interactive)
+  NOTE: hybrid execution from storytelling.md Export Mode:
+    Phases E0/E1 (pre-flight, role/audience confirmation, plan approval) remain interactive
+    Portion construction runs in batch after plan approval and writes files directly
+    (no per-portion chat navigation prompts)
 ```
-
-If user confirms `yes`: execute auto-config methodology (Phases 1→6), then return to generate and proceed to `workflows/generate/phase-0-dependencies.md`. If user says `skip`: proceed without task-matched project-specific specs/rules and continue to `workflows/generate/phase-0-dependencies.md`. If user says `no`: cancel the generate workflow.
-
-**AUTO_CONFIG fast path** — WHEN `AUTO_CONFIG=true` (set by the `/cf-auto-config` thin entry point at `workflows/auto-config.md`): SKIP the `yes/no/skip` offer prompt above and run the auto-config methodology (`{cf-studio-path}/.core/requirements/auto-config.md`) Phases 1→6 directly. After Phase 6 completes, return to generate only if the user explicitly asks to continue; otherwise stop after auto-config (this thin entry point's terminal state is auto-config completion, not generation).
-
-ALWAYS open and follow `{cf-studio-path}/.core/requirements/storytelling.md` WHEN user requests an explanatory / educational / presentation / guide / README / training-material **package** to be written to disk (intent like `generate guide for X`, `make a README from X`, `export explain package`, `create training material from X`, `build onboarding doc set for X`, `write a how-to package about X`, or equivalents in any user language). WHEN this rule triggers, set BOTH `EXPLAIN_MODE=true` AND `EXPLAIN_EXPORT=true`; the storytelling methodology handles plan + portion construction; the package is written under `{cf-studio-path}/.cache/explain/packages/{slug}-{ISO-timestamp}/`. Standard `generate.md` write-permission gates apply (user confirmation before writing files; do NOT add `--yes`/`-y` to write-capable commands unless the user explicitly requested non-interactive behavior). The hybrid execution from `storytelling.md` Export Mode applies: Phases E0/E1 (pre-flight, role/audience confirmation, plan approval) remain interactive; portion construction runs in batch after plan approval and writes files directly (no per-portion chat navigation prompts).

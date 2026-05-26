@@ -13,6 +13,36 @@ version: 1.0
 
 <!-- /toc -->
 
+```text
+UNIT AnalyzePhase4OutputStandard
+
+PURPOSE:
+  Render the six-section Standard Analysis Output (or Semantic-Only variant)
+  and enforce the remediation-prompt policy.
+
+WHEN:
+  EXPLAIN_MODE == false AND PROMPT_REVIEW == false AND PROMPT_BUG_REVIEW == false
+
+DO:
+  Render the six sections below (both STRICT and RELAXED modes use the same titles).
+  IF SEMANTIC_ONLY == true:
+    SET section 2 Deterministic Gate: Status=SKIPPED, Invocation=not run,
+      Notes=semantic-only invocation
+    FORBID describing semantic-only findings as deterministic, validator-backed,
+      or tool-validated
+  IF actionable issues exist:
+    FORBID emitting Fix Prompt or Plan Prompt here
+    REQUIRE remediation-handoff.md to be appended
+
+RULES:
+  - MUST use the same six section titles in both STRICT and RELAXED modes
+  - In STRICT mode: section titles MUST match exactly
+  - In RELAXED mode: content may be lighter but MUST_NOT substitute alternate
+    headings (e.g. "## Analysis" or "### Category Review")
+  - MUST_NOT emit Fix Prompt or Plan Prompt from this schema
+  - MUST append remediation-handoff.md when actionable issues exist
+```
+
 ### Standard Analysis Output (non-prompt review)
 ```markdown
 ## Validation Report

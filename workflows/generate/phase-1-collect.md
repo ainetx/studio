@@ -14,44 +14,69 @@ version: 1.0
 
 ## Phase 1: Collect Information
 
-Requires: `workflows/shared/inline-fallback-probe.md` before any `cf-*` sub-agent dispatch.
-
-Dispatch sub-agent `cf-generate-collector` with the JSON contract documented in `{cf-studio-path}/.core/skills/studio/agents/cf-generate-collector.md`. Inputs: see "Inputs (dispatched-prompt contract)" in that agent file (mandatory vs optional listed there). Orchestrator-supplied values for this dispatch:
-
-- `kind` = `{KIND}`; `name` = `{name}`; `rules_mode` = `{STRICT|RELAXED}`; `system` from Phase 0.5
-- `template_path`, `example_path`, `kit_rules_path` resolved from `rules.md`
-- `pre_resolved_inputs` = `state.decisions` from Phase 0.7 (or `{}` when brainstorm was skipped)
-- `open_questions` = `state.open_questions` from Phase 0.7 (or `[]` when skipped)
-
-The agent returns a single Inputs markdown block (shown to the user verbatim)
-followed by a `proposed_inputs` JSON block (consumed by the orchestrator).
-Show the markdown; persist the returned JSON as
-`stored_proposed_inputs`. This stored value is the only authoritative Phase 1
-state for Phase 4. Await `approve all` or per-item edits.
-
-On edits, merge the user's modifications into `stored_proposed_inputs`, then
-re-dispatch the collector with the **same full Inputs field set** as the
-initial dispatch above (`kind`, `name`, `rules_mode`, `system`,
-`template_path`, `example_path`, `kit_rules_path`, `open_questions` all
-carried over unchanged), with **only `pre_resolved_inputs` updated** to that
-merged `stored_proposed_inputs` map. When the collector returns a refreshed
-Inputs block, replace `stored_proposed_inputs` with the refreshed
-`proposed_inputs` JSON before showing the next edit/approval prompt. Every
-collector return supersedes the prior stored state; Phase 4 MUST use the final
-approved `stored_proposed_inputs`, not an earlier display copy. Iterate until
-`approve all` or `COLLECTOR_MAX_ITER` is reached. `COLLECTOR_MAX_ITER`
-defaults to `5` (mirrors Phase 5's `MAX_ITER` default). On exhaustion the
-orchestrator MUST STOP and surface a `BLOCKED` status with the partial Inputs
-block — identically to other Constructor Studio iteration loops — rather than
-auto-proceeding to Phase 3.
-
-After approval:
-
 ```text
-Inputs confirmed. Proceeding to author planning...
+UNIT Phase1CollectInformation
+
+PURPOSE:
+  Dispatch collector sub-agent, manage edit-iteration loop, await final approval.
+
+DO:
+  REQUIRE workflows/shared/inline-fallback-probe.md loaded before dispatch
+  DISPATCH cf-generate-collector with JSON contract from
+    {cf-studio-path}/.core/skills/studio/agents/cf-generate-collector.md
+  WITH orchestrator-supplied values:
+    kind = {KIND}
+    name = {name}
+    rules_mode = {STRICT|RELAXED}
+    system = from Phase 0.5
+    template_path = resolved from rules.md
+    example_path = resolved from rules.md
+    kit_rules_path = resolved from rules.md
+    pre_resolved_inputs = state.decisions from Phase 0.7 (or {} when skipped)
+    open_questions = state.open_questions from Phase 0.7 (or [] when skipped)
+
+  RECEIVE Inputs markdown block (show to user verbatim) + proposed_inputs JSON block
+  PERSIST returned JSON as stored_proposed_inputs
+    NOTE: stored_proposed_inputs is the ONLY authoritative Phase 1 state for Phase 4
+
+  EMIT_MENU Phase1EditLoop
+  WAIT user.reply
+  STOP_TURN
+
+MENU Phase1EditLoop:
+  TITLE: Input approval loop
+  OPTIONS:
+    approve all ->
+      EMIT "Inputs confirmed. Proceeding to author planning..."
+      CONTINUE workflows/generate/phase-1.5-author-plan.md
+    per-item edits ->
+      MERGE user modifications into stored_proposed_inputs
+      RE-DISPATCH cf-generate-collector with:
+        same full Inputs field set (kind, name, rules_mode, system,
+        template_path, example_path, kit_rules_path, open_questions
+        all carried over unchanged)
+        ONLY pre_resolved_inputs updated to merged stored_proposed_inputs
+      RECEIVE refreshed Inputs block
+      REPLACE stored_proposed_inputs with refreshed proposed_inputs JSON
+      DECREMENT COLLECTOR_MAX_ITER budget
+      IF COLLECTOR_MAX_ITER exhausted:
+        STOP
+        EMIT BLOCKED status with partial Inputs block
+        STOP_TURN
+      ELSE:
+        CONTINUE Phase1EditLoop
+
+RULES:
+  - MUST show Inputs markdown to user verbatim
+  - MUST persist returned JSON as stored_proposed_inputs
+  - MUST replace stored_proposed_inputs on every collector return before showing
+    next edit/approval prompt
+  - MUST use final approved stored_proposed_inputs in Phase 4 (not earlier display copy)
+  - MUST NOT skip questions, assume answers, or proceed without explicit approve all
+  - MUST stop and surface BLOCKED on COLLECTOR_MAX_ITER exhaustion — MUST NOT
+    auto-proceed to Phase 3
+  - MUST NOT enter Phase 3 until AUTHOR_PLAN_OFFER_RESOLVED is set by Phase 1.5
+  - COLLECTOR_MAX_ITER defaults to 5; mirrors Phase 5 MAX_ITER default
+  - Collector MUST propose specific answers and use project context
+  - Orchestrator MUST require final confirmation
 ```
-
-Then proceed to `workflows/generate/phase-1.5-author-plan.md`. Phase 3 MUST
-NOT run until `AUTHOR_PLAN_OFFER_RESOLVED` is set by Phase 1.5.
-
-Input collection rules: the collector MUST propose specific answers, use project context, allow modifications, and the orchestrator MUST require final confirmation. MUST NOT skip questions, assume answers, or proceed without explicit `approve all`.

@@ -14,17 +14,28 @@ version: 1.0
 
 ## Phase 3: Summary
 
-Prerequisite: `AUTHOR_PLAN_OFFER_RESOLVED` MUST be set by
-`workflows/generate/phase-1.5-author-plan.md`. If unset, fail-stop and route
-back to `workflows/generate/phase-1.5-author-plan.md` so its state contract and
-offer/dispatch modules can re-run.
+```text
+UNIT Phase3Summary
 
-If `AUTHOR_PLAN_OFFER_RESOLVED` is a terminal cancellation state
-(`cancelled_by_stop_token`, `cancelled_planner_failure`,
-`cancelled_partial_write`), do NOT emit the Summary block. Stop the current
-generate sub-flow and leave target files untouched.
+PURPOSE:
+  Emit Summary block with STRICT self-check and await yes/no/modify gate
+  before any file writes.
 
-```markdown
+DO:
+  REQUIRE AUTHOR_PLAN_OFFER_RESOLVED is set by
+    workflows/generate/phase-1.5-author-plan.md
+  IF AUTHOR_PLAN_OFFER_RESOLVED is unset:
+    FAIL-STOP
+    ROUTE back to workflows/generate/phase-1.5-author-plan.md
+
+  IF AUTHOR_PLAN_OFFER_RESOLVED is a terminal cancellation state
+    (cancelled_by_stop_token | cancelled_planner_failure | cancelled_partial_write):
+    STOP current generate sub-flow
+    LEAVE target files untouched
+    RETURN
+
+  EMIT exactly:
+---
 ## Summary
 **Target**: {TARGET_TYPE}
 **Kind**: {KIND}
@@ -41,6 +52,37 @@ Reply with `yes`, `no`, or `modify`.
 `yes` → Suggested when the summary is accurate; write files and continue to validation.
 `no` → Cancel without writing files.
 `modify` → Revisit the inputs or proposal before any files are written.
-```
+---
+  WAIT user.reply
+  STOP_TURN
 
-Responses: `yes` = create files and validate; `no` = cancel; `modify` = revisit a question and iterate (max 3 iterations, then require explicit `continue iterating` or stop the generate workflow (reply with a stop token — open and follow {cf-studio-path}/.core/workflows/shared/stop-token-policy.md)).
+MENU Phase3ConfirmationMenu:
+  TITLE: Phase 3 confirmation
+  OPTIONS:
+    yes ->
+      CONTINUE workflows/generate/phase-4-write.md
+    no ->
+      CANCEL without writing files
+    modify ->
+      EMIT "What would you like to change?"
+      WAIT user.reply
+      STOP_TURN
+      REVISIT inputs or proposal
+      ITERATE (max 3 iterations)
+      IF iterations exhausted:
+        REQUIRE explicit "continue iterating" or stop token
+        IF stop token:
+          LOAD workflows/shared/stop-token-policy.md
+          STOP generate workflow
+  INVALID:
+    EMIT "Reply with yes, no, or modify."
+    WAIT user.reply
+    STOP_TURN
+
+RULES:
+  - MUST NOT emit Summary block when AUTHOR_PLAN_OFFER_RESOLVED is a
+    terminal cancellation state
+  - MUST NOT write files before receiving yes
+  - Max 3 modify iterations; after that require explicit "continue iterating"
+    or stop the generate workflow
+```

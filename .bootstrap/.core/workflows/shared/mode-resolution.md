@@ -1,11 +1,3 @@
-
-<!-- toc -->
-
-- [Rules Mode Behavior](#rules-mode-behavior)
-- [Warnings](#warnings)
-
-<!-- /toc -->
-
 ---
 name: mode-resolution
 description: "Invoke when loading the canonical STRICT vs RELAXED rules-mode behavior definitions for a generate workflow phase."
@@ -14,22 +6,89 @@ loaded_by: workflows/generate.md, workflows/analyze.md
 version: 1.0
 ---
 
-Plan workflow note: `workflows/plan.md` does not resolve a rules mode itself; mode resolution happens in the downstream `generate`/`analyze` workflow at phase execution time. Plan-compiled phase files MUST NOT hardcode a rules mode.
+<!-- toc -->
+
+- [Rules Mode Behavior](#rules-mode-behavior)
+- [Warnings](#warnings)
+
+<!-- /toc -->
+
+```text
+UNIT ModeResolution
+
+PURPOSE:
+  Define the canonical STRICT vs RELAXED rules-mode behavior for generate
+  and analyze workflow phases.
+
+RULES:
+  - MUST NOT hardcode a rules mode in plan-compiled phase files;
+    mode resolution happens in the downstream generate/analyze workflow
+    at phase execution time
+
+NOTES:
+  Plan workflow note: workflows/plan.md does not resolve a rules mode itself.
+```
 
 ## Rules Mode Behavior
 
-STRICT: generation must load the required generation-phase dependencies (typically template + example for artifacts, design/spec context for code), checklist-driven review must run in Phase 5, and Phase 6 requires validation `PASS`. RELAXED: use user-provided or best-effort phase-appropriate dependencies, still attempt post-write validation automatically when the validator command is available and at least one target file was written, and if validation cannot reach `PASS` after recovery, stop with an explicitly unvalidated result instead of treating it as success.
+```text
+UNIT StrictMode
+
+PURPOSE:
+  Define required behavior when rules_mode = STRICT.
+
+RULES:
+  - MUST load required generation-phase dependencies
+    (typically template + example for artifacts, design/spec context for code)
+  - MUST run checklist-driven review in Phase 5
+  - MUST require validation PASS before Phase 6 proceeds
+```
+
+```text
+UNIT RelaxedMode
+
+PURPOSE:
+  Define required behavior when rules_mode = RELAXED.
+
+RULES:
+  - MUST use user-provided or best-effort phase-appropriate dependencies
+  - MUST attempt post-write validation automatically when:
+      validator command is available
+      AND at least one target file was written
+  - MUST stop with an explicitly unvalidated result when validation cannot
+    reach PASS after recovery — MUST NOT treat this as success
+```
 
 ## Warnings
 
-Rules-unavailable case (no template/example/kit loaded):
 ```text
-⚠️ Generated without Constructor Studio rules (reduced quality assurance)
+UNIT RulesUnavailableWarning
+
+PURPOSE:
+  Emit the rules-unavailable warning when no kit rules are loaded in STRICT mode.
+
+WHEN:
+  rules.md is not loaded AND rules_mode == STRICT
+
+DO:
+  EMIT "⚠️ Generated without Constructor Studio rules (reduced quality assurance)"
+
+RULES:
+  - MUST fire this warning before proceeding when condition is met
 ```
 
-Validation FAIL despite rules applied:
 ```text
-⚠️ Validated — FAIL (RELAXED mode): rules applied but validation could not reach PASS
-```
+UNIT ValidationFailWarning
 
-Fire rules-unavailable warning when no checklist, template, or kit rules are available for the target. Fire validation-FAIL warning when rules were loaded and validation ran but reached FAIL status in RELAXED mode.
+PURPOSE:
+  Emit the validation-FAIL warning when validation reaches FAIL in STRICT mode.
+
+WHEN:
+  validation gate fails AND rules_mode == STRICT
+
+DO:
+  EMIT "⚠️ Validated — FAIL (RELAXED mode): rules applied but validation could not reach PASS"
+
+RULES:
+  - MUST fire this warning before proceeding when condition is met
+```

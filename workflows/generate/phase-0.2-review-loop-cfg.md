@@ -8,8 +8,28 @@ version: 1.0
 
 ## Phase 1 Collector Iteration Cap
 
-Phase 1 (input collection) uses iteration cap `COLLECTOR_MAX_ITER` (default `5`) for collector ↔ user edit rounds. Resolve it before Phase 1.
+```text
+UNIT Phase02ReviewLoopCfg
 
-If the user supplied `collector=<m>` in the invocation, use that value. Otherwise default to `5`; ask only when the user explicitly wants collector-loop control. `COLLECTOR_MAX_ITER=0` disables iteration — the collector returns once and on any edit reply the orchestrator stops with `BLOCKED`.
+PURPOSE:
+  Resolve COLLECTOR_MAX_ITER before Phase 1 input collection begins.
 
-Phase 5 `MAX_ITER` prompts do not change `COLLECTOR_MAX_ITER`; by then Phase 1 is complete.
+STATE:
+  COLLECTOR_MAX_ITER: integer
+    default: 5
+    scope: workflow_run
+
+DO:
+  IF user supplied collector=<m> in invocation:
+    SET COLLECTOR_MAX_ITER = m
+  ELSE:
+    SET COLLECTOR_MAX_ITER = 5
+    ASK only when user explicitly wants collector-loop control
+
+RULES:
+  - MUST resolve COLLECTOR_MAX_ITER before Phase 1
+  - COLLECTOR_MAX_ITER=0 disables iteration: collector returns once;
+    on any edit reply the orchestrator MUST stop with BLOCKED
+  - Phase 5 MAX_ITER prompts MUST NOT change COLLECTOR_MAX_ITER;
+    by then Phase 1 is complete
+```

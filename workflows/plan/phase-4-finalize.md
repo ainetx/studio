@@ -17,172 +17,246 @@ version: 1.0
 
 <!-- /toc -->
 
-> **Note**: `plan.toml` was already written in Phase 3.1 and briefs were written in Phase 3.2. Enter Phase 4 only if the user selected option `[1]` or `[3]` and all `phase-*` files were produced in Phase 3.3. If the user selected option `[2]` or `[4]`, stop after the brief checkpoint and do not emit `Plan created`.
+```text
+UNIT Phase4Init
 
-Status model in `plan.toml`:
-- `phases[].status`: `pending`, `in_progress`, `done`, `failed`
-- `plan.execution_status`: aggregate phase execution state, independent of lifecycle handling
-- `plan.lifecycle_status`: plan-file lifecycle state, independent of whether all phases are already complete
+PURPOSE:
+  Define entry conditions and status model for Phase 4.
 
-Update rules:
-- all phases `pending` → `plan.execution_status = "not_started"`
-- user chose option `[4]` at brief checkpoint → `plan.execution_status = "briefs_only"` (valid stop state; resume by presenting `[1]-[4]` menu)
-- user chose option `[2]` at brief checkpoint and only downstream compile prompts were emitted → `plan.execution_status = "prompts_emitted"` (valid stop state; phase files do not exist yet)
-- any phase `in_progress`, or any mix of `done` and `pending`, → `plan.execution_status = "in_progress"`
-- any phase `failed` → `plan.execution_status = "failed"` until explicitly reopened or downgraded
-- all phases `done` → `plan.execution_status = "done"`; `plan.lifecycle_status` may still be `ready`, `partial`, `in_progress`, or `manual_action_required`
+WHEN:
+  User selected option [1] or [3] in Phase 3.2A
+  AND all phase-* files were produced in Phase 3.3
+
+RULES:
+  - MUST NOT enter Phase 4 if user selected option [2] or [4] at brief checkpoint
+  - MUST NOT emit "Plan created" if run stopped after brief generation or produced only downstream prompts
+
+STATE:
+  plan.toml status fields:
+    phases[].status: pending | in_progress | done | failed
+    plan.execution_status: aggregate phase execution state (independent of lifecycle handling)
+    plan.lifecycle_status: plan-file lifecycle state (independent of whether all phases complete)
+
+CONTINUE Phase4StatusMapping
+```
+
+```text
+UNIT Phase4StatusMapping
+
+PURPOSE:
+  Apply the correct execution_status to plan.toml based on current phase states.
+
+DO:
+  IF all phases pending:
+    SET plan.execution_status = "not_started"
+  IF user chose option [4] at brief checkpoint:
+    SET plan.execution_status = "briefs_only"
+  IF user chose option [2] (only prompts emitted):
+    SET plan.execution_status = "prompts_emitted"
+  IF any phase in_progress OR done/pending mix:
+    SET plan.execution_status = "in_progress"
+  IF any phase failed:
+    SET plan.execution_status = "failed"
+  IF all phases done:
+    SET plan.execution_status = "done"
+
+NOTES:
+  plan.lifecycle_status may still be ready/partial/in_progress/manual_action_required
+  even when plan.execution_status = "done".
+```
 
 ## 4.1 Validate Plan Before Handoff (MANDATORY)
 
-> **⛔ CRITICAL**: Offer plan validation as the FIRST next step.
-
-Before generating the startup prompt or offering execution handoff:
-1. Self-validate against `{cf-studio-path}/.core/requirements/plan-checklist.md`.
-2. Report:
 ```text
-═══════════════════════════════════════════════
-Plan Self-Validation: {task-slug}
-───────────────────────────────────────────────
-| Category | Status |
-|----------|--------|
-| 1. Structural | PASS/FAIL |
-| 2. Interactive Questions | PASS/FAIL |
-| 3. Rules Coverage | PASS/FAIL |
-| 4. Context Completeness | PASS/FAIL |
-| 5. Phase Independence | PASS/FAIL |
-| 6. Budget Compliance | PASS/FAIL |
-| 7. Lifecycle & Handoff | PASS/FAIL |
-Overall: PASS/FAIL
-═══════════════════════════════════════════════
+UNIT Phase4SelfValidation
+
+PURPOSE:
+  Self-validate the complete plan against the plan-checklist before offering handoff.
+
+DO:
+  OPEN {cf-studio-path}/.core/requirements/plan-checklist.md
+  SELF-VALIDATE against plan-checklist.md
+
+  EMIT:
+    ═══════════════════════════════════════════════
+    Plan Self-Validation: {task-slug}
+    ───────────────────────────────────────────────
+    | Category                  | Status    |
+    |---------------------------|-----------|
+    | 1. Structural              | PASS/FAIL |
+    | 2. Interactive Questions   | PASS/FAIL |
+    | 3. Rules Coverage          | PASS/FAIL |
+    | 4. Context Completeness    | PASS/FAIL |
+    | 5. Phase Independence      | PASS/FAIL |
+    | 6. Budget Compliance       | PASS/FAIL |
+    | 7. Lifecycle & Handoff     | PASS/FAIL |
+    Overall: PASS/FAIL
+    ═══════════════════════════════════════════════
+
+  IF any category FAIL:
+    LIST issues
+    OFFER to fix them
+
+RULES:
+  - MUST run self-validation before generating the startup prompt or offering execution handoff
 ```
-If any category FAILs: list issues and offer to fix them.
 
 ## 4.2 Report Plan & Offer Next Steps
 
-If all categories PASS, report:
 ```text
-Plan created: {cf-studio-path}/.plans/{task-slug}/
-  Phases: {N}
-  Files: {file_count}
-  Lifecycle: {lifecycle}
-```
+UNIT Phase4ReportPlan
 
-You may emit `Plan created` only after Phase 3.4 PASS confirms that `plan.toml`, every `brief-*`, and every compiled `phase-*` file already exist on disk. If the run stopped after brief generation or produced only downstream prompts, omit this section.
+PURPOSE:
+  Report plan creation and present the appropriate next-steps menu.
 
-Then immediately report the delegation handoff:
+WHEN:
+  All validation categories PASS
 
-```text
-Delegation prompt:
-  I have a Constructor Studio execution plan ready at:
-    {cf-studio-path}/.plans/{task-slug}
+DO:
+  EMIT:
+    Plan created: {cf-studio-path}/.plans/{task-slug}/
+      Phases: {N}
+      Files: {file_count}
+      Lifecycle: {lifecycle}
 
-  Please delegate this plan to ralphex using Constructor Studio's native delegation flow.
-```
+  EMIT:
+    Delegation prompt:
+      I have a Constructor Studio execution plan ready at:
+        {cf-studio-path}/.plans/{task-slug}
 
-Only when `SUB_AGENT_SESSION_APPROVED=true` AND `INLINE_FALLBACK=false`, also
-report:
+      Please delegate this plan to ralphex using Constructor Studio's native delegation flow.
 
-```text
-Native execution options available:
-  This plan can be delegated to ralphex using Constructor Studio's native delegation feature.
-  Command: {cfs_cmd} delegate "{cf-studio-path}/.plans/{task-slug}"
+  IF SUB_AGENT_SESSION_APPROVED == true AND INLINE_FALLBACK == false:
+    EMIT:
+      Native execution options available:
+        This plan can be delegated to ralphex using Constructor Studio's native delegation feature.
+        Command: {cfs_cmd} delegate "{cf-studio-path}/.plans/{task-slug}"
 
-Native phase execution prompt:
-  I have a Constructor Studio execution plan ready at:
-    {cf-studio-path}/.plans/{task-slug}/plan.toml
+      Native phase execution prompt:
+        I have a Constructor Studio execution plan ready at:
+          {cf-studio-path}/.plans/{task-slug}/plan.toml
 
-  Please execute the next phase using Constructor Studio's native phase runner.
-```
+        Please execute the next phase using Constructor Studio's native phase runner.
 
-When native execution is not currently available (`SUB_AGENT_SESSION_APPROVED`
-unset/false, or `INLINE_FALLBACK=true`), do NOT present the native execution
-section or a same-chat phase-runner option here. Instead state:
+    EMIT_MENU Phase4NextStepsNative
+    WAIT user.reply
+    STOP_TURN
 
-```text
-Same-chat native phase execution is not currently available in this run.
-If the user later asks to execute a phase in this chat, re-run
-`workflows/shared/inline-fallback-probe.md` first. Offer native phase-runner
-execution only if that re-probe resolves to `SUB_AGENT_SESSION_APPROVED=true`
-and `INLINE_FALLBACK=false`; otherwise keep to validation/review/handoff paths.
-```
+  ELSE:
+    EMIT:
+      Same-chat native phase execution is not currently available in this run.
+      If the user later asks to execute a phase in this chat, re-run
+      `workflows/shared/inline-fallback-probe.md` first. Offer native phase-runner
+      execution only if that re-probe resolves to `SUB_AGENT_SESSION_APPROVED=true`
+      and `INLINE_FALLBACK=false`; otherwise keep to validation/review/handoff paths.
 
-Then present exactly one of these next-step menus and wait for user choice
-before generating any startup prompt:
+    EMIT_MENU Phase4NextStepsFallback
+    WAIT user.reply
+    STOP_TURN
 
-Native execution available:
-```text
-What would you like to do next?
+RULES:
+  - MUST emit "Plan created" only after Phase 3.4 PASS confirms plan.toml, every brief-*, and every compiled phase-* file already exist on disk
+  - MUST wait for user choice before generating any startup prompt
 
-The plan passed self-validation. Choose your next action:
+MENU Phase4NextStepsNative:
+  TITLE: What would you like to do next? (native execution available)
+  PREAMBLE:
+    The plan passed self-validation. Choose your next action:
+  OPTIONS:
+    1 -> EMIT "Validate plan thoroughly — run /cf-analyze on the plan"
+         (Suggested default before execution — verify the plan thoroughly with /cf-analyze)
+    2 -> CONTINUE Phase4NativePhaseDispatch
+         (Start executing the first phase now in this chat with the native phase runner)
+    3 -> CONTINUE Phase4EmitStartupPrompt
+         (Generate a handoff prompt for a separate execution chat)
+    4 -> EMIT "Review plan files — inspect phase files before execution"
+         (Inspect the plan files manually before deciding what to do next)
+    5 -> EMIT "Modify plan — adjust phases, add/remove content"
+         (Rework the plan structure or contents before execution)
+  PREAMBLE_REPLY: Reply with `1`, `2`, `3`, `4`, or `5`.
+  INVALID:
+    EMIT "Reply with 1, 2, 3, 4, or 5."
+    WAIT user.reply
+    STOP_TURN
 
-  [1] Validate plan thoroughly — run /cf-analyze on the plan
-  [2] Execute Phase 1 natively here — dispatch Constructor Studio's dedicated phase-runner subagent in this chat
-  [3] Prepare execution handoff — generate the Phase 1 startup prompt for a downstream execution chat
-  [4] Review plan files — inspect phase files before execution
-  [5] Modify plan — adjust phases, add/remove content
-Reply with `1`, `2`, `3`, `4`, or `5`.
-[1] Suggested default before execution — verify the plan thoroughly with `/cf-analyze`.
-[2] Start executing the first phase now in this chat with the native phase runner.
-[3] Generate a handoff prompt for a separate execution chat.
-[4] Inspect the plan files manually before deciding what to do next.
-[5] Rework the plan structure or contents before execution.
-```
-
-Native execution unavailable:
-```text
-What would you like to do next?
-
-The plan passed self-validation. Choose your next action:
-
-  [1] Validate plan thoroughly — run /cf-analyze on the plan
-  [2] Prepare execution handoff — generate the Phase 1 startup prompt for a downstream execution chat
-  [3] Review plan files — inspect phase files before execution
-  [4] Modify plan — adjust phases, add/remove content
-Reply with `1`, `2`, `3`, or `4`.
-[1] Suggested default before execution — verify the plan thoroughly with `/cf-analyze`.
-[2] Generate a handoff prompt for a separate execution chat.
-[3] Inspect the plan files manually before deciding what to do next.
-[4] Rework the plan structure or contents before execution.
+MENU Phase4NextStepsFallback:
+  TITLE: What would you like to do next? (native execution unavailable)
+  PREAMBLE:
+    The plan passed self-validation. Choose your next action:
+  OPTIONS:
+    1 -> EMIT "Validate plan thoroughly — run /cf-analyze on the plan"
+         (Suggested default before execution — verify the plan thoroughly with /cf-analyze)
+    2 -> CONTINUE Phase4EmitStartupPrompt
+         (Generate a handoff prompt for a separate execution chat)
+    3 -> EMIT "Review plan files — inspect phase files before execution"
+         (Inspect the plan files manually before deciding what to do next)
+    4 -> EMIT "Modify plan — adjust phases, add/remove content"
+         (Rework the plan structure or contents before execution)
+  PREAMBLE_REPLY: Reply with `1`, `2`, `3`, or `4`.
+  INVALID:
+    EMIT "Reply with 1, 2, 3, or 4."
+    WAIT user.reply
+    STOP_TURN
 ```
 
 ## New-Chat Startup Prompt
 
-When the user chooses option `[2]` from the native-available menu, do **not**
-emit a startup prompt. Treat this reply as a fresh native dispatch site:
-
-1. Re-run `workflows/shared/inline-fallback-probe.md` immediately before any
-   phase-runner dispatch. Do NOT trust the earlier menu state as sufficient
-   proof because `INLINE_FALLBACK` is re-derived per workflow run and may need
-   to be re-confirmed after resume/compaction.
-2. If that re-probe stops for approval, end the turn there. If it resolves to
-   `INLINE_FALLBACK=true`, do NOT dispatch the phase runner; surface that
-   same-chat native execution is unavailable for this turn and fall back to the
-   non-native Phase 4.2 choices.
-3. If the re-probe resolves to `SUB_AGENT_SESSION_APPROVED=true` and
-   `INLINE_FALLBACK=false`, set `CF_PHASE_GATE=released_for_dispatch`
-   immediately before routing to
-   `{cf-studio-path}/.core/skills/studio/agents/cf-phase-runner.md`.
-4. The dispatch payload MUST include:
-   - `plan_dir = "{cf-studio-path}/.plans/{task-slug}/"`
-   - `target_phase = 1`
-   - `git_commit_mode = GIT_COMMIT_MODE`
-   - `contributing_guide = CONTRIBUTING_GUIDE`
-   - `git_constraint` = the mode-matched constraint block from
-     `workflows/generate/phase-4-write.md` § Git constraint blocks
-5. Reset `CF_PHASE_GATE=armed` immediately after the phase-runner returns —
-   success, error, or no-response.
-6. Then return only the concise execution summary defined by that agent
-   contract.
-
-When the user chooses the handoff option (`[3]` in the native-available menu,
-`[2]` in the native-unavailable menu), emit the entire startup prompt inside a
-**single fenced code block**:
 ```text
-I have a Constructor Studio execution plan ready at:
-  {cf-studio-path}/.plans/{task-slug}/plan.toml
+UNIT Phase4NativePhaseDispatch
 
-Please read the plan manifest, then execute Phase 1.
-The phase file is self-contained — follow its instructions exactly.
-After completion, report results and generate the prompt for Phase 2.
+PURPOSE:
+  Dispatch the phase runner for native same-chat phase execution (option [2] native menu).
+
+DO:
+  OPEN workflows/shared/inline-fallback-probe.md
+  RE-RUN inline-fallback-probe.md immediately before dispatch
+    (do NOT trust the earlier menu state; INLINE_FALLBACK is re-derived per workflow run)
+
+  IF re-probe stops for approval:
+    STOP_TURN
+
+  IF re-probe resolves to INLINE_FALLBACK == true:
+    EMIT "Same-chat native execution is unavailable for this turn."
+    FALL BACK to Phase4NextStepsFallback choices
+    STOP_TURN
+
+  IF SUB_AGENT_SESSION_APPROVED == true AND INLINE_FALLBACK == false:
+    SET CF_PHASE_GATE = released_for_dispatch
+    DISPATCH {cf-studio-path}/.core/skills/studio/agents/cf-phase-runner.md
+      with payload:
+        plan_dir = "{cf-studio-path}/.plans/{task-slug}/"
+        target_phase = 1
+        git_commit_mode = GIT_COMMIT_MODE
+        contributing_guide = CONTRIBUTING_GUIDE
+        git_constraint = mode-matched constraint block from workflows/generate/phase-4-write.md § Git constraint blocks
+    ACCEPT only concise execution summary defined by the agent contract
+    SET CF_PHASE_GATE = armed  (immediately after phase-runner returns — success, error, or no-response)
+
+RULES:
+  - MUST NOT dispatch without a successful re-probe of inline-fallback-probe.md
+  - MUST set CF_PHASE_GATE = released_for_dispatch immediately before dispatch
+  - MUST reset CF_PHASE_GATE = armed immediately after dispatch returns
+  - Dispatch payload MUST include plan_dir, target_phase, git_commit_mode, contributing_guide, and git_constraint
 ```
-No explanatory text may be mixed into that code fence.
+
+```text
+UNIT Phase4EmitStartupPrompt
+
+PURPOSE:
+  Emit the new-chat startup prompt for execution handoff
+  ([3] in native-available menu, [2] in native-unavailable menu).
+
+DO:
+  EMIT exactly the following inside a single fenced code block:
+
+    I have a Constructor Studio execution plan ready at:
+      {cf-studio-path}/.plans/{task-slug}/plan.toml
+
+    Please read the plan manifest, then execute Phase 1.
+    The phase file is self-contained — follow its instructions exactly.
+    After completion, report results and generate the prompt for Phase 2.
+
+RULES:
+  - MUST wrap startup prompt in a single fenced code block
+  - MUST NOT mix explanatory text into that code fence
+```

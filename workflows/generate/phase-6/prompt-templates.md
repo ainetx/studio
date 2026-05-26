@@ -13,20 +13,41 @@ description: Invoke when the user picked `R2`/`R3`/`W2`/`W3` and the correspondi
 
 ### Emission targets (templates — emitted on demand only)
 
-These templates are NOT emitted unconditionally. They are emitted only when the user picks `R2`/`R3` (Remediation Handoff) or `W2`/`W3` (Post-Write Review Handoff) in their next turn. Each, when emitted, MUST be a **self-contained final prompt** usable in a fresh chat without any prior context:
+```text
+UNIT Phase6EmissionTargets
 
-- explicitly begin with the phrase `Invoke skill cf`
-- embed inline: changed file paths, what was changed per file (brief summary), kind/target, and the completed `Validation Results` body with actual values; for `R2`/`R3` also embed the full `remaining_findings` list
-- verify before emitting that the `Validation Results` body is present and complete; if not, stop with the Phase 6 prerequisite error instead of generating a partial prompt
-- do NOT reference "previous chat", "findings above", or any content outside the prompt itself
-- MUST NOT ask the next agent to regenerate or re-implement the changes (W*) or re-discover the findings (R*)
+PURPOSE:
+  Define emission rules for self-contained prompt templates emitted on R2/R3/W2/W3.
 
-| User pick | Template sub-file |
-|---|---|
-| `W3` (Plan Review Prompt) | `prompt-template-plan-review.md` |
-| `W2` (Direct Review Prompt) | `prompt-template-direct-review.md` |
-| `R2` (Fix Prompt) | `prompt-template-fix.md` |
-| `R3` (Plan Prompt) | `prompt-template-plan.md` |
+RULES:
+  - MUST NOT emit these templates unconditionally
+  - MUST emit ONLY when user picks R2/R3 (Remediation Handoff) or W2/W3
+    (Post-Write Review Handoff) in their next turn
+  - Each emitted template MUST be a self-contained final prompt usable in a
+    fresh chat without any prior context:
+    MUST explicitly begin with the phrase "Invoke skill cf"
+    MUST embed inline: changed file paths, what was changed per file (brief summary),
+      kind/target, and completed Validation Results body with actual values;
+      for R2/R3 also embed full remaining_findings list
+    MUST verify before emitting that Validation Results body is present and complete;
+      if not: STOP with Phase 6 prerequisite error instead of generating partial prompt
+    MUST NOT reference "previous chat", "findings above", or any content outside
+      the prompt itself
+    MUST NOT ask next agent to regenerate or re-implement changes (W*)
+    MUST NOT ask next agent to re-discover findings (R*)
+
+MENU EmissionTargetRouting:
+  TITLE: Emission target routing (machine reference)
+  OPTIONS:
+    W3 (Plan Review Prompt) ->
+      LOAD prompt-template-plan-review.md
+    W2 (Direct Review Prompt) ->
+      LOAD prompt-template-direct-review.md
+    R2 (Fix Prompt) ->
+      LOAD prompt-template-fix.md
+    R3 (Plan Prompt) ->
+      LOAD prompt-template-plan.md
+```
 
 <!--
 I18 re-evaluation outcome (plan phase 5): KEEP SEPARATE.

@@ -15,12 +15,18 @@ version: 1.0
 
 
 
-
 ## Phase 0.5: Clarify Output & Context
 
-If system context is unclear, ask:
-
 ```text
+UNIT Phase05ClarifyContext
+
+PURPOSE:
+  Clarify system context and output destination before Phase 0.7 / Phase 1.
+
+DO:
+  IF system context is unclear:
+    EMIT exactly:
+---
 Why this input is needed: system selection controls registry placement, ID prefixes, and traceability boundaries.
 
 Which system does this artifact/code belong to?
@@ -28,13 +34,14 @@ Which system does this artifact/code belong to?
 - Create new system
 Suggested: the current or nearest registered system when one owns the target path; otherwise `Create new system`.
 Reply with the system name or `Create new system`.
-```
+---
+    WAIT user.reply
+    SET selected_system = user.reply
+    STOP_TURN
 
-Store the selected system for registry placement.
-
-If output destination is unclear, ask:
-
-```text
+  IF output destination is unclear:
+    EMIT exactly:
+---
 Why this input is needed: destination controls whether this workflow writes files, updates the registry, or returns a chat-only preview.
 
 Where should the result go?
@@ -43,6 +50,26 @@ Where should the result go?
 - MCP tool / external system (specify as `MCP: <tool>` or `External: <system>`)
 Suggested: File for durable artifacts/code changes; Chat only for previews.
 Reply with `File`, `Chat only`, `MCP: <tool>`, or `External: <system>`.
-```
+---
+    WAIT user.reply
+    SET output_destination = user.reply
+    STOP_TURN
 
-Then: store the selected system; if file output + using rules, determine the path, plan the `artifacts.toml` entry, and check `UPDATE` vs `CREATE`; for artifacts identify parent references; for code identify design artifacts + requirement IDs + traceability markers; for new IDs use `cpt-{system}-{kind}-{slug}` and verify uniqueness with `{cfs_cmd} --json list-ids`.
+  SET selected_system (store for registry placement)
+  IF file output AND using rules:
+    DETERMINE path
+    PLAN artifacts.toml entry
+    CHECK UPDATE vs CREATE
+  IF artifacts:
+    IDENTIFY parent references
+  IF code:
+    IDENTIFY design artifacts + requirement IDs + traceability markers
+  FOR new IDs:
+    USE cpt-{system}-{kind}-{slug}
+    VERIFY uniqueness with `{cfs_cmd} --json list-ids`
+
+RULES:
+  - MUST clarify system context when unclear before proceeding
+  - MUST clarify output destination when unclear before proceeding
+  - MUST store selected system for registry placement
+```

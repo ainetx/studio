@@ -8,523 +8,644 @@ version: 1.3
 
 ### Round loop
 
-Requires: `workflows/shared/inline-fallback-probe.md` before any `cf-*` sub-agent dispatch.
+```text
+UNIT Phase07RoundLoopPreconditions
 
-Precondition: INLINE_FALLBACK must be set before the first round (already probed by `workflows/generate/phase-0-dependencies.md` at workflow start). If `INLINE_FALLBACK` is unset at any round-level dispatch site (e.g., after a context-loss / compaction event), follow the universal fail-stop rule in `skills/studio/sub-agent-dispatch.md` § Pre-dispatch discipline and re-run the shared probe before continuing. Do NOT re-probe per-round when `INLINE_FALLBACK` is already set.
+PURPOSE:
+  Enforce pre-loop invariants before any round-level dispatch.
 
-**Orchestration modes:** This loop supports two exclusive orchestration strategies per round, controlled by environment variables:
-- **Single-agent (default):** `PANEL_MODE_TOPIC` and `PANEL_MODE_CHALLENGE` both default to `"single-agent"`. When set to `"single-agent"`, the orchestrator dispatches the `cf-brainstorm-panel` agent once per round (not per expert). That agent runs the full round logic with one expert as primary; subsequent experts provide optional critique via the `protocol` field. This is the default because it yields one cohesive deliberation per round, works identically on all hosts, and makes INLINE_FALLBACK a no-op.
-- **Fan-out:** When `PANEL_MODE_TOPIC` or `PANEL_MODE_CHALLENGE` is set to `"fan-out"`, the orchestrator dispatches all relevant panel members in parallel using the `cf-brainstorm-expert` contract. Each expert independently produces questions/contributions; the orchestrator collects all responses before aggregation. Fan-out is opt-in and requires a host with native sub-agent parallelism (otherwise it degrades to sequential via INLINE_FALLBACK).
+RULES:
+  - REQUIRE workflows/shared/inline-fallback-probe.md loaded before any cf-* sub-agent dispatch
+  - REQUIRE INLINE_FALLBACK set before the first round (already probed by
+    workflows/generate/phase-0-dependencies.md)
+  - IF INLINE_FALLBACK is unset at any round-level dispatch site
+    (e.g. after context-loss/compaction):
+    follow universal fail-stop rule in skills/studio/sub-agent-dispatch.md
+    § Pre-dispatch discipline; re-run shared probe before continuing
+  - MUST NOT re-probe per-round when INLINE_FALLBACK is already set
+```
+
+```text
+UNIT Phase07OrchestrationModes
+
+PURPOSE:
+  Define the two exclusive orchestration strategies per round.
+
+STATE:
+  panel_mode: single-agent | fan-out
+    per-round, resolved from precedence chain
+
+NOTES:
+  single-agent (default): orchestrator dispatches cf-brainstorm-panel once per round.
+  One expert is primary; secondary experts provide optional critique via protocol field.
+  One cohesive sub-agent context; host-independent; INLINE_FALLBACK is a no-op.
+
+  fan-out: orchestrator dispatches all relevant panel members in parallel via
+  cf-brainstorm-expert. Each expert independently produces questions/contributions.
+  No inter-expert live communication. Requires host with native sub-agent parallelism
+  (degrades to sequential via INLINE_FALLBACK otherwise).
+```
 
 ### Anti-pattern: SILENT_MODE_DOWNGRADE
 
-When `panel_mode=="single-agent"` AND `len(state.panel) > 1`, the orchestrator MUST NOT dispatch one `cf-brainstorm-expert` per panel member in parallel (or sequentially) in lieu of a single `cf-brainstorm-panel` dispatch. Doing so is a `SILENT_MODE_DOWNGRADE` failure. The recovery is NOT the agent-availability menu — the agent is registered, the orchestrator simply attempted the wrong agent for the resolved mode. Instead: STOP, reset the Phase-Skip Gate to `armed`, surface `"silent mode downgrade prevented — single-agent mode requires cf-brainstorm-panel"` (or the symmetric fan-out string when the downgrade direction is reversed), then emit the dedicated downgrade-recovery menu defined below.
-
-The same prohibition applies in reverse for `panel_mode=="fan-out"`: do NOT dispatch one `cf-brainstorm-panel` when the user requested fan-out.
-
-### SILENT_MODE_DOWNGRADE recovery menu
-
 ```text
-A SILENT_MODE_DOWNGRADE was caught: the orchestrator attempted to dispatch the wrong agent for the resolved `panel_mode`.
+UNIT SilentModeDowngradeGuard
 
-| Option | Action |
-|---|---|
-| 1 | Retry this round with the correct agent for the resolved `panel_mode` (no mode change) |
-| 2 | Abort the brainstorm session (route to `wrap-handoff.md` with `reason="silent-mode-downgrade"`) |
+PURPOSE:
+  Prevent the orchestrator from dispatching the wrong agent for the resolved panel_mode.
 
-Reply with `1` or `2`.
+RULES:
+  - WHEN panel_mode=="single-agent" AND len(state.panel) > 1:
+    MUST NOT dispatch one cf-brainstorm-expert per panel member in parallel or sequentially
+    (doing so is SILENT_MODE_DOWNGRADE failure)
+  - WHEN panel_mode=="fan-out":
+    MUST NOT dispatch one cf-brainstorm-panel when user requested fan-out
+
+ON_ERROR:
+  SILENT_MODE_DOWNGRADE ->
+    STOP
+    SET CF_PHASE_GATE = armed
+    EMIT "silent mode downgrade prevented — single-agent mode requires cf-brainstorm-panel"
+      (or symmetric fan-out string when direction is reversed)
+    EMIT_MENU SilentModeDowngradeRecoveryMenu
+    WAIT user.reply
+    STOP_TURN
+
+MENU SilentModeDowngradeRecoveryMenu:
+  TITLE: A SILENT_MODE_DOWNGRADE was caught: orchestrator attempted wrong agent for resolved panel_mode.
+  OPTIONS:
+    1 ->
+      RE-RESOLVE panel_mode from precedence chain
+      DISPATCH correct agent for resolved panel_mode
+      CONTINUE round normally
+    2 ->
+      CONTINUE wrap-handoff.md WITH reason="silent-mode-downgrade"
+  INVALID:
+    EMIT "Please reply with 1 or 2."
+    WAIT user.reply
+    STOP_TURN
+
+NOTES:
+  This recovery menu is independent of INLINE_FALLBACK and does NOT touch the
+  § Agent availability check menu.
+  Recovery is NOT the agent-availability menu — the agent is registered;
+  orchestrator attempted the wrong agent for the resolved mode.
 ```
 
-Reply parsing:
-- `1` → re-resolve `panel_mode` from the precedence chain, dispatch the correct agent for that mode, continue the round normally.
-- `2` → route to `wrap-handoff.md` with `reason="silent-mode-downgrade"`.
-- anything else → re-emit the menu prefixed with the clarifier "Please reply with 1 or 2."
+```text
+UNIT Phase07RoundLoop
 
-This recovery menu is independent of `INLINE_FALLBACK` and does NOT touch the § Agent availability check menu.
+PURPOSE:
+  Drive topic and challenge rounds, dispatch agents, validate contributions,
+  render output, parse user replies, and enforce the round cap.
 
-**Inline-fallback note:** When `INLINE_FALLBACK=true`, parallel_dispatch degrades to sequential; experts-are-independent guarantee is best-effort in that mode (per `skills/studio/sub-agent-dispatch.md` Mode B). In single-agent mode, INLINE_FALLBACK is a no-op: single-agent orchestration is inherently sequential.
+STATE:
+  pending_round_kind: topic | challenge
+    default: topic (first iteration is always a topic-round)
+  INLINE_FALLBACK_THIS_ROUND: bool
+    default: false
+    scope: per-round
 
-The loop drives two kinds of rounds, chosen by the user after every round finishes:
+DO:
+  WHILE state.topic_current is not None:
 
-- **topic-round** (`kind="topic"`) — explore `state.topic_current`; panel contributes 1-3 questions each with proposed defaults + a `next_topic_proposal`.
-- **challenge-round** (`kind="challenge"`) — re-open decisions from the most recent completed round; panel critiques those decisions from each persona's POV and offers counter-proposals. Challenge results can themselves be challenged when the user accepted or wrote counter-values. Topic does not advance; `next_topic_proposal` is ignored (kept from the most recent topic-round).
+    SET INLINE_FALLBACK_THIS_ROUND = false
+
+    # Resolve panel_mode (precedence chain):
+    #   1. state.run_config.PANEL_MODE_TOPIC / PANEL_MODE_CHALLENGE (offer-reply)
+    #   2. env var PANEL_MODE_TOPIC / PANEL_MODE_CHALLENGE
+    #   3. workflow default "single-agent"
+    IF pending_round_kind == "topic":
+      SET panel_mode = state.run_config.PANEL_MODE_TOPIC
+                       OR env(PANEL_MODE_TOPIC)
+                       OR "single-agent"
+    ELSE:
+      SET panel_mode = state.run_config.PANEL_MODE_CHALLENGE
+                       OR env(PANEL_MODE_CHALLENGE)
+                       OR "single-agent"
+
+    IF panel_mode == "single-agent":
+      SET protocol = env(BRAINSTORM_PANEL_PROTOCOL, "independent-then-critique")
+    ELSE:
+      SET protocol = null
+
+    # Pre-dispatch: run SILENT_MODE_DOWNGRADE guard and agent availability check
+    CONTINUE SilentModeDowngradeGuard
+    CONTINUE Phase07AgentAvailabilityCheck
+
+    # Pre-dispatch checkpoint (MANDATORY before any dispatch):
+    EMIT exactly one chat line:
+      "- [BRAINSTORM-DISPATCH]: round={N} kind={topic|challenge} panel_mode={resolved}
+        mode_source={offer-reply|env|default} agent={cf-brainstorm-panel|cf-brainstorm-expert}
+        panel_size={len(state.panel)}"
+
+    # Dispatch phase
+    IF pending_round_kind == "topic":
+      CONTINUE Phase07TopicDispatch
+    ELSE:  # challenge
+      CONTINUE Phase07ChallengeDispatch
+
+    # Invariant validation
+    CONTINUE Phase07InvariantValidation
+
+    # Post-dispatch processing
+    CONTINUE Phase07PostDispatch
+
+    # Render output to user
+    CONTINUE Phase07Render
+
+    # Parse user reply
+    CONTINUE Phase07ReplyParsing
+
+    # Iteration cap check
+    SET state.round_count = state.round_count + 1
+    IF state.round_count >= state.BRAINSTORM_MAX_ROUNDS:
+      EMIT_MENU RoundCapMenu
+      WAIT user.reply
+      STOP_TURN
+
+  # After while-loop exits:
+  LOAD workflows/generate/phase-0.7/wrap-handoff.md
+
+RULES:
+  - MUST emit pre-dispatch checkpoint line after agent availability check resolves
+    agent identifier AND before actual sub-agent dispatch tool call
+  - MUST NOT emit checkpoint when availability check routes to its 3-option menu
+  - Omitting checkpoint is MISSING_DISPATCH_CHECKPOINT failure: STOP, re-emit
+    checkpoint line, then continue
+  - INLINE_FALLBACK_THIS_ROUND is per-round scope; see sub-agent-dispatch.md
+    § Registered native sub-agent set & INLINE_FALLBACK_THIS_ROUND
+```
 
 ```text
-pending_round_kind = "topic"        # first iteration is always a topic-round
-while state.topic_current is not None:
-  INLINE_FALLBACK_THIS_ROUND = false  # per-round scope; see sub-agent-dispatch.md § Registered native sub-agent set & INLINE_FALLBACK_THIS_ROUND
-  # Read orchestration mode flags independently for each round kind.
-  # Precedence: state.run_config (set from the user's offer reply, e.g.
-  # `yes mode=fan-out`) → env var → workflow default "single-agent".
-  panel_mode_topic = (
-      state.run_config.PANEL_MODE_TOPIC
-      or env("PANEL_MODE_TOPIC")
-      or "single-agent"
-  )
-  panel_mode_challenge = (
-      state.run_config.PANEL_MODE_CHALLENGE
-      or env("PANEL_MODE_CHALLENGE")
-      or "single-agent"
-  )
-  
-  if pending_round_kind == "topic":
-    panel_mode = panel_mode_topic
-  else:  # pending_round_kind == "challenge"
-    panel_mode = panel_mode_challenge
-  
-  # Select protocol (used only when panel_mode="single-agent")
-  protocol = env("BRAINSTORM_PANEL_PROTOCOL", "independent-then-critique")
-  
-  # MANDATORY: emit pre-dispatch checkpoint line (see § Pre-dispatch checkpoint)
-  # Dispatch phase — conditional on panel_mode
-  challenged_decisions = None
-  if pending_round_kind == "topic":
-    if panel_mode == "fan-out":
-      # Legacy parallel dispatch: all experts independently
-      contributions = parallel_dispatch([
-        cf-brainstorm-expert(
-            persona = e, topic = state.topic_current, state,
-            mode = "topic")
-        for e in state.panel
-      ])
-    else:  # panel_mode == "single-agent"
-      # Pre-dispatch G1/G2 guards (only when prior rounds exist)
-      if state.rounds:
-        if state.rounds[-1].protocol and state.rounds[-1].protocol != protocol:
-          status = "skipped"
-          health = { degraded: true, reason: "protocol changed mid-session" }
-          contributions = []
-          # PROTOCOL_CHANGE_DETECTED: fail-stop, skip dispatch
-        elif state.rounds[-1].panel != state.panel:
-          status = "skipped"
-          health = { degraded: true, reason: "panel mutated mid-session" }
-          contributions = []
-          # PANEL_MUTATION_DETECTED: fail-stop, skip dispatch
-        else:
-          # New single-agent panel dispatch
-          envelope = cf-brainstorm-panel(
-              panel = state.panel, topic = state.topic_current, state,
-              mode = "topic", protocol = protocol)
-          # Flatten envelope into contributions[] (see state-schema.md § envelope)
-          contributions = flatten_envelope(envelope)
-      else:
-        # New single-agent panel dispatch
-        envelope = cf-brainstorm-panel(
-            panel = state.panel, topic = state.topic_current, state,
-            mode = "topic", protocol = protocol)
-        # Flatten envelope into contributions[] (see state-schema.md § envelope)
-        contributions = flatten_envelope(envelope)
-      
-  else:  # pending_round_kind == "challenge"
-    # The parse-side guard (see Parse block) refuses `C` when
-    # `state.rounds[-1].answer_keys` is empty BEFORE this branch is entered,
-    # so by precondition `state.rounds` is non-empty and `answer_keys` is
-    # non-empty here. The orchestrator MUST NOT enter this branch otherwise.
-    challenge_source_round = state.rounds[-1]
-    challenge_keys = challenge_source_round.answer_keys
-    challenged_decisions = { k: state.decisions[k] for k in challenge_keys }
-    
-    if panel_mode == "fan-out":
-      # Legacy parallel dispatch: all experts independently
-      contributions = parallel_dispatch([
-        cf-brainstorm-expert(
-            persona = e, topic = state.topic_current, state,
-            mode = "challenge",
-            challenged_decisions = challenged_decisions)
-        for e in state.panel
-      ])
-    else:  # panel_mode == "single-agent"
-      # Pre-dispatch G1/G2 guards (only when prior rounds exist)
-      if state.rounds:
-        if state.rounds[-1].protocol and state.rounds[-1].protocol != protocol:
-          status = "skipped"
-          health = { degraded: true, reason: "protocol changed mid-session" }
-          contributions = []
-          # PROTOCOL_CHANGE_DETECTED: fail-stop, skip dispatch
-        elif state.rounds[-1].panel != state.panel:
-          status = "skipped"
-          health = { degraded: true, reason: "panel mutated mid-session" }
-          contributions = []
-          # PANEL_MUTATION_DETECTED: fail-stop, skip dispatch
-        else:
-          # New single-agent panel dispatch
-          envelope = cf-brainstorm-panel(
-              panel = state.panel, topic = state.topic_current, state,
-              mode = "challenge", challenged_decisions = challenged_decisions,
-              protocol = protocol)
-          # Flatten envelope into contributions[]
-          contributions = flatten_envelope(envelope)
-      else:
-        # UNREACHABLE: precondition at line 92-94 guarantees state.rounds is
-        # non-empty on the challenge branch; the if-branch above is always
-        # taken. Kept as a comment to document the structural symmetry with
-        # the topic-round branch; do not add a dispatch here without first
-        # relaxing the precondition.
-  
-  # ---- Invariant validation (applies to both orchestration modes) ----
-  # Validate contributions structure and detect invariant violations.
-  # If violations are detected and attempts_used < 2, construct repair_feedback
-  # and dispatch once more before persisting. On second failure or at
-  # attempts_used == 2, mark status="skipped" and set health.degraded=true.
-  #
-  # 12 Invariant violations grouped by category:
-  #   Structural (short-circuit on first, do not continue):
-  #     1. contributions is not a list
-  #     2. a contribution has no expert_id
-  #     9. a contribution has questions but no relevant field
-  #     12. (in single-agent mode only) envelope kind is invalid
-  #
-  #   Content (accumulate all violations found, apply repair_feedback once):
-  #     3. a relevant contribution has no questions array
-  #     4. a question has no decision_key
-  #     5. a question has an empty decision_key
-  #     6. duplicate decision_key within topic-round (challenge-round reuse is allowed)
-  #     7. decision_key in challenge-round not in challenged_decisions
-  #     8. a question has no text field
-  #     10. relevant=false but no reason field
-  #     11. topic-round: a relevant contribution has no next_topic_proposal
-  #
-  # Upon first structural violation: set status="skipped", health.degraded=true,
-  # health.reason="Structural invariant violation {N}", contributions=[],
-  # do NOT dispatch repair. End round.
-  #
-  # Upon content violations (accumulated across all contributions):
-  # If attempts_used == 1:
-  #   - Construct repair_feedback object with violation details and re-dispatch once.
-  #   - If re-dispatch succeeds with no new violations: continue normally with
-  #     status="ok" (or "degraded" if SLA was exceeded), health.attempts_used=2.
-  #   - If re-dispatch fails with violations: set status="skipped",
-  #     health.degraded=true, health.reason="{N} invariant violations despite retry",
-  #     contributions=[], answer_keys=[], do NOT render.
-  # If attempts_used >= 2:
-  #   - Skip the current round, set status="skipped", health.degraded=true,
-  #     health.reason="{N} invariant violations; retry limit reached",
-  #     contributions=[], answer_keys=[].
-  
-  # Placeholder: run validation
-  validation_result = validate_contributions(contributions, kind=pending_round_kind, 
-                                             challenged_decisions=challenged_decisions)
-  structural_errors = validation_result.structural_errors
-  content_errors = validation_result.content_errors
-  attempts_used = 1  # Track retry attempts per round
-  
-  while True:  # Retry loop (max 2 iterations per round)
-    if structural_errors and attempts_used == 1:
-      # Structural violation: short-circuit, do not repair
-      status = "skipped"
-      health = { degraded: true, reason: f"Structural invariant violation {structural_errors[0]}", 
-                 attempts_used: 1 }
-      contributions = []
-      break  # Exit retry loop
-    elif content_errors and attempts_used == 1:
-      # Content violations: attempt repair with repair_feedback
-      repair_feedback = {
-        mode: pending_round_kind,
-        panel_mode: panel_mode,
-        protocol: protocol,
-        violations: content_errors,
-        prior_contributions: contributions
-      }
-      
-      # Re-dispatch with repair_feedback signal
-      if pending_round_kind == "topic":
-        if panel_mode == "fan-out":
-          contributions = parallel_dispatch([
-            cf-brainstorm-expert(
-                persona = e, topic = state.topic_current, state,
-                mode = "topic", repair_feedback = repair_feedback)
-            for e in state.panel
-          ])
-        else:  # single-agent
-          envelope = cf-brainstorm-panel(
-              panel = state.panel, topic = state.topic_current, state,
-              mode = "topic", protocol = protocol, 
-              repair_feedback = repair_feedback)
-          contributions = flatten_envelope(envelope)
-      else:  # challenge
-        if panel_mode == "fan-out":
-          contributions = parallel_dispatch([
-            cf-brainstorm-expert(
-                persona = e, topic = state.topic_current, state,
-                mode = "challenge",
-                challenged_decisions = challenged_decisions,
-                repair_feedback = repair_feedback)
-            for e in state.panel
-          ])
-        else:  # single-agent
-          envelope = cf-brainstorm-panel(
-              panel = state.panel, topic = state.topic_current, state,
-              mode = "challenge", challenged_decisions = challenged_decisions,
-              protocol = protocol, repair_feedback = repair_feedback)
-          contributions = flatten_envelope(envelope)
-      
-      attempts_used = 2
-      validation_result = validate_contributions(contributions, kind=pending_round_kind,
-                                                 challenged_decisions=challenged_decisions)
-      structural_errors = validation_result.structural_errors
-      content_errors = validation_result.content_errors
-      
-      if content_errors:
-        # Second failure: mark as skipped
-        status = "skipped"
-        health = { degraded: true, 
-                   reason: f"{len(content_errors)} invariant violations despite retry",
-                   attempts_used: 2 }
-        contributions = []
-        break  # Exit retry loop
-      else:
-        # Repair successful
-        status = "ok"
-        health = { degraded: false, reason: null, attempts_used: 2 }
-        break  # Exit retry loop normally
-    else:
-      # No errors or attempts_used >= 2
-      if structural_errors or content_errors:
-        status = "skipped"
-        health = { degraded: true,
-                   reason: f"{len(structural_errors or content_errors)} invariant violations; retry limit reached",
+UNIT Phase07AgentAvailabilityCheck
+
+PURPOSE:
+  Verify resolved agent is present in host's registered native sub-agent set
+  before any dispatch.
+
+DO:
+  VERIFY resolved agent identifier is in host registered native sub-agent set
+
+  IF agent unavailable AND INLINE_FALLBACK == false:
+    EMIT_MENU AgentUnavailableMenu
+    WAIT user.reply
+    STOP_TURN
+
+  IF INLINE_FALLBACK == true:
+    NOTE: inline-panel option is the recommended default; surface as suggested choice
+
+MENU AgentUnavailableMenu:
+  TITLE: The resolved brainstorm agent `{agent}` is not registered as a native sub-agent in this host.
+  OPTIONS:
+    1 ->
+      SET INLINE_FALLBACK_THIS_ROUND = true
+      INLINE the matching agent contract for this round only
+    2 ->
+      IF pending_round_kind == "topic":
+        SET state.run_config.PANEL_MODE_TOPIC = other_value(current_mode)
+      ELSE:
+        SET state.run_config.PANEL_MODE_CHALLENGE = other_value(current_mode)
+      NOTE: other_value("single-agent") = "fan-out"; other_value("fan-out") = "single-agent"
+      NOTE: the OTHER mode key (not matching pending_round_kind) is left unchanged
+      RE-RESOLVE panel_mode for current round
+      CONTINUE Phase07AgentAvailabilityCheck (for newly resolved agent)
+    3 ->
+      CONTINUE wrap-handoff.md WITH reason="agent-unavailable"
+  INVALID:
+    EMIT "Reply with 1, 2, or 3."
+    WAIT user.reply
+    STOP_TURN
+```
+
+```text
+UNIT Phase07TopicDispatch
+
+PURPOSE:
+  Dispatch panel for topic-round based on resolved panel_mode.
+
+DO:
+  REQUIRE pending_round_kind == "topic"
+
+  IF panel_mode == "fan-out":
+    PARALLEL_DISPATCH [cf-brainstorm-expert for each e in state.panel]
+    WITH: persona=e, topic=state.topic_current, state, mode="topic"
+    SET contributions = all_results
+
+  ELSE:  # single-agent
+    IF state.rounds is non-empty:
+      CONTINUE Phase07MidSessionMutationGuard
+      IF status != "skipped":
+        DISPATCH cf-brainstorm-panel
+        WITH: panel=state.panel, topic=state.topic_current, state,
+              mode="topic", protocol=protocol
+        SET envelope = result
+        SET contributions = flatten_envelope(envelope)
+    ELSE:
+      DISPATCH cf-brainstorm-panel
+      WITH: panel=state.panel, topic=state.topic_current, state,
+            mode="topic", protocol=protocol
+      SET envelope = result
+      SET contributions = flatten_envelope(envelope)
+```
+
+```text
+UNIT Phase07ChallengeDispatch
+
+PURPOSE:
+  Dispatch panel for challenge-round based on resolved panel_mode.
+  Precondition: state.rounds non-empty and state.rounds[-1].answer_keys non-empty
+  (parse-side guard in Phase07ReplyParsing refuses C when answer_keys is empty).
+
+DO:
+  REQUIRE pending_round_kind == "challenge"
+  SET challenge_source_round = state.rounds[-1]
+  SET challenge_keys = challenge_source_round.answer_keys
+  SET challenged_decisions = { k: state.decisions[k] for k in challenge_keys }
+
+  IF panel_mode == "fan-out":
+    PARALLEL_DISPATCH [cf-brainstorm-expert for each e in state.panel]
+    WITH: persona=e, topic=state.topic_current, state,
+          mode="challenge", challenged_decisions=challenged_decisions
+    SET contributions = all_results
+
+  ELSE:  # single-agent
+    IF state.rounds is non-empty:
+      CONTINUE Phase07MidSessionMutationGuard
+      IF status != "skipped":
+        DISPATCH cf-brainstorm-panel
+        WITH: panel=state.panel, topic=state.topic_current, state,
+              mode="challenge", challenged_decisions=challenged_decisions,
+              protocol=protocol
+        SET contributions = flatten_envelope(result)
+    # UNREACHABLE else branch: precondition guarantees state.rounds non-empty
+```
+
+```text
+UNIT Phase07MidSessionMutationGuard
+
+PURPOSE:
+  Shared guard for single-agent dispatch: detect mid-session protocol or panel
+  mutations and set fail-stop skip state before any dispatch attempt.
+  Called by Phase07TopicDispatch and Phase07ChallengeDispatch when
+  state.rounds is non-empty.
+
+DO:
+  IF state.rounds[-1].protocol AND state.rounds[-1].protocol != protocol:
+    SET status = "skipped"
+    SET health = { degraded: true, reason: "protocol changed mid-session" }
+    SET contributions = []
+    # PROTOCOL_CHANGE_DETECTED: fail-stop, skip dispatch
+  ELIF state.rounds[-1].panel != state.panel:
+    SET status = "skipped"
+    SET health = { degraded: true, reason: "panel mutated mid-session" }
+    SET contributions = []
+    # PANEL_MUTATION_DETECTED: fail-stop, skip dispatch
+
+RULES:
+  - MUST be called by single-agent branches of Phase07TopicDispatch and
+    Phase07ChallengeDispatch whenever state.rounds is non-empty
+  - MUST NOT dispatch any agent when status is set to "skipped" by this guard
+  - Callers MUST check status != "skipped" before proceeding to dispatch
+```
+
+```text
+UNIT Phase07InvariantValidation
+
+PURPOSE:
+  Validate contributions structure; repair once on content violations;
+  fail-stop on structural violations or second failure.
+
+STATE:
+  attempts_used: int
+    default: 1
+    scope: per-round
+
+DO:
+  RUN validate_contributions(contributions, kind=pending_round_kind,
+                             challenged_decisions=challenged_decisions)
+
+  # Structural invariants (short-circuit on first, do not repair):
+  #  1. contributions is not a list
+  #  2. a contribution has no expert_id
+  #  9. a contribution has questions but no relevant field
+  #  12. (single-agent only) envelope kind is invalid
+  IF structural_errors:
+    SET status = "skipped"
+    SET health = { degraded: true,
+                   reason: "Structural invariant violation {structural_errors[0]}",
+                   attempts_used: 1 }
+    SET contributions = []
+    RETURN
+
+  # Content invariants (accumulate all, apply repair_feedback once):
+  #  3. relevant contribution has no questions array
+  #  4. a question has no decision_key
+  #  5. a question has empty decision_key
+  #  6. duplicate decision_key within topic-round (challenge reuse allowed)
+  #  7. challenge-round decision_key not in challenged_decisions
+  #  8. a question has no text field
+  #  10. relevant=false but no reason field
+  #  11. topic-round: relevant contribution has no next_topic_proposal
+  IF content_errors AND attempts_used == 1:
+    SET repair_feedback = { mode, panel_mode, protocol, violations, prior_contributions }
+    RE-DISPATCH with repair_feedback signal
+    SET attempts_used = 2
+    RE-VALIDATE
+    IF content_errors remain:
+      SET status = "skipped"
+      SET health = { degraded: true,
+                     reason: "{N} invariant violations despite retry",
+                     attempts_used: 2 }
+      SET contributions = []
+    ELSE:
+      SET status = "ok"
+      SET health = { degraded: false, reason: null, attempts_used: 2 }
+
+  IF attempts_used >= 2 AND (structural_errors OR content_errors):
+    SET status = "skipped"
+    SET health = { degraded: true,
+                   reason: "{N} invariant violations; retry limit reached",
                    attempts_used: attempts_used }
-        contributions = []
-      else:
-        status = "ok"
-        health = { degraded: false, reason: null, attempts_used: attempts_used }
-      break  # Exit retry loop
-  
-  # Post-dispatch processing
-  participating = [c for c in contributions if c.relevant]
-  skipped       = [c for c in contributions if not c.relevant]
-  # Only topic-rounds refresh the next-topic proposal cache; challenge-rounds
-  # reuse the most recent topic-round's proposals so the post-round menu can
-  # keep offering them.
-  if pending_round_kind == "topic":
-    state.next_topic_proposals = dedupe_and_merge(
-      [c.next_topic_proposal for c in participating])
-  # In challenge mode, critique-only challenge outputs stay in `participating`;
-  # do not render critique-only challenge outputs as skipped merely because
-  # they have no questions.
-  # Topic-round decision keys are write targets, not display labels. Before
-  # rendering a topic-round, validate that every participating question has a
-  # non-empty `decision_key` and that all topic-round `decision_key` values are
-  # unique across the rendered questions. MUST reject duplicate topic-round `decision_key` values as malformed expert output instead of allowing
-  # last-write-wins overwrites. Challenge-round questions intentionally reuse
-  # existing keys from `challenged_decisions`.
-  # ---- Render ----
-  header  = "Round {N} — Topic: {topic_current.text}"   (topic-round)
-            or
-            "Round {N} — Challenge: decisions from round {M} on {topic_current.text}"
-            (challenge-round; M = n of challenge_source_round)
-  
-  # If status="skipped", skip rendering and go directly to post-round menu
-  # with retry option.
-  if status == "skipped":
-    present to user:
-      {header}
-      Round skipped: {health.reason}
-      | Option | Action |
-      |---|---|
-      | R      | Retry this round (confirm-gated) |
-      | W      | Wrap up brainstorm (no more topics) |
-      | then: custom: <text> | Skip to a custom topic (topic-rounds only) |
-      
-      Parse retry confirmation:
-        - `R` with confirm: reset health.attempts_used=1, contributions=[],
-          status=null; jump back to dispatch phase for this round.
-        - `R` without confirm or malformed: re-show the skipped menu with
-          one-line clarifier.
-        - `W` or stop-token: state.topic_current = None; break (end brainstorm).
-        - `then: custom: <text>`: set pending_round_kind="topic",
-          state.topic_current = custom topic, continue the loop.
-  else:
-    # Normal render (status="ok" or "degraded")
-    present to user:
-      {header}
-      Panel reacted: {len(participating)} contributing, {len(skipped)} skipped.
-      [challenge-round only]
-      Challenging these decisions (overwrite-on-accept):
-        - {key1}: current value = "{state.decisions[key1]}"
-        - {key2}: current value = "{state.decisions[key2]}"
-      Questions:
-        [E1 Domain Architect]
-          E1Q1. {text}
-                Target: {decision_key}
-                Proposed: {proposed_default}    # in challenge-mode this is the
-                                                # counter-proposal that overwrites
-                                                # the current value on accept
-                Why: {rationale}
-        [E2 Security Reviewer] — skipped: {reason}
-      Critique (cross-expert pushback):
-        [E1] {critique}
-      Reply per question: `E1Q1: accept | keep | <answer> | skip`
-        accept = take the proposed/counter value
-        keep   = (challenge-round only) keep the current decision unchanged
-        skip   = leave unanswered (moves to state.open_questions on topic-rounds;
-                 on challenge-rounds keep = skip semantically, but `keep` is
-                 preferred for clarity)
-        Note: on challenge-rounds, `keep` and `skip` produce the same effect
-        (no overwrite); prefer `keep`.
-      After answers, what next?
-        1. {next_topic_proposals[0].text}  — proposed by {experts}
-        2. {next_topic_proposals[1].text}  — proposed by {experts}
-        C. Challenge the decisions just made (same topic, panel pushes back)
-        W. Wrap up brainstorm (no more topics)
-      then: custom: <text> — custom topic
-      Reply with `<answers> + then: <1|2|C|W>` or `then: custom: <text>`.
-      Shortcuts: `accept all; then: <1|2|C|W>`, `skip rest`, and `then:` may be sent as a follow-up when the user answered only the questions first.
-      You can also type `stop` / `enough` / `done` at any point to end now.
-      Option `C` is hidden when there are no decisions to challenge (e.g. the user skipped every question, or the last round itself was a challenge where nothing was overwritten).
-  
-  # ---- Parse ----
-  parse user reply:
-    - append a new entry to state.rounds with n = len(rounds)+1,
-      kind = pending_round_kind, topic = state.topic_current,
-      panel_mode = panel_mode, protocol = protocol (null if fan-out),
-      status = status, health = health,
-      contributions = contributions, answers = parsed_answers,
-      challenged_decisions = challenged_decisions   # null on topic-rounds
-    - decision key derivation: for each accepted/custom answer,
-      `key = question.decision_key`; in challenge-rounds this MUST be one
-      of `challenged_decisions.keys()`
-    - for each accepted/custom answer, write state.decisions[key] = value
-      (OVERWRITES any prior value — challenge-rounds intentionally clobber
-      the topic-round value when the user accepted a counter-proposal)
-    - record the set of touched keys as rounds[-1].answer_keys (deduped).
-      On challenge-rounds, `answer_keys` lists ONLY keys whose value was
-      actually overwritten by an `accept` / `<custom>` answer; `keep` /
-      `skip` answers are excluded from `answer_keys` (the value was
-      re-affirmed, not rewritten).
-    - When the user replies `skip` to a question, add that question to `state.open_questions`.
-    - When an expert returns `relevant: false`, do NOT add that expert's unposed questions to `state.open_questions` — they were never surfaced.
-    - on challenge-rounds `keep`/`skip` leaves state.decisions[key] unchanged
-      and does NOT add to open_questions (it was an explicit re-affirmation)
-    - if a reply answers questions but omits `then:`, record the answers,
-      re-render only the post-round menu, and ask for `then:` as a follow-up
-    - `accept all` accepts every currently rendered proposed/counter value;
-      `skip rest` applies `skip` to every unanswered rendered question
-    - malformed reply (e.g. multiple `then:` tokens, unknown choice letter,
-      `then: C` when option C is hidden): do NOT mutate state; re-render
-      the post-round menu prefixed with a one-line clarifier and re-ask
-    - self-check before dispatching the `then:` choice: assert that
-      `state.rounds[-1].answer_keys` is a list (possibly empty); if it is
-      not a list, treat as a malformed-state error and re-ask
-    # ---- Iteration cap check (runs after every completed round) ----
-    state.round_count = state.round_count + 1
-    if state.round_count >= state.BRAINSTORM_MAX_ROUNDS:
-      emit:
-        Brainstorm round cap reached ({state.round_count}/{state.BRAINSTORM_MAX_ROUNDS}).
-        | Option | Action |
-        |---|---|
-        | extend: M | Raise cap to M (must be > current BRAINSTORM_MAX_ROUNDS) and continue |
-        | accept     | Wrap up brainstorm now with decisions collected so far |
-        | stop       | Manual handoff — route to wrap-handoff.md (reason: manual-cap) |
-        Reply `extend: <M>`, `accept`, or `stop`.
-      parse cap reply:
-        - `extend: M` (M must be a positive integer greater than state.BRAINSTORM_MAX_ROUNDS):
-              state.BRAINSTORM_MAX_ROUNDS = M; continue the loop
-        - `accept`:
-              state.topic_current = None; break  # wrap up normally
-        - `stop`:
-              route to wrap-handoff.md with reason="manual-cap"; break
-        - anything else: re-emit the cap prompt with one-line rejection
-    then dispatch on the user's `then:` choice:
-    - `W` or stop-token: state.topic_current = None; break
-    - `C`: REFUSE if `state.rounds[-1].answer_keys` is empty — render the
-           one-line clarifier "Nothing to challenge — the previous round
-           produced no accepted or custom answers. Pick a numbered topic
-           option, `then: custom: <text>`, or `W` to wrap instead." and
-           re-show the post-round menu without entering a new round. Otherwise
-           set `pending_round_kind = "challenge"` (topic_current unchanged;
-           topic_history NOT appended) and continue the loop.
-           Authoritative guard: this is the ONLY place that decides whether
-           a challenge-round may start; the loop's challenge branch trusts
-           this guard and does not re-check.
-    - `1|2|custom`: pending_round_kind = "topic"
-           state.topic_history.append(state.topic_current.id)
-           state.topic_current = chosen-or-custom topic
+    SET contributions = []
+  ELIF NOT (structural_errors OR content_errors):
+    SET status = "ok"
+    SET health = { degraded: false, reason: null, attempts_used: attempts_used }
+```
+
+```text
+UNIT Phase07PostDispatch
+
+PURPOSE:
+  Process contributions after dispatch and validation.
+
+DO:
+  SET participating = [c for c in contributions if c.relevant]
+  SET skipped = [c for c in contributions if not c.relevant]
+
+  IF pending_round_kind == "topic":
+    SET state.next_topic_proposals = dedupe_and_merge(
+        [c.next_topic_proposal for c in participating])
+  # challenge-rounds reuse the most recent topic-round's proposals
+
+RULES:
+  - MUST validate every participating topic-round question has non-empty decision_key
+  - MUST reject duplicate topic-round decision_key values as malformed expert output
+  - MUST NOT render critique-only challenge outputs as skipped (keep in participating)
+```
+
+```text
+UNIT Phase07Render
+
+PURPOSE:
+  Render round output or skipped-round menu to user.
+
+DO:
+  SET header = "Round {N} — Topic: {topic_current.text}"
+               (topic-round)
+               OR
+               "Round {N} — Challenge: decisions from round {M} on {topic_current.text}"
+               (challenge-round; M = n of challenge_source_round)
+
+  IF status == "skipped":
+    EMIT {header}
+    EMIT "Round skipped: {health.reason}"
+    EMIT_MENU SkippedRoundMenu
+    WAIT user.reply
+    STOP_TURN
+
+  ELSE:  # status == "ok" or "degraded"
+    EMIT {header}
+    EMIT "Panel reacted: {len(participating)} contributing, {len(skipped)} skipped."
+    IF pending_round_kind == "challenge":
+      EMIT "Challenging these decisions (overwrite-on-accept):"
+      FOR each key in challenged_decisions.keys():
+        EMIT "  - {key}: current value = \"{state.decisions[key]}\""
+    EMIT "Questions:"
+    FOR each expert contribution:
+      EMIT "[{expert_id}] ..." (or skipped: {reason})
+    EMIT "Critique (cross-expert pushback): ..."
+    EMIT "Reply per question: `{id}: accept | keep | <answer> | skip`"
+    EMIT post-round menu with numbered topics + C + W options
+    NOTE: Option C is hidden when state.rounds[-1].answer_keys is empty
+    EMIT "then: custom: <text> — custom topic"
+    EMIT "You can also type `stop` / `enough` / `done` at any point to end now."
+    WAIT user.reply
+    STOP_TURN
+
+MENU SkippedRoundMenu:
+  TITLE: Round skipped
+  OPTIONS:
+    R (with confirm) ->
+      SET health.attempts_used = 1
+      SET contributions = []
+      SET status = null
+      JUMP BACK to dispatch phase for this round
+    R (without confirm or malformed) ->
+      EMIT one-line clarifier
+      EMIT_MENU SkippedRoundMenu
+      WAIT user.reply
+      STOP_TURN
+    W ->
+      SET state.topic_current = None
+    stop_token ->
+      SET state.topic_current = None
+    then: custom: <text> ->
+      SET pending_round_kind = "topic"
+      SET state.topic_current = custom topic
+      CONTINUE round loop
+```
+
+```text
+UNIT Phase07ReplyParsing
+
+PURPOSE:
+  Parse user reply to record round state, update decisions, and set next topic/kind.
+
+DO:
+  APPEND to state.rounds:
+    n = len(rounds)+1
+    kind = pending_round_kind
+    topic = state.topic_current
+    panel_mode = panel_mode
+    protocol = protocol (null if fan-out)
+    status = status
+    health = health
+    contributions = contributions
+    answers = parsed_answers
+    challenged_decisions = challenged_decisions (null on topic-rounds)
+
+  FOR each accepted/custom answer:
+    SET key = question.decision_key
+    IF challenge-round: REQUIRE key in challenged_decisions.keys()
+    WRITE state.decisions[key] = value  # OVERWRITES prior value
+
+  SET rounds[-1].answer_keys = deduped set of touched keys
+    NOTE: challenge-rounds: ONLY keys overwritten by accept/<custom>;
+          keep/skip answers excluded from answer_keys
+
+  IF user replies skip to question:
+    ADD question to state.open_questions
+  IF expert returns relevant=false:
+    MUST NOT add that expert's unposed questions to state.open_questions
+  IF challenge-round keep/skip:
+    leave state.decisions[key] unchanged
+    MUST NOT add to open_questions
+
+  IF reply answers questions but omits then::
+    RECORD answers
+    RE-RENDER only post-round menu
+    ASK for then: as follow-up
+    WAIT user.reply
+    STOP_TURN
+
+  # Shortcut semantics
+  # "accept all" = accept every currently rendered proposed/counter value
+  # "skip rest" = skip every unanswered rendered question
+  # "then:" may be sent as follow-up after questions answered
+
+RULES:
+  - MUST NOT mutate state on malformed reply (multiple then: tokens, unknown
+    choice letter, then: C when C is hidden)
+  - MUST re-render post-round menu prefixed with one-line clarifier on malformed reply
+  - MUST assert rounds[-1].answer_keys is a list before dispatching then: choice;
+    if not a list, treat as malformed-state error and re-ask
+
+  SWITCH then: choice:
+    W or stop_token ->
+      SET state.topic_current = None
+    C ->
+      IF state.rounds[-1].answer_keys is empty:
+        EMIT "Nothing to challenge — the previous round produced no accepted or custom
+              answers. Pick a numbered topic option, `then: custom: <text>`, or `W`
+              to wrap instead."
+        RE-SHOW post-round menu
+        WAIT user.reply
+        STOP_TURN
+      ELSE:
+        SET pending_round_kind = "challenge"
+        NOTE: topic_current unchanged; topic_history NOT appended
+    1|2|custom ->
+      SET pending_round_kind = "topic"
+      APPEND state.topic_current.id to state.topic_history
+      SET state.topic_current = chosen-or-custom topic
+
+NOTES:
+  The C guard in this parse block is the ONLY place that decides whether a
+  challenge-round may start; the loop's challenge branch trusts this guard
+  and does not re-check.
+```
+
+```text
+UNIT RoundCapMenu
+
+PURPOSE:
+  Present cap-reached menu when state.round_count >= state.BRAINSTORM_MAX_ROUNDS.
+
+MENU RoundCapMenu:
+  TITLE: Brainstorm round cap reached ({state.round_count}/{state.BRAINSTORM_MAX_ROUNDS}).
+  OPTIONS:
+    extend: M (M must be positive integer > current BRAINSTORM_MAX_ROUNDS) ->
+      SET state.BRAINSTORM_MAX_ROUNDS = M
+      CONTINUE round loop
+    accept ->
+      SET state.topic_current = None
+    stop ->
+      CONTINUE wrap-handoff.md WITH reason="manual-cap"
+  INVALID:
+    EMIT one-line rejection
+    EMIT_MENU RoundCapMenu
+    WAIT user.reply
+    STOP_TURN
 ```
 
 ### Pre-dispatch checkpoint (MANDATORY)
 
-Before any per-round dispatch, the orchestrator MUST emit exactly one chat line of the form:
+```text
+UNIT Phase07PreDispatchCheckpoint
 
+PURPOSE:
+  Enforce mandatory pre-dispatch checkpoint before every round dispatch.
+
+RULES:
+  - MUST emit exactly one checkpoint line before each round dispatch:
+    "- [BRAINSTORM-DISPATCH]: round={N} kind={topic|challenge}
+      panel_mode={resolved} mode_source={offer-reply|env|default}
+      agent={cf-brainstorm-panel|cf-brainstorm-expert}
+      panel_size={len(state.panel)}"
+  - MUST emit AFTER agent availability check resolves agent identifier
+  - MUST emit BEFORE actual sub-agent dispatch tool call
+  - MUST NOT emit when availability check routes to its 3-option menu
+  - Omitting is MISSING_DISPATCH_CHECKPOINT failure:
+    STOP, re-emit checkpoint line, then continue
 ```
-- [BRAINSTORM-DISPATCH]: round={N} kind={topic|challenge} panel_mode={resolved} mode_source={offer-reply|env|default} agent={cf-brainstorm-panel|cf-brainstorm-expert} panel_size={len(state.panel)}
-```
-
-Omitting this checkpoint is a `MISSING_DISPATCH_CHECKPOINT` failure: STOP, re-emit the checkpoint line, then continue.
-
-The checkpoint MUST be emitted AFTER the agent availability check resolves the agent identifier AND BEFORE the actual sub-agent dispatch tool call. If the availability check routes to its 3-option menu, NO checkpoint is emitted on that path — the checkpoint is only valid when a real dispatch will follow.
 
 ### Agent availability check (pre-dispatch)
 
-Membership semantics and the `INLINE_FALLBACK_THIS_ROUND` lifecycle are defined in `skills/studio/sub-agent-dispatch.md § Registered native sub-agent set & INLINE_FALLBACK_THIS_ROUND`.
-
-Before any sub-agent dispatch, the orchestrator MUST verify the resolved `agent` identifier is present in the host's registered native sub-agent set.
-
-If the agent is unavailable AND `INLINE_FALLBACK=false`, the orchestrator MUST NOT silently switch modes. Emit the following menu and end the assistant turn:
-
-```text
-The resolved brainstorm agent `{agent}` is not registered as a native sub-agent in this host.
-
-| Option | Action |
-|---|---|
-| 1 | Run this round in inline-panel mode (orchestrator inlines the contract; reduced isolation) |
-| 2 | Switch panel_mode to `{other_mode}` for this session (dispatches `{other_agent}` instead) |
-| 3 | Abort the brainstorm session |
-
-Reply with 1, 2, or 3.
-```
-
-Reply parsing:
-- `1` → set `INLINE_FALLBACK_THIS_ROUND=true` and inline the matching agent contract for this round only.
-- `2` → flip ONLY the mode key corresponding to `pending_round_kind`:
-        on topic-rounds, write `state.run_config.PANEL_MODE_TOPIC = other_value(current_mode)`;
-        on challenge-rounds, write `state.run_config.PANEL_MODE_CHALLENGE = other_value(current_mode)`.
-        `other_value(current_mode)` is `"fan-out"` when `current_mode == "single-agent"`, else `"single-agent"`. The other mode key (the one NOT matching `pending_round_kind`) is left unchanged.
-        After the write, re-resolve `panel_mode` for the current round (the precedence chain at the top of the loop) and continue with the availability check for the newly resolved agent.
-- `3` → route to `wrap-handoff.md` with `reason="agent-unavailable"`.
-
-If `INLINE_FALLBACK=true` already, the inline-panel option is the recommended default — surface that as the suggested choice in the menu.
+See `skills/studio/sub-agent-dispatch.md § Registered native sub-agent set & INLINE_FALLBACK_THIS_ROUND` for membership semantics and lifecycle. Handled by `Phase07AgentAvailabilityCheck` unit above.
 
 ### Envelope flattening (single-agent mode)
 
-When `cf-brainstorm-panel` returns an `envelope` object (in single-agent mode), the orchestrator flattens it into a `contributions[]` array before persisting. The envelope has two kinds of blocks:
+```text
+UNIT Phase07EnvelopeFlattening
 
-- **`kind="independent"`**: Primary expert output (questions, initial answers, next_topic_proposal).
-- **`kind="critique"`**: Secondary experts' reviews of the primary's output.
+PURPOSE:
+  Flatten cf-brainstorm-panel envelope into contributions[] array.
 
-**Flattening algorithm:**
-1. Initialize `contributions = []`.
-2. For each block in `envelope.blocks` where `block.kind=="independent"`, iterate `block.rows`:
-   - Extract expert_id, questions, critique, next_topic_proposal, relevant.
-   - Create a contribution entry and append to `contributions`.
-3. For each block in `envelope.blocks` where `block.kind=="critique"`, iterate `block.rows`:
-   - Extract expert_id and critique.
-   - Merge the critique into the corresponding primary contribution's `critique` field (append to existing critique or create it).
-4. Return flattened `contributions` array.
+DO:
+  INITIALIZE contributions = []
+  FOR each block in envelope.blocks WHERE block.kind == "independent":
+    FOR each row in block.rows:
+      EXTRACT expert_id, questions, critique, next_topic_proposal, relevant
+      APPEND contribution entry to contributions
+  FOR each block in envelope.blocks WHERE block.kind == "critique":
+    FOR each row in block.rows:
+      EXTRACT expert_id and critique
+      MERGE critique into corresponding primary contribution's critique field
 
-Open, load, and follow `workflows/generate/phase-0.7/state-schema.md` § envelope for the full envelope schema.
+  RETURN flattened contributions array
+
+NOTES:
+  Open, load, and follow workflows/generate/phase-0.7/state-schema.md § envelope
+  for the full envelope schema.
+```
 
 ### Expert dispatch contracts
 
-**Fan-out mode (panel_mode="fan-out"):**
-Each expert dispatch follows the JSON contract in `{cf-studio-path}/.core/skills/studio/agents/cf-brainstorm-expert.md`. The facilitator is dispatched once per session; experts are re-dispatched fresh each round (parallel fan-out). Orchestrator-supplied values for every expert dispatch (same shape per expert in a given round):
+```text
+UNIT Phase07ExpertDispatchContracts
 
-- `persona` = the full panel entry for expert `e` from `state.panel` (`{id, persona, focus, rationale}` — pass the entire object, not just the id)
-- `topic` = the full `state.topic_current` object (`{id, text, section}` — `section` is the template H2 section name when the topic maps to one, else `null`)
-- `mode` = `"topic"` for an exploratory round or `"challenge"` for a challenge round; required field
-- `challenged_decisions` = `{ "<key>": "<current value>", ... }` snapshot of `state.decisions` for the keys under challenge; required when `mode="challenge"`, MUST be omitted (or `null`) when `mode="topic"`
-- `repair_feedback` = (optional) object containing prior round violations and suggestions for correction; omit if no repair is needed
-- `state` = the orchestrator's brainstorm state with these sub-fields always present: `kind`, `rules_loaded`, `kit_rules_path`, `template_path`, `panel`, `decisions`, `topic_history`. Sub-fields not in this list (`example_path`, `rounds`, `open_questions`, `session_id`, `next_topic_proposals`) are optional — pass them when available, omit otherwise.
+PURPOSE:
+  Define dispatch contract fields for fan-out and single-agent modes.
 
-**Single-agent mode (panel_mode="single-agent"):**
-The orchestrator dispatches `cf-brainstorm-panel` once per round (not per expert). Open, load, and follow `{cf-studio-path}/.core/skills/studio/agents/cf-brainstorm-panel.md` for the full contract.
+NOTES:
+  Fan-out mode (panel_mode="fan-out"):
+    Each expert dispatch follows JSON contract in
+    {cf-studio-path}/.core/skills/studio/agents/cf-brainstorm-expert.md
+    Orchestrator-supplied values per expert per round:
+      persona = full panel entry {id, persona, focus, rationale}
+      topic = full state.topic_current object {id, text, section}
+      mode = "topic" or "challenge"
+      challenged_decisions = {key: value} snapshot when mode="challenge";
+        MUST be omitted or null when mode="topic"
+      repair_feedback = (optional) prior round violations and correction hints
+      state = brainstorm state with sub-fields:
+        ALWAYS: kind, rules_loaded, kit_rules_path, template_path, panel,
+                decisions, topic_history
+        OPTIONAL when available: example_path, rounds, open_questions,
+                session_id, next_topic_proposals
 
-- `panel` = the full `state.panel` array (all experts, to allow the agent to designate a primary)
-- `topic` = the full `state.topic_current` object
-- `mode` = `"topic"` or `"challenge"`
-- `protocol` = orchestration protocol for multi-expert interaction (`"independent-then-critique"` or `"single-pass"`)
-- `challenged_decisions` = (required on `mode="challenge"`) snapshot of keys under challenge
-- `repair_feedback` = (optional) prior round violations and correction hints
-- `state` = same as fan-out mode
-
-After the while-loop exits (any of: `W` stop, stop-token, `accept` cap reply, `stop` cap reply), load and follow `workflows/generate/phase-0.7/wrap-handoff.md` to consolidate the design and hand off to Phase 1.
+  Single-agent mode (panel_mode="single-agent"):
+    Dispatches cf-brainstorm-panel once per round.
+    Open, load, and follow
+    {cf-studio-path}/.core/skills/studio/agents/cf-brainstorm-panel.md
+    for the full contract.
+    Orchestrator-supplied values:
+      panel = full state.panel array
+      topic = full state.topic_current object
+      mode = "topic" or "challenge"
+      protocol = "independent-then-critique" or "single-pass"
+      challenged_decisions = (required on mode="challenge") snapshot of keys under challenge
+      repair_feedback = (optional) prior round violations and correction hints
+      state = same as fan-out mode
+```

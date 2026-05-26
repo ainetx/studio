@@ -12,6 +12,40 @@ version: 1.0
 
 <!-- /toc -->
 
+```text
+UNIT AnalyzeContextBudget
+
+PURPOSE:
+  Enforce context-budget sizing, chunked loading, fail-safe output, and
+  plan-escalation pointer before loading large documents.
+
+WHEN:
+  Phase 0 is about to load large documents
+  OR estimated total context would exceed 1200 lines
+
+DO:
+  Estimate size before loading large docs (e.g. with `wc -l`); state the budget for this turn.
+  Load only what is used: prefer rules.md Validation and needed checklist categories only.
+  Use read_file ranges; summarize each chunk; keep only extracted criteria.
+  IF checks cannot be completed within context:
+    EMIT partial output with PARTIAL status and checkpoint + resume guidance
+    FORBID claiming overall PASS
+  CONTINUE phase-0.1-plan-escalation-gate.md
+
+RULES:
+  - MUST estimate context size before loading large documents
+  - MUST use chunked reads and summarize-and-drop
+  - MUST_NOT claim overall PASS when context budget is exhausted
+  - MUST output PARTIAL with checkpoint when checks cannot complete
+
+NOTES:
+  Plan escalation: Phase 0.1 is mandatory after dependencies load.
+  When SUB_AGENT_SESSION_APPROVED=true AND INLINE_FALLBACK=false, the gate
+  logs the estimate and proceeds without proposing /cf-plan; decomposition is
+  handled in-workflow by Phase 2.5 (reviewer plan). Otherwise the legacy
+  size-based escalation menu fires when budget is exceeded.
+```
+
 ## Context Budget & Overflow Prevention (CRITICAL)
 - Budget first: estimate size before loading large docs (for example with `wc -l`) and state the budget for this turn.
 - Load only what you use: prefer rules.md Validation and only needed checklist categories; avoid large registries/specs unless required.

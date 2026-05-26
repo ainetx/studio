@@ -9,10 +9,59 @@ version: 1.0
 
 # Phase 0: Resolve Variables & Discover Tools
 
-Run `EXECUTE: {cfs_cmd} --json info`; store `{cf-studio-path}`, `{project_root}`, and the returned `variables` dict for later path resolution.
+```text
+UNIT Phase0ResolveVariables
 
-Variable checkpoint: after resolving `{cfs_cmd}`, `{cf-studio-path}`, and `{project_root}`, carry them forward to Phase 3.1, where they MUST be written into the `[meta]` TOML table at the top of `plan.toml` so they survive context compaction and the runtime can read them on resume. On context loss or new-chat resume, parse `plan.toml`'s `[meta]` table first, then re-run `{cfs_cmd} --json info` to verify (or refresh) the resolved values before any path-dependent step.
+PURPOSE:
+  Resolve runtime variables and persist them for later phases and context recovery.
+
+DO:
+  EXECUTE {cfs_cmd} --json info
+  SET {cf-studio-path} = returned value
+  SET {project_root} = returned value
+  SET {variables} = returned variables dict
+  CONTINUE Phase0VariableCheckpoint
+
+NOTES:
+  Resolved values must be carried forward to Phase 3.1, where they MUST be
+  written into the [meta] TOML table of plan.toml.
+```
+
+```text
+UNIT Phase0VariableCheckpoint
+
+PURPOSE:
+  Ensure resolved variables survive context compaction and resume.
+
+RULES:
+  - MUST write {cfs_cmd}, {cf-studio-path}, and {project_root} into plan.toml [meta]
+    table in Phase 3.1 so the runtime can read them on resume
+  - MUST re-run {cfs_cmd} --json info on context loss or new-chat resume to verify
+    or refresh resolved values before any path-dependent step
+  - MUST parse plan.toml [meta] table first on resume, then re-run {cfs_cmd} --json info
+
+DO:
+  CONTINUE Phase0DiscoverTools
+
+ON_ERROR:
+  {cfs_cmd} --json info failure ->
+    EMIT "Failed to resolve runtime variables from `{cfs_cmd} --json info`. Verify that {cfs_cmd} is on PATH and the studio is initialised, then retry."
+    STOP_TURN
+```
 
 ## 0.1 Discover Available Tools
 
-Read `READ: {cf-studio-path}/.core/skills/studio/studio.clispec` and build a dynamic tool map from each `COMMAND` block as `{command_name} — {DESCRIPTION line} [outputs: {OUTPUT format}]`. Also inspect the resolved `variables` dict for script directories (for example `{scripts}` when present), scan each such directory for `*.py`, `*.sh` files, and add kit scripts with inferred purpose.
+```text
+UNIT Phase0DiscoverTools
+
+PURPOSE:
+  Build a dynamic tool map from the CLISPEC and kit scripts.
+
+DO:
+  READ {cf-studio-path}/.core/skills/studio/studio.clispec
+  FOR each COMMAND block:
+    ADD to tool_map: {command_name} — {DESCRIPTION line} [outputs: {OUTPUT format}]
+  FOR each script directory in {variables} (e.g. {scripts} when present):
+    SCAN for *.py and *.sh files
+    ADD each kit script to tool_map with inferred purpose
+```

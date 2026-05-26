@@ -14,18 +14,34 @@ version: 1.0
 
 ### Session setup (panel selection)
 
-Requires: `workflows/shared/inline-fallback-probe.md` before any `cf-*` sub-agent dispatch.
-
-Dispatch sub-agent `cf-brainstorm-facilitator` with the JSON contract documented in `{cf-studio-path}/.core/skills/studio/agents/cf-brainstorm-facilitator.md`. Orchestrator-supplied values for this dispatch:
-
-- `initial_topic` = a one-paragraph summary of the user's original request (the trigger prompt for this `/cf-generate` run)
-- `kind` = `{KIND}`; `rules_loaded` = `true` only when kit rules were actually loaded for this brainstorm session, else `false`
-- `kit_rules_path`, `template_path`, `example_path` = resolved from `rules.md` when available (each `null` when unavailable; pass the key with `null` rather than omitting). A non-null `kit_rules_path` by itself does not make `rules_loaded=true`; the orchestrator must have opened and applied the rules.
-- `project_ctx` = a 2-3-sentence summary covering: the selected `system` (from Phase 0.5), the `KIND` and its kit (when STRICT + kit-mapped), and the most-relevant existing artifact paths identified during Phase 0.5 parent/sibling discovery
-
-The agent returns `{ proposed_panel: [...3..6 entries], seed_topic: {...} }`. Show to the user:
-
 ```text
+UNIT Phase07PanelSelection
+
+PURPOSE:
+  Dispatch facilitator, render proposed panel, manage panel edits, confirm seed topic.
+
+DO:
+  REQUIRE workflows/shared/inline-fallback-probe.md loaded before any cf-* sub-agent dispatch
+  DISPATCH cf-brainstorm-facilitator with JSON contract from
+    {cf-studio-path}/.core/skills/studio/agents/cf-brainstorm-facilitator.md
+  WITH orchestrator-supplied values:
+    initial_topic = one-paragraph summary of user's original request
+    kind = {KIND}
+    rules_loaded = true ONLY when kit rules actually loaded for this brainstorm session,
+                   else false
+    kit_rules_path = resolved from rules.md or null
+    template_path = resolved from rules.md or null
+    example_path = resolved from rules.md or null
+    NOTE: non-null kit_rules_path alone does NOT make rules_loaded=true;
+          orchestrator must have opened and applied the rules
+    project_ctx = 2-3-sentence summary covering: selected system (Phase 0.5),
+                  KIND and its kit (STRICT + kit-mapped), most-relevant existing
+                  artifact paths from Phase 0.5 parent/sibling discovery
+
+  RECEIVE { proposed_panel: [...3..6 entries], seed_topic: {...} }
+
+  EMIT exactly:
+---
 Proposed panel for `{KIND}: {name}`:
 
 E1. Domain Architect      — focus: domain model, actor boundaries
@@ -44,6 +60,47 @@ proposed panel until the user replies `accept`.
 
 Seed topic: `{seed_topic.text}`
 Reply `start` after confirming the panel, or `seed: <topic>` to override.
-```
+---
+  WAIT user.reply
 
-After user confirmation, set `state.panel = confirmed_list` and `state.topic_current = confirmed_seed_topic`.
+MENU PanelEditLoop:
+  TITLE: Panel edit loop (repeat until user replies accept)
+  OPTIONS:
+    accept ->
+      SET state.panel = confirmed_list
+      SET state.topic_current = confirmed_seed_topic
+      CONTINUE phase-0.7/round-loop.md
+    drop E{N},E{M} ->
+      REMOVE listed experts from proposed panel
+      REQUIRE min 3 remain
+      EMIT re-rendered panel
+      WAIT user.reply
+    swap E{N}: <new persona> (<focus>) ->
+      REPLACE E{N} with new persona
+      EMIT re-rendered panel
+      WAIT user.reply
+    add: <persona> (<focus>) ->
+      REQUIRE panel size < 6
+      ADD new persona to panel
+      EMIT re-rendered panel
+      WAIT user.reply
+    start ->
+      SET state.panel = confirmed_list
+      SET state.topic_current = confirmed_seed_topic
+      CONTINUE phase-0.7/round-loop.md
+    seed: <topic> ->
+      SET confirmed_seed_topic = <topic>
+      EMIT re-rendered panel with updated seed topic
+      WAIT user.reply
+  INVALID (compound reply):
+    EMIT one-line clarifier asking for single edit form
+    WAIT user.reply
+    STOP_TURN
+
+RULES:
+  - MUST refuse compound replies with a one-line clarifier
+  - MUST require min 3 panel members; MUST NOT allow more than 6
+  - MUST re-render proposed panel after every edit until user replies accept
+  - MUST set state.panel = confirmed_list and state.topic_current before
+    entering round loop
+```

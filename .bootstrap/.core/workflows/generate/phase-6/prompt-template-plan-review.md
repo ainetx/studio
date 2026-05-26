@@ -16,6 +16,21 @@ inline conditionals that break the "self-contained final prompt usable in a fres
 Open, load, and follow `workflows/generate/phase-6/prompt-templates.md` for the diff summary.
 -->
 
+```text
+UNIT PlanReviewPromptEmission
+
+PURPOSE:
+  Emit self-contained Plan Review Prompt as the FINAL section on W3.
+
+RULES:
+  - MUST verify Validation Results body is present and complete before emitting
+  - MUST begin with "Invoke skill cf"
+  - MUST embed inline: changed file paths, what changed, kind/target,
+    completed Validation Results body verbatim, remaining_findings when non-empty
+  - MUST NOT reference "previous chat" or content outside the prompt itself
+  - MUST NOT ask next agent to regenerate or re-implement changes
+```
+
 #### `Plan Review Prompt` template (emitted on `W3`)
 
 ```text

@@ -5,6 +5,21 @@ parent: workflows/generate.md
 description: Invoke when the user picked `R3` (Plan Prompt) on the Remediation Handoff menu and the self-contained phased-remediation prompt must be emitted verbatim as the FINAL section.
 ---
 
+```text
+UNIT PlanPromptEmission
+
+PURPOSE:
+  Emit self-contained Plan Prompt as the FINAL section on R3.
+
+RULES:
+  - MUST verify Validation Results body is present and complete before emitting
+  - MUST begin with "Invoke skill cf"
+  - MUST embed inline: changed file paths, what changed, kind/target,
+    completed Validation Results body verbatim, full remaining_findings list
+  - MUST NOT reference "previous chat" or content outside the prompt itself
+  - MUST NOT ask next agent to restate task unless required inputs missing
+```
+
 #### `Plan Prompt` template (emitted on `R3`)
 
 ```text

@@ -7,6 +7,20 @@ version: 1.0
 ---
 
 ```text
+UNIT AnalyzePlanPromptTemplate
+
+PURPOSE:
+  Emit the self-contained Plan Prompt when the user selects remediation option 3.
+
+RULES:
+  - MUST emit as the FINAL section of the response
+  - MUST start with "Invoke skill `cf`"
+  - MUST be self-contained: include PATH, KIND, status, and full numbered issue list
+  - MUST embed all findings with severity, file, line, evidence, root cause
+  - MUST_NOT omit any actionable finding
+```
+
+```text
 Invoke skill `cf`.
 
 I need a phased remediation plan via `/cf-plan` for `{PATH}` ({KIND}).

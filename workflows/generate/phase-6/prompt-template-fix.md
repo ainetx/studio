@@ -5,6 +5,21 @@ parent: workflows/generate.md
 description: Invoke when the user picked `R2` (Fix Prompt) on the Remediation Handoff menu and the self-contained bounded-fix prompt must be emitted verbatim as the FINAL section.
 ---
 
+```text
+UNIT FixPromptEmission
+
+PURPOSE:
+  Emit self-contained Fix Prompt as the FINAL section on R2.
+
+RULES:
+  - MUST verify Validation Results body is present and complete before emitting
+  - MUST begin with "Invoke skill cf"
+  - MUST embed inline: changed file paths, what changed, kind/target,
+    completed Validation Results body verbatim, full remaining_findings list
+  - MUST NOT reference "previous chat" or content outside the prompt itself
+  - MUST NOT ask next agent to re-discover findings
+```
+
 #### `Fix Prompt` template (emitted on `R2`)
 
 ```text

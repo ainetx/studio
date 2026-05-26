@@ -15,63 +15,91 @@ description: Canonical state contract for Generate Phase 1.5 author-plan offer r
 
 ## State Contract
 
-Set `AUTHOR_PLAN_OFFER_RESOLVED` to exactly one of:
+```text
+UNIT Phase15StateContract
 
-- `memory`
-- `disk`
-- `declined`
-- `auto_skipped_no_author_plan_flag`
-- `auto_skipped_rules_disabled`
-- `cancelled_by_stop_token`
-- `cancelled_planner_failure`
-- `cancelled_partial_write`
+PURPOSE:
+  Define canonical AUTHOR_PLAN_OFFER_RESOLVED values, state families,
+  and derived state variables.
 
-Derived state families:
+STATE:
+  AUTHOR_PLAN_OFFER_RESOLVED:
+    memory
+    | disk
+    | declined
+    | auto_skipped_no_author_plan_flag
+    | auto_skipped_rules_disabled
+    | cancelled_by_stop_token
+    | cancelled_planner_failure
+    | cancelled_partial_write
 
-- **Continuation states**: `memory`, `disk`, `declined`,
-  `auto_skipped_no_author_plan_flag`, `auto_skipped_rules_disabled`
-- **Terminal cancellation states**: `cancelled_by_stop_token`,
-  `cancelled_planner_failure`, `cancelled_partial_write`
+  AUTHOR_EXECUTION_PLAN: parsed author_plan JSON | null
+  AUTHOR_PLAN_CACHE_DIR: directory path | null (only when AUTHOR_PLAN_OFFER_RESOLVED=disk
+    AND cache render completed successfully)
 
-Set `AUTHOR_EXECUTION_PLAN` to the parsed `author_plan` JSON only when
-`AUTHOR_PLAN_OFFER_RESOLVED` is `memory` or `disk`; otherwise set it to `null`.
+RULES:
+  Continuation states:
+    memory | disk | declined | auto_skipped_no_author_plan_flag |
+    auto_skipped_rules_disabled
 
-Set `AUTHOR_PLAN_CACHE_DIR` only when `AUTHOR_PLAN_OFFER_RESOLVED=disk` and the
-cache render completed successfully. If disk-mode cache writes fail, do not
-claim a cache directory unless the successfully written subset is explicitly
-reported to the user.
+  Terminal cancellation states:
+    cancelled_by_stop_token | cancelled_planner_failure | cancelled_partial_write
 
-Auto-skip the offer only when one of these conditions applies:
+  AUTHOR_EXECUTION_PLAN:
+    - MUST be set to parsed author_plan JSON ONLY when
+      AUTHOR_PLAN_OFFER_RESOLVED is memory or disk
+    - MUST be null otherwise
 
-- the user passed `--no-author-plan` in the invocation
-- the KIND's `rules.md` explicitly sets `author_plan = "disabled"`
+  AUTHOR_PLAN_CACHE_DIR:
+    - MUST be set ONLY when AUTHOR_PLAN_OFFER_RESOLVED=disk AND cache
+      render completed successfully
+    - MUST NOT be claimed unless successfully written subset is explicitly
+      reported to the user when disk-mode cache writes fail
+
+  Auto-skip conditions:
+    - user passed --no-author-plan in the invocation
+    - KIND's rules.md explicitly sets author_plan = "disabled"
+```
 
 ### Mandatory-Decompose Branch
 
-When `SUB_AGENT_SESSION_APPROVED=true` AND `INLINE_FALLBACK=false` AND no
-auto-skip condition applies, the author plan is mandatory.
+```text
+UNIT Phase15MandatoryDecomposeBranch
 
-In that branch:
+PURPOSE:
+  Define behavior when SUB_AGENT_SESSION_APPROVED=true AND INLINE_FALLBACK=false
+  AND no auto-skip condition applies.
 
-- the initial user choice is only plan storage (`memory` vs `disk`)
-- direct user-decline from the offer itself is unreachable
-- `auto_skipped_*` states are unreachable
-- planner dispatch is unconditional
-- `AUTHOR_EXECUTION_PLAN` is expected to be non-null on successful planner exit
+WHEN:
+  SUB_AGENT_SESSION_APPROVED == true
+  AND INLINE_FALLBACK == false
+  AND auto_skip_condition == false
 
-However, `declined` remains reachable in this branch through **planner-failure
-recovery** when planner validation fails and the user explicitly chooses the
-"Skip author plan" recovery option. That recovery path is valid and proceeds to
-Phase 3 as a continuation state.
+RULES:
+  - Initial user choice is ONLY plan storage (memory vs disk)
+  - FORBID direct user-decline from the offer itself
+  - auto_skipped_* states are unreachable in this branch
+  - Planner dispatch is unconditional
+  - AUTHOR_EXECUTION_PLAN is expected non-null on successful planner exit
+  - declined REMAINS reachable through planner-failure recovery ONLY when
+    planner validation fails and user explicitly chooses "Skip author plan"
+    recovery option; that path is a valid continuation state to Phase 3
+```
 
 ### Downstream Requirements
 
-Phase 3 and Phase 4 may run only when `AUTHOR_PLAN_OFFER_RESOLVED` is a
-continuation state.
+```text
+UNIT Phase15DownstreamRequirements
 
-If a later phase observes a terminal cancellation state, it MUST fail-stop
-without dispatching a write-capable author and must leave any target files
-untouched. Plan-cache files written under disk mode are not target-file writes;
-their cleanup/resume handling is defined by
-`workflows/generate/phase-1.5/disk-mode.md` and
-`workflows/generate/error-handling.md`.
+PURPOSE:
+  Enforce Phase 3 / Phase 4 entry guards based on AUTHOR_PLAN_OFFER_RESOLVED.
+
+RULES:
+  - Phase 3 and Phase 4 MUST only run when AUTHOR_PLAN_OFFER_RESOLVED
+    is a continuation state
+  - IF a later phase observes a terminal cancellation state:
+    MUST fail-stop without dispatching write-capable author
+    MUST leave target files untouched
+  - Plan-cache files written under disk mode are not target-file writes;
+    cleanup/resume handling defined by disk-mode.md and error-handling.md
+```

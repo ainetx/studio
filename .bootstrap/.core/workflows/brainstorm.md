@@ -7,4 +7,15 @@ version: 1.0
 purpose: Standalone brainstorm command; pass-through to generate.md with BRAINSTORM mode
 ---
 
-LOAD skill `cf` IN GENERATE + BRAINSTORM mode
+```text
+UNIT BrainstormProxy
+
+PURPOSE:
+  Pass through to generate.md with BRAINSTORM mode active.
+
+DO:
+  LOAD skill `cf` IN GENERATE + BRAINSTORM mode
+
+ON_ERROR:
+  load_failed -> EMIT "Cannot load target workflow — check that {cf-studio-path} is correctly set." STOP_TURN
+```

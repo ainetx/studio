@@ -13,79 +13,136 @@ description: Invoke when the merged findings list (det + semantic) must be displ
 
 ### Phase 5.3: Findings Display + Auto-Fix-Mechanical Fast Path
 
-Requires: `workflows/shared/inline-fallback-probe.md` before any `cf-*` sub-agent dispatch. Pre-dispatch fail-stop and Mode B degradation rules are defined in `{cf-studio-path}/.core/skills/studio/sub-agent-dispatch.md`.
-
-**External entry from `analyze.md` Remediation Handoff option 1**: this phase accepts entry from the analyze workflow (when the user picks "Continue here in fix mode" on the analyze-side handoff menu). On external entry, the orchestrator must initialize the following Phase-5 state before executing the body of this phase:
-
-- **MUST re-probe** `workflows/shared/inline-fallback-probe.md` FIRST — analyze-side `INLINE_FALLBACK` does NOT carry across this handoff. `SUB_AGENT_SESSION_APPROVED` carries across; `INLINE_FALLBACK` does not.
-- `all_findings` = the merged findings list handed off from analyze (already namespaced per `workflows/analyze/phase-3-semantic.md` § Namespace rule)
-- `carried_validation_results` and `carried_semantic_reports` = analyze-side
-  deterministic results and semantic report blocks for Phase 6 external-entry
-  output, especially when `MAX_ITER=0`
-- `external_target_paths = analyzed_paths` and MUST be preserved until an
-  author dispatch returns a non-empty `manifest.paths_written`; downstream
-  remediation re-entry uses it as the fallback target set
-- `target_paths = analyzed_paths` (in-scope target set for every downstream validation, review, and author dispatch)
-- `manifest.paths_written = []` until an author dispatch returns an actual write manifest
-- `MAX_ITER` = resolved via the `workflows/generate/phase-5/index.md` § Pre-Phase-Setup (MAX_ITER resolution) prompt at handoff time (default `5` on enter; `0` to skip the loop and surface findings into `workflows/generate/phase-6/index.md` directly)
-- `N`, `carry_forward` = inherit the canonical Phase 5 state initialization defined in `workflows/generate/phase-5/index.md` § Dispatcher (`N = 1`, `carry_forward = []`); the dispatcher definition is the single source of truth and external entry uses identical values
-- `kit_rules_path`, `rules_mode`, `template_path`, `example_path`, `checklist_path`, `kind`, `name`, `system`, `design_artifact_path` (code mode) = resolved from the analyze-side context the same way `workflows/generate/phase-0-dependencies.md` + `workflows/generate/phase-0.5-clarify.md` would resolve them on a fresh generate run; when any of these values cannot be inferred, emit the following structured clarification prompt for each missing value before proceeding:
-
-  ```text
-  One or more generate-context values could not be inferred from the analyze-side handoff. Please supply the following:
-
-  Why this input is needed: The generate-side author dispatch requires [{variable_name}] to select the correct template/rules/author tier.
-  Suggested: {inferred_value_from_artifacts_toml_or_N/A_if_not_available}
-  Reply with `{variable_name}: <value>`
-  ```
-
-  Emit one prompt per unresolved variable in order: `kind`, `rules_mode`, `system`, `kit_rules_path`, `template_path`, `example_path`, `checklist_path`, `name`, `design_artifact_path`. Wait for user reply before proceeding to the body of this phase.
-
-External-fix handoff guard: before any file edit or inline patch attempt, Phase
-5 state MUST show `handoff_guard.inline_fallback_reprobed = true`,
-`handoff_guard.max_iter_resolved = true`, and
-`handoff_guard.dispatch_evidence_required = true`. Inline patching is permitted only when `INLINE_FALLBACK=true` or `MAX_ITER=0`. When `MAX_ITER > 0` and
-`INLINE_FALLBACK=false`, missing `phase5_dispatch_evidence` for the required
-validator/reviewer/author sequence means the orchestrator MUST stop before editing files and repair the dispatch state instead of applying patches inline.
-
-After initialization, execute the body of this sub-file normally (it treats external-entry state identically to internal-entry state).
-
-If `MAX_ITER == 0`: skip the partition + auto-fix logic, but STILL render the full findings list (see the Findings display block below) so the user has the audit trail in chat. For external analyze→generate entry, use the carried findings from analyze without a fresh Phase 5 validation/review and emit `Iteration 1/1 (MAX_ITER=0): zero-iteration external entry; surfacing all carried findings to workflows/generate/phase-6/index.md.` For internal generate entry, use the findings from the one fresh validator + semantic-reviewer pass and emit `Iteration 1/1 (MAX_ITER=0): zero-iteration internal entry; surfacing the single-pass findings to workflows/generate/phase-6/index.md.` Then set `remaining_findings = all_findings` and route to `workflows/generate/phase-6/index.md` (Remediation Handoff menu MANDATORY when `remaining_findings` is non-empty).
-
-Set `remaining_findings = []` on entry to this phase (before any branch executes). Branches below override this value before exiting.
-
-Partition `all_findings` by the `mechanical` flag:
-
-- `mechanical = [f for f in all_findings if f.mechanical]`
-- `judgmental = [f for f in all_findings if not f.mechanical]`
-
-If `all_findings` is empty and `carry_forward` is also empty, emit:
-
 ```text
-Iteration {N}/{MAX_ITER}: clean — exiting review loop.
+UNIT Phase53ExternalEntry
+
+PURPOSE:
+  Initialize Phase 5 state on external entry from analyze.md Remediation Handoff option 1.
+
+WHEN:
+  external_entry from analyze.md Remediation Handoff option 1
+
+DO:
+  MUST RE-PROBE workflows/shared/inline-fallback-probe.md FIRST
+    (analyze-side INLINE_FALLBACK does NOT carry across; SUB_AGENT_SESSION_APPROVED carries)
+  SET all_findings = merged findings list from analyze (already namespaced per
+    workflows/analyze/phase-3-semantic.md § Namespace rule)
+  SET carried_validation_results = analyze-side deterministic results
+  SET carried_semantic_reports = analyze-side semantic report blocks for Phase 6
+    (used especially when MAX_ITER=0)
+  SET external_target_paths = analyzed_paths
+    MUST preserve until an author dispatch returns non-empty manifest.paths_written
+    (downstream remediation re-entry uses it as fallback target set)
+  SET target_paths = analyzed_paths (in-scope for every downstream dispatch)
+  SET manifest.paths_written = [] until author dispatch returns actual write manifest
+  RESOLVE MAX_ITER via workflows/generate/phase-5/index.md § Pre-Phase-Setup
+    (default 5 on enter; 0 to skip loop and surface findings to phase-6)
+  SET N = 1 (canonical, same as internal entry)
+  SET carry_forward = [] (canonical, same as internal entry)
+
+  FOR each unresolved context value (kind, rules_mode, system, kit_rules_path,
+    template_path, example_path, checklist_path, name, design_artifact_path):
+    IF cannot be inferred from analyze-side handoff:
+      EMIT exactly:
+---
+One or more generate-context values could not be inferred from the analyze-side handoff. Please supply the following:
+
+Why this input is needed: The generate-side author dispatch requires [{variable_name}] to select the correct template/rules/author tier.
+Suggested: {inferred_value_from_artifacts_toml_or_N/A_if_not_available}
+Reply with `{variable_name}: <value>`
+---
+      WAIT user.reply
+      STOP_TURN
+
+RULES:
+  - MUST re-probe inline-fallback-probe.md FIRST before any other external-entry setup
+  - MUST emit one prompt per unresolved variable in order:
+    kind, rules_mode, system, kit_rules_path, template_path, example_path,
+    checklist_path, name, design_artifact_path
+  - MUST wait for user reply before proceeding to body of this phase
+
+UNIT Phase53ExternalEntryGuard
+
+PURPOSE:
+  Enforce external-fix handoff guard before any file edit or inline patch.
+
+RULES:
+  - Before any file edit or inline patch, Phase 5 state MUST show:
+    handoff_guard.inline_fallback_reprobed = true
+    handoff_guard.max_iter_resolved = true
+    handoff_guard.dispatch_evidence_required = true
+  - Inline patching permitted ONLY when INLINE_FALLBACK=true OR MAX_ITER=0
+  - When MAX_ITER > 0 AND INLINE_FALLBACK=false:
+    missing phase5_dispatch_evidence for required validator/reviewer/author sequence
+    MUST stop before editing files and repair dispatch state
+    FORBID applying patches inline
 ```
 
-Then set `loop_exit = "clean"`, `remaining_findings = []`, and
-proceed to `workflows/generate/phase-5/phase-5.5-final.md`.
+```text
+UNIT Phase53Body
 
-If `all_findings` is empty but `carry_forward` is non-empty, the loop is not
-clean. Do not announce `clean`. Exit only as one of:
+PURPOSE:
+  Display findings, partition mechanical/judgmental, and route to fast-path or
+  approval gate.
 
-- `loop_exit = "manual-handoff"` when the user stopped or chose handoff;
-  set `remaining_findings = carry_forward`.
-- `loop_exit = "user-accepted"` when the user explicitly accepted those
-  carried findings as-is after seeing their IDs; set
-  `remaining_findings = carry_forward`.
-- Protocol error when neither condition is true; stop and surface that
-  unresolved carry-forward findings cannot be hidden by a clean validator pass.
+DO:
+  REQUIRE workflows/shared/inline-fallback-probe.md loaded before dispatch
+
+  IF MAX_ITER == 0:
+    SKIP partition + auto-fix logic
+    STILL render full findings list (audit trail in chat)
+    IF external analyze→generate entry:
+      EMIT "Iteration 1/1 (MAX_ITER=0): zero-iteration external entry;
+            surfacing all carried findings to workflows/generate/phase-6/index.md."
+      USE carried findings from analyze (no fresh Phase 5 validation/review)
+    IF internal generate entry:
+      EMIT "Iteration 1/1 (MAX_ITER=0): zero-iteration internal entry;
+            surfacing the single-pass findings to workflows/generate/phase-6/index.md."
+      USE findings from one fresh validator + semantic-reviewer pass
+    SET remaining_findings = all_findings
+    CONTINUE workflows/generate/phase-6/index.md
+    NOTE: Remediation Handoff menu MANDATORY when remaining_findings non-empty
+
+  SET remaining_findings = []  # before any branch executes
+
+  PARTITION all_findings:
+    mechanical = [f for f in all_findings if f.mechanical]
+    judgmental = [f for f in all_findings if not f.mechanical]
+
+  IF all_findings is empty AND carry_forward is empty:
+    EMIT "Iteration {N}/{MAX_ITER}: clean — exiting review loop."
+    SET loop_exit = "clean"
+    SET remaining_findings = []
+    CONTINUE workflows/generate/phase-5/phase-5.5-final.md
+
+  IF all_findings is empty AND carry_forward non-empty:
+    NOTE: loop is not clean; MUST NOT announce clean
+    EXIT only as one of:
+      loop_exit = "manual-handoff" when user stopped or chose handoff;
+        SET remaining_findings = carry_forward
+      loop_exit = "user-accepted" when user explicitly accepted carried findings
+        after seeing their IDs; SET remaining_findings = carry_forward
+    ELSE: STOP and surface protocol error (unresolved carry-forward findings
+          cannot be hidden by clean validator pass)
+```
 
 #### Findings display (ALWAYS rendered — preserves audit history in the chat)
 
-When `all_findings` is non-empty, render every finding in a single ordered list so the user can audit the classification and rationale BEFORE any fix proceeds. The list includes BOTH mechanical and judgmental findings; mechanical-vs-judgmental classification is shown inline together with each agent's `mechanical_rationale` so the user can spot misclassifications.
-
-Before rendering, the orchestrator MUST verify every finding object has a non-empty `mechanical_rationale` string. On missing field, substitute the literal text `<no rationale provided by {agent_name}>` for that finding and continue rendering (do not abort the iteration).
-
 ```text
+UNIT Phase53FindingsDisplay
+
+PURPOSE:
+  Render every finding in a single ordered list before any fix proceeds.
+
+DO:
+  WHEN all_findings non-empty:
+    FOR each finding:
+      VERIFY finding has non-empty mechanical_rationale string
+      IF missing: SUBSTITUTE "<no rationale provided by {agent_name}>"
+        MUST NOT abort iteration
+
+    EMIT exactly:
+---
 Iteration {N}/{MAX_ITER}. Det gate: {PASS|FAIL}. Findings: High {h} / Medium {m} / Low {l}; mechanical {m_count}, judgmental {j_count}.
 
 [{id}] [{mech|judg}] [{severity}] `{path}`:{line} — {category}
@@ -93,56 +150,90 @@ Iteration {N}/{MAX_ITER}. Det gate: {PASS|FAIL}. Findings: High {h} / Medium {m}
        Why {mechanical|judgmental}: {mechanical_rationale}
        Suggested fix: {suggested_fix}
 [{next id}] ... (one block per finding, mechanical and judgmental interleaved by source order)
-```
+---
 
-The orchestrator MUST emit every finding before deciding the next step: do not collapse, summarize, or truncate the finding list before user approval; the displayed list and the full findings JSON must identify the same IDs so later fix, prompt, and plan handoffs cannot reference unseen findings.
+RULES:
+  - MUST emit every finding before deciding next step
+  - MUST NOT collapse, summarize, or truncate finding list before user approval
+  - MUST ensure displayed list and full findings JSON identify same IDs
+    (later fix, prompt, and plan handoffs MUST NOT reference unseen findings)
+```
 
 #### Branch — all-mechanical fast path
 
-If `judgmental` is EMPTY (i.e., every finding has `mechanical: true`), emit the announcement immediately after the findings display:
-
 ```text
-All {m_count} findings are mechanical — deterministic fixes derivable from each finding's `mechanical_rationale` alone. No user approval required. Auto-fixing now.
+UNIT Phase53MechanicalFastPath
+
+PURPOSE:
+  Auto-fix all findings when judgmental is empty; no user approval required.
+
+WHEN:
+  judgmental is EMPTY (every finding has mechanical=true)
+
+DO:
+  EMIT immediately after findings display:
+---
+All {m_count} findings are mechanical — deterministic fixes derivable from each
+finding's `mechanical_rationale` alone. No user approval required. Auto-fixing now.
+---
+
+  IF user types stop_token BEFORE orchestrator dispatches auto-fix
+    (while announcement is being read):
+    TREAT as phase-5.4-approval.md § option 4 (manual-handoff)
+    SKIP auto-fix dispatch
+    SET remaining_findings = all_findings
+    SET loop_exit = "manual-handoff"
+    CONTINUE workflows/generate/phase-6/index.md
+
+  BUILD mode=fix Inputs contract:
+    mode = "fix"
+    kind, name, system, rules_mode (carried from phase-4-write.md)
+    target_paths = target_paths
+    findings = mechanical
+    template_path, example_path, kit_rules_path (resolved or null in RELAXED non-kit)
+    checklist_path (ONLY when STRICT explicitly requires during fix)
+    design_artifact_path (code mode only)
+    git_commit_mode = GIT_COMMIT_MODE (MUST be included)
+    contributing_guide = CONTRIBUTING_GUIDE (MUST be included; null when not found)
+    git_constraint = mode-matched block from phase-4-write.md § Git constraint blocks
+
+  IF INLINE_FALLBACK == true:
+    SET CF_PHASE_GATE = released_for_inline_write IMMEDIATELY before inline write block
+    RESET CF_PHASE_GATE = armed IMMEDIATELY after inline write block completes
+      (both on success AND on failure)
+
+  EXECUTE workflows/generate/phase-4-write.md § Author Selection and Dispatch
+  APPEND returned findings_not_fixable to carry_forward
+    (open, load, follow phase-5.4-approval.md § Session-level carry-forward)
+  UPDATE manifest from returned manifest
+  SET N = N + 1
+  IF N > MAX_ITER:
+    # NOTE: CF_PHASE_GATE is already armed at this point (reset above after inline write)
+    EMIT_MENU Phase5IterationCapPrompt (from phase-5/index.md § Pre-Phase-Setup)
+    APPLY cap-reply rules from phase-5.4-approval.md
+  ELSE:
+    CONTINUE workflows/generate/phase-5/phase-5.1-det-gate.md
+
+RULES:
+  - MUST set CF_PHASE_GATE = released_for_inline_write IMMEDIATELY before inline write
+  - MUST reset CF_PHASE_GATE = armed IMMEDIATELY after inline write (success or failure)
 ```
-
-Then build the full mode=fix Inputs contract (matching the
-`workflows/generate/phase-4-write.md` author worker Inputs schema, with
-`mode=fix` replacing `mode=create` and `findings` replacing the original
-`inputs`):
-
-- `mode`: `"fix"`
-- `kind`, `name`, `system`, `rules_mode` — carried over from `workflows/generate/phase-4-write.md`
-- `target_paths`: `target_paths`
-- `findings`: `mechanical`
-- `template_path`, `example_path`, `kit_rules_path` resolved from `rules.md` (or `null` in RELAXED non-kit)
-- `checklist_path` included only when STRICT explicitly requires checklist guidance during fix (mirrors `workflows/generate/phase-4-write.md` § STRICT-checklist conditional)
-- `design_artifact_path` code mode only
-- `git_commit_mode` = `GIT_COMMIT_MODE` (MUST be included)
-- `contributing_guide` = `CONTRIBUTING_GUIDE` (MUST be included; `null` when not found)
-- `git_constraint` = the mode-matched constraint block from `workflows/generate/phase-4-write.md` § Git constraint blocks (include the block matching the current `GIT_COMMIT_MODE`)
-
-When `INLINE_FALLBACK=true`, MUST set `CF_PHASE_GATE=released_for_inline_write`
-IMMEDIATELY before executing the inline write block below (see SKILL.md §
-Phase-Skip Gate). MUST reset `CF_PHASE_GATE=armed` IMMEDIATELY after the
-inline write block completes — both on success AND on failure.
-
-Execute `workflows/generate/phase-4-write.md` § Author Selection and Dispatch
-with that payload. Append the selected author's returned `findings_not_fixable`
-to the session-level `carry_forward` set; open, load, and follow
-`workflows/generate/phase-5/phase-5.4-approval.md` § Session-level
-carry-forward for the canonical rule. Update `manifest` from the returned
-manifest, set `N = N + 1`. On `N > MAX_ITER`:
-<!-- Gate invariant: CF_PHASE_GATE is already 'armed' at this point (reset above after the inline write block). The cap prompt does not modify gate state. -->
-emit the `Review-Loop Iteration Cap Prompt` (defined in `workflows/generate/phase-5/index.md` §
-Pre-Phase-Setup as the canonical wording) and apply the same cap-reply rules
-from `workflows/generate/phase-5/phase-5.4-approval.md`: `extend: <M>` raises
-the cap, `accept` exits only after a post-fix deterministic gate, and `stop`
-exits with `loop_exit = "manual-handoff", remaining_findings =
-carry_forward`. If `N ≤ MAX_ITER`, return to
-`workflows/generate/phase-5/phase-5.1-det-gate.md`.
-
-If the user types a stop token (`stop` / `enough` / `done`) BEFORE the orchestrator dispatches the auto-fix (i.e., while the announcement is being read), treat it as `workflows/generate/phase-5/phase-5.4-approval.md` § option `4` (manual-handoff): skip the auto-fix dispatch, set `remaining_findings = all_findings`, set `loop_exit = "manual-handoff"`, proceed to `workflows/generate/phase-6/index.md`.
 
 #### Branch — mixed or judgmental-only
 
-If `judgmental` is non-empty, proceed to `workflows/generate/phase-5/phase-5.4-approval.md` with both `mechanical` and `judgmental` lists in scope. The `workflows/generate/phase-5/phase-5.4-approval.md` menu acknowledges that the full findings list above has already been rendered for audit; the menu governs which judgmental findings get fixed alongside the mechanical batch.
+```text
+UNIT Phase53MixedBranch
+
+PURPOSE:
+  Route to user-approval gate when judgmental findings are present.
+
+WHEN:
+  judgmental is non-empty
+
+DO:
+  CONTINUE workflows/generate/phase-5/phase-5.4-approval.md
+    WITH mechanical and judgmental lists in scope
+  NOTE: the full findings list above has already been rendered for audit;
+        phase-5.4-approval.md menu governs which judgmental findings get
+        fixed alongside the mechanical batch
+```
