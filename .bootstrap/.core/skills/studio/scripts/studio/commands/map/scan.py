@@ -296,6 +296,45 @@ def _split_md_cpt(path: Path) -> Tuple[List[str], List[CptUse]]:
 # Source scanning
 # ---------------------------------------------------------------------------
 
+def _resolve_registry_path_for_root(root: Path) -> Optional[Path]:
+    """Resolve the artifacts registry path via the canonical adapter_dir helper.
+
+    Uses find_studio_directory / load_artifacts_registry so that the registry
+    at <adapter_dir>/config/artifacts.toml is found even when it is not at the
+    project root.  Only applies adapter resolution when ``root`` is the actual
+    project root (i.e. find_project_root returns the same path); otherwise falls
+    back to the flat ``root / artifacts.toml`` layout.  This prevents test
+    fixtures nested inside a larger repo from picking up the repo-level adapter.
+    Returns None when no registry file can be located.
+    """
+    try:
+        from studio.utils.files import find_studio_directory, find_project_root, load_artifacts_registry
+        project_root = find_project_root(root)
+        if project_root is not None and project_root.resolve() == root.resolve():
+            # root IS the project root — use full adapter resolution.
+            adapter_dir = find_studio_directory(root) or root
+            cfg, _err = load_artifacts_registry(adapter_dir)
+            if cfg is None:
+                return None
+            # Mirror the fallback chain from load_artifacts_registry to get the path.
+            for candidate in (
+                adapter_dir / "artifacts.toml",
+                adapter_dir / "config" / "artifacts.toml",
+                adapter_dir / "artifacts.json",
+            ):
+                if candidate.is_file():
+                    return candidate
+            return None
+        # root is a sub-directory — use flat layout only.
+        flat = root / "artifacts.toml"
+        return flat if flat.is_file() else None
+    except Exception:  # pylint: disable=broad-exception-caught  # registry resolution is best-effort
+        pass
+    # Final fallback: flat layout at root.
+    flat = root / "artifacts.toml"
+    return flat if flat.is_file() else None
+
+
 def _scan_sources(root: Path, source_name: str, skip_dirs: Set[str]) -> List[Node]:
     """Scan source files driven by [[systems.codebase]] entries in artifacts.toml.
 
@@ -303,8 +342,8 @@ def _scan_sources(root: Path, source_name: str, skip_dirs: Set[str]) -> List[Nod
     DOCS-ONLY systems contribute no source nodes.
     """
     # @cpt-begin:cpt-studio-algo-map-scan:p1:inst-scan-sources
-    registry_path = root / "artifacts.toml"
-    if not registry_path.is_file():
+    registry_path = _resolve_registry_path_for_root(root)
+    if registry_path is None:
         return []
 
     try:
@@ -319,7 +358,6 @@ def _scan_sources(root: Path, source_name: str, skip_dirs: Set[str]) -> List[Nod
     seen: Set[Path] = set()
 
     for cb, _system in meta.iter_all_codebase():
-        # Check traceability_mode on the raw system node
         cb_path = cb.path.lstrip("./")
         cb_dir = root / cb_path
         if not cb_dir.is_dir():
