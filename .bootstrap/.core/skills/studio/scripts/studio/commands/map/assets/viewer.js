@@ -775,10 +775,10 @@
         const meta = "line " + u.line + (u.marker_kind ? " · " + u.marker_kind : "");
         const metaRow = el("div", {});
         metaRow.appendChild(el("span", {}, meta));
-        const hasSpec = !!u.def_snippet;
         const snippetWrap = el("div", { className: "snippet-wrap" });
         snippetWrap.appendChild(renderSnippet(u.snippet));
-        if (hasSpec) {
+        const definers = (window._cfcCptDefiners || {})[u.cpt_id];
+        if (definers && definers.size > 0) {
           let mode = "code";
           const toggleBtn = el("button", { className: "cpt-view-toggle", title: "Show definition from spec" }, "spec ⇄");
           toggleBtn.addEventListener("click", function (ev) {
@@ -790,8 +790,13 @@
               toggleBtn.textContent = "spec ⇄";
               toggleBtn.title = "Show definition from spec";
             } else {
-              const defOpts = { className: "snippet", sourceName: "definition" };
-              snippetWrap.appendChild(collapsible(mdElement(u.def_snippet || "", defOpts), u.def_snippet || ""));
+              const specText = lookupCptDefSnippet(u.cpt_id);
+              if (specText) {
+                const defOpts = { className: "snippet", sourceName: "definition" };
+                snippetWrap.appendChild(collapsible(mdElement(specText, defOpts), specText));
+              } else {
+                snippetWrap.appendChild(el("p", { className: "muted" }, "(no spec snippet available)"));
+              }
               toggleBtn.textContent = "code ⇄";
               toggleBtn.title = "Show code at use site";
             }
@@ -1354,6 +1359,22 @@
     row.appendChild(filterBtn);
 
     return row;
+  }
+
+  function lookupCptDefSnippet(cptId) {
+    const definers = (window._cfcCptDefiners || {})[cptId];
+    if (!definers || definers.size === 0) return null;
+    const byId = {};
+    (window._cfcAllNodesData || []).forEach(function (n) { byId[n.id] = n; });
+    for (const nid of definers) {
+      const defNode = byId[nid];
+      if (!defNode) continue;
+      const mdDef = (defNode.cpt_uses || []).find(function (x) {
+        return x.marker_kind === "md-def" && x.cpt_id === cptId;
+      });
+      if (mdDef && mdDef.snippet) return mdDef.snippet;
+    }
+    return null;
   }
 
   function navigateOne(anchor, idSet, highlightCptId) {
