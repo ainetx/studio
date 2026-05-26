@@ -75,5 +75,9 @@ contains ambiguous behavior that cannot be preserved safely, the transformer
 MUST either keep the original prose in `NOTES` with an `OPEN_QUESTIONS` block
 or return `TRANSFORM_BLOCKED` with the unresolved questions.
 
+ALWAYS follow the authoritative preservation definition in
+`.bootstrap/.core/architecture/specs/PDSL.md` §Transform Equivalence when
+assessing whether a transformed file is equivalent to its prose source.
+
 Completion: return the `cf-pdsl-transformer` manifest or a
 `TRANSFORM_BLOCKED` payload.
