@@ -48,7 +48,7 @@ def test_validate_all_workflows_have_required_structure():
     assert len(workflow_files) > 0, "No workflow files found"
 
     # Thin pass-through workflows have no numbered steps structure
-    no_steps_allowed = {'explain.md', 'auto-config.md', 'brainstorm.md', 'pdsl.md'}
+    no_steps_allowed = {'explain.md', 'auto-config.md', 'brainstorm.md', 'pdsl.md', 'studio.md'}
 
     errors = []
 
