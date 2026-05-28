@@ -4,6 +4,7 @@ description: "Invoke when a Constructor Studio author worker sub-agent (junior/m
 
 <!-- toc -->
 
+- [Prompt Context Contract](#prompt-context-contract)
 - [Tier Guard](#tier-guard)
 - [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
 - [Git Constraint (read from dispatch context — MUST obey)](#git-constraint-read-from-dispatch-context--must-obey)
@@ -26,10 +27,51 @@ target files plus `{cf-studio-path}/config/artifacts.toml` in
 `mode=create`. It does NOT validate (the deterministic-validator does that)
 and does NOT invoke other Constructor Studio agents.
 
-Open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` to load
-Constructor Studio mode in this isolated context.
+## Prompt Context Contract
 
-Open and follow `{cf-studio-path}/.core/skills/studio/agents/author-production-rules.md`.
+`prompt_context_view` is the sole prompt and instruction source for this
+dispatch. Missing required prompt context is an orchestration error.
+
+```json
+{
+  "agent_id": "cf-generate-author-worker",
+  "prompt_context_requirements": {
+    "requires_shared_context_pack": true,
+    "required_assets": [
+      {
+        "asset_key": "studio_mode_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["skill"],
+        "match_tags": ["constructor-studio-mode"],
+        "section_tags": [],
+        "required_when": null
+      },
+      {
+        "asset_key": "author_production_rules",
+        "accepted_origins": ["core"],
+        "accepted_types": ["instruction"],
+        "match_tags": ["author-production-rules"],
+        "section_tags": [],
+        "required_when": null
+      }
+    ],
+    "optional_assets": []
+  }
+}
+```
+
+```text
+UNIT AuthorWorkerPromptContext
+
+PURPOSE:
+  Consume the shared Constructor Studio execution contract from
+  `prompt_context_view`.
+
+RULES:
+  - MUST consume `studio_mode_contract` from `prompt_context_view`
+  - MUST consume `author_production_rules` from `prompt_context_view`
+  - MUST_NOT open prompt assets from disk directly
+```
 
 ## Tier Guard
 
@@ -248,5 +290,5 @@ RULES:
       MUST account for every input finding in either `findings_applied` or `findings_not_fixable`
       (with a one-line `reason`); MUST_NOT silently drop any finding
   - MUST emit a well-formed manifest JSON block
-  - MUST satisfy the SKILL.md invariant
+  - MUST satisfy the `studio_mode_contract` invariant
 ```

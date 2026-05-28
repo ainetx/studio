@@ -5,6 +5,9 @@ Disposition legend:
 - `deferred`: Explicit controller/runtime exception left for later phases.
 - `out_of_scope`: Registry entry had no Phase 4 leaf prompt-loader migration requirement.
 
+Shared-module note:
+- `cf-generate-author-worker.md` is now migrated to `prompt_context_view` prompt assets even though it remains intentionally absent from `agents.toml`.
+
 | Agent | Disposition | Files changed | PDSL-normalized | Follow-up / reason |
 | --- | --- | --- | --- | --- |
 | `cf-codegen` | deferred | none | n/a | Explicit phase exception: controller/runtime contract. |
@@ -18,7 +21,7 @@ Disposition legend:
 | `cf-migrate-verifier` | migrated | `cf-migrate-verifier.md`, `agents.toml` | yes | Loader path replaced with `prompt_context_view` contract. |
 | `cf-diff-scope-resolver` | migrated | `cf-diff-scope-resolver.md`, `agents.toml` | yes | Structural git contract preserved; prompt self-load removed. |
 | `cf-deterministic-validator` | migrated | `cf-deterministic-validator.md`, `agents.toml` | yes | Prompt self-load removed; validator execution unchanged. |
-| `cf-semantic-reviewer-artifact` | migrated | `cf-semantic-reviewer-artifact.md`, `agents.toml` | yes | Checklist/compliance assets now semantic. |
+| `cf-semantic-reviewer-artifact` | migrated | `cf-semantic-reviewer-artifact.md`, `agents.toml` | yes | Checklist/compliance assets now semantic; any contract-required checklist asset missing from `prompt_context_view` is fail-closed, and RELAXED degrades only when the contract does not require a checklist. |
 | `cf-semantic-reviewer-code` | migrated | `cf-semantic-reviewer-code.md`, `agents.toml` | yes | Checklist/traceability/compliance assets now semantic. |
 | `cf-code-bug-finder` | migrated | `cf-code-bug-finder.md`, `agents.toml` | yes | Bug methodology/compliance assets now semantic. |
 | `cf-semantic-reviewer-prompt` | migrated | `cf-semantic-reviewer-prompt.md`, `agents.toml` | yes | Prompt-review methodology/compliance assets now semantic. |
@@ -34,14 +37,14 @@ Disposition legend:
 | `cf-analyze-planner` | migrated | `cf-analyze-planner.md`, `agents.toml` | yes | Mode bootstrap moved to `prompt_context_view`. |
 | `cf-generate-planner` | migrated | `cf-generate-planner.md`, `agents.toml` | yes | Mode bootstrap moved to `prompt_context_view`. |
 | `cf-generate-author` | out_of_scope | none | n/a | Selector does not self-load prompt assets; no leaf migration needed. |
-| `cf-generate-author-junior` | migrated | `cf-generate-author-junior.md`, `agents.toml` | no | Wrapper now requests shared worker contract semantically. |
-| `cf-generate-author-middle` | migrated | `cf-generate-author-middle.md`, `agents.toml` | no | Wrapper now requests shared worker contract semantically. |
-| `cf-generate-author-senior` | migrated | `cf-generate-author-senior.md`, `agents.toml` | no | Wrapper now requests shared worker contract semantically. |
-| `cf-generate-author-lead` | migrated | `cf-generate-author-lead.md`, `agents.toml` | no | Wrapper now requests shared worker contract semantically. |
-| `cf-generate-coder-casual` | migrated | `cf-generate-coder-casual.md`, `agents.toml` | no | Wrapper now requests shared worker contract semantically. |
-| `cf-generate-coder-smart` | migrated | `cf-generate-coder-smart.md`, `agents.toml` | no | Wrapper now requests shared worker contract semantically. |
-| `cf-generate-prompt-engineer-casual` | migrated | `cf-generate-prompt-engineer-casual.md`, `agents.toml` | no | Wrapper now requests shared worker contract semantically. |
-| `cf-generate-prompt-engineer-smart` | migrated | `cf-generate-prompt-engineer-smart.md`, `agents.toml` | no | Wrapper now requests shared worker contract semantically. |
+| `cf-generate-author-junior` | migrated | `cf-generate-author-worker.md`, `cf-generate-author-junior.md`, `agents.toml` | no | Wrapper now declares the worker's full prompt-context dependency set; shared worker no longer self-loads prompt files. |
+| `cf-generate-author-middle` | migrated | `cf-generate-author-worker.md`, `cf-generate-author-middle.md`, `agents.toml` | no | Wrapper now declares the worker's full prompt-context dependency set; shared worker no longer self-loads prompt files. |
+| `cf-generate-author-senior` | migrated | `cf-generate-author-worker.md`, `cf-generate-author-senior.md`, `agents.toml` | no | Wrapper now declares the worker's full prompt-context dependency set; shared worker no longer self-loads prompt files. |
+| `cf-generate-author-lead` | migrated | `cf-generate-author-worker.md`, `cf-generate-author-lead.md`, `agents.toml` | no | Wrapper now declares the worker's full prompt-context dependency set; shared worker no longer self-loads prompt files. |
+| `cf-generate-coder-casual` | migrated | `cf-generate-author-worker.md`, `cf-generate-coder-casual.md`, `agents.toml` | no | Wrapper now declares the worker's full prompt-context dependency set; shared worker no longer self-loads prompt files. |
+| `cf-generate-coder-smart` | migrated | `cf-generate-author-worker.md`, `cf-generate-coder-smart.md`, `agents.toml` | no | Wrapper now declares the worker's full prompt-context dependency set; shared worker no longer self-loads prompt files. |
+| `cf-generate-prompt-engineer-casual` | migrated | `cf-generate-author-worker.md`, `cf-generate-prompt-engineer-casual.md`, `agents.toml` | no | Wrapper now declares the worker's full prompt-context dependency set; shared worker no longer self-loads prompt files. |
+| `cf-generate-prompt-engineer-smart` | migrated | `cf-generate-author-worker.md`, `cf-generate-prompt-engineer-smart.md`, `agents.toml` | no | Wrapper now declares the worker's full prompt-context dependency set; shared worker no longer self-loads prompt files. |
 | `storytelling-preflight` | out_of_scope | none | n/a | Task-resource/access-tier contract; no direct prompt-asset self-load found. |
 | `storytelling-gate` | out_of_scope | none | n/a | Gate/controller-like surface excluded from leaf migration. |
 | `storytelling-context-pack` | out_of_scope | none | n/a | Content-pack builder reads task resources, not prompt assets. |

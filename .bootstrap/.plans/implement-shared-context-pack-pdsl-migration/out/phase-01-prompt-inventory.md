@@ -9,7 +9,8 @@
 | `requirements/` | 24 | All files are methodology, checklist, template, or prompt-review requirements. |
 | `architecture/specs/` | 14 | Technical specs that directly instruct agent behavior or are loaded by prompt surfaces. |
 | `AGENTS.md` surfaces | 4 | Source, bootstrap runtime, generated runtime, and kit prompt surfaces. |
-| Total included | 179 | Prompt-bearing or prompt-surface files that later phases must consider. |
+| `.bootstrap` runtime skill/workflow surfaces | 6 | Active runtime prompt chain loaded from bootstrap `SKILL.md` surfaces into kit-specific workflows. |
+| Total included | 185 | Prompt-bearing or prompt-surface files that later phases must consider. |
 
 ## Included Prompt-Bearing Files
 
@@ -66,12 +67,26 @@ Reason: these files either contain explicit "open and follow" guidance, define p
 | `.bootstrap/.gen/AGENTS.md` | Generated runtime prompt asset | Generated quick-reference prompt surface consumed during Protocol Guard. |
 | `.bootstrap/config/kits/sdlc/AGENTS.md` | Kit prompt asset | Kit-specific prompt surface summarizing artifact usage and references. |
 
+### Bootstrap Runtime Skill And Workflow Surfaces
+
+| Path | Classification | Reason |
+| --- | --- | --- |
+| `.bootstrap/.gen/SKILL.md` | Generated runtime skill prompt surface | Active runtime skill surface; it instructs the agent to invoke `{cf-studio-path}/config/kits/sdlc/SKILL.md` first. |
+| `.bootstrap/config/SKILL.md` | Runtime skill prompt surface | Bootstrap prompt surface loaded alongside `.gen/SKILL.md`; currently small, but still part of the active runtime skill chain. |
+| `.bootstrap/config/kits/sdlc/SKILL.md` | Kit runtime skill prompt surface | Active kit extension surface that routes PR review, PR status, and OpenSpec migration requests into dedicated workflows. |
+| `.bootstrap/config/kits/sdlc/workflows/pr-review.md` | Kit runtime workflow prompt asset | Runtime workflow contract for PR review requests; directly instructs analysis steps, output paths, and checklist loading. |
+| `.bootstrap/config/kits/sdlc/workflows/pr-status.md` | Kit runtime workflow prompt asset | Runtime workflow contract for PR status requests; directly instructs fetch, audit, and severity-triage behavior. |
+| `.bootstrap/config/kits/sdlc/workflows/migrate-openspec.md` | Kit runtime workflow prompt asset | Runtime workflow contract for OpenSpec migration; governs multi-phase artifact generation and validation behavior. |
+
 ## Mixed Prompt And Resource Surfaces
 
 | Path | Mixed reason |
 | --- | --- |
 | `AGENTS.md` | Prompt surface is limited to the managed bootstrap block; no broader behavioral contract yet. |
 | `.bootstrap/.gen/AGENTS.md` | Prompt-ish navigation rules plus placeholder-heavy quick-reference content. |
+| `.bootstrap/.gen/SKILL.md` | Generated routing prompt surface; tiny but active, and primarily a bootstrap handoff into the kit skill. |
+| `.bootstrap/config/SKILL.md` | Runtime extension surface with minimal project-specific content today, but still loaded as part of the active skill chain. |
+| `.bootstrap/config/kits/sdlc/SKILL.md` | Active kit skill surface, but much of its content is routing, command reference, and workflow lookup rather than a pure PDSL contract. |
 | `.bootstrap/config/kits/sdlc/AGENTS.md` | Kit prompt surface, but primarily a reference index with unresolved `{...}` placeholders. |
 | `architecture/specs/artifacts-registry.md` | Technical registry spec that also embeds direct AGENTS load instructions. |
 | `architecture/specs/{CDSL,CLISPEC,cli,traceability}.md` | Technical specs whose primary content is reference material, but they are also explicitly loaded as agent instructions in current prompt surfaces. |
@@ -91,4 +106,5 @@ Reason: these files either contain explicit "open and follow" guidance, define p
 
 - All 40 `prompt_file` targets declared in `skills/studio/agents.toml` are covered above.
 - The explicitly excluded shared contracts `skills/studio/agents/cf-generate-author-worker.md` and `skills/studio/agents/author-production-rules.md` are prompt-bearing and must remain visible in later migration phases even though they are not registered dispatch targets.
-- The largest migration surface is `workflows/` plus `skills/studio/agents/`; those two areas account for 132 of the 179 included prompt-bearing files.
+- The runtime bootstrap skill chain adds 6 active prompt surfaces that were previously omitted: `.bootstrap/.gen/SKILL.md`, `.bootstrap/config/SKILL.md`, `.bootstrap/config/kits/sdlc/SKILL.md`, and the three SDLC kit workflow files.
+- The largest migration surface is `workflows/` plus `skills/studio/agents/`; those two areas still account for 132 of the 185 included prompt-bearing files.

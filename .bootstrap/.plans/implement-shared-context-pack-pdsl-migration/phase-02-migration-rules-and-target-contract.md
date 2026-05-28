@@ -53,15 +53,17 @@ preconditions.
 The authoritative target spec is `architecture/specs/shared-context-pack.md`.
 The current PDSL workflow and `cf-pdsl-*` agents still include direct prompt
 file loads that later phases must replace or route through orchestrators.
-This phase depends on Phase 1 but MUST continue even when the Phase 1 `out/*`
-artifacts are absent at execution start.
+This phase depends on Phase 1 and requires the three Phase 1 `out/*`
+artifacts at execution time even though their absence did not block
+compilation of this phase file.
 
 ## User Decisions
 
 ### Already Decided (pre-resolved during planning)
 
-- **Runtime dependency rule**: Missing `out/phase-01-*.md` files MUST NOT
-  block execution of this phase.
+- **Runtime dependency rule**: Missing `out/phase-01-*.md` files are
+  execution-time blockers for this phase and must stop execution with an exact
+  missing-path report.
 - **Write scope**: This phase may modify only
   `architecture/specs/shared-context-pack.md` and create only the three listed
   `out/phase-02-*.md` files.
@@ -83,8 +85,9 @@ authorized in this phase. Execute deterministically.
 - MUST treat `out/phase-01-prompt-inventory.md`,
   `out/phase-01-load-path-findings.md`, and
   `out/phase-01-pdsl-scope-map.md` as execution-time dependencies.
-- MUST continue when one or more Phase 1 `out/*` inputs are missing and record
-  them as pending runtime dependencies instead of failing.
+- MUST stop before writing outputs if one or more Phase 1 `out/*` runtime
+  inputs are missing at execution time, and MUST report the exact missing
+  path(s) as runtime dependency failures.
 - MUST write only `architecture/specs/shared-context-pack.md`,
   `out/phase-02-rewrite-rules.md`,
   `out/phase-02-agent-context-contract.md`, and
@@ -169,8 +172,9 @@ authorized in this phase. Execute deterministically.
 
 - MUST verify that every file listed in `input_files` has a matching runtime
   read in the Task section.
-- MUST verify that every file listed in `inputs` is either read or explicitly
-  recorded as missing-but-required-at-runtime.
+- MUST verify that every file listed in `inputs` was read before contract
+  decisions were made; if any required runtime input is missing, the phase
+  MUST stop and report the exact missing path.
 - MUST verify that the completion report accounts for all four written files.
 - MUST verify that no unresolved brace-delimited placeholder variables remain
   outside code fences.
@@ -223,8 +227,9 @@ Treat these Phase 1 artifacts as runtime dependencies:
 - `out/phase-01-load-path-findings.md`
 - `out/phase-01-pdsl-scope-map.md`
 
-If one of those Phase 1 artifacts is absent, record the absence in the phase
-outputs and continue without failing.
+If one of those Phase 1 artifacts is absent at execution time, stop before
+writing outputs and report the missing runtime dependency instead of
+continuing.
 
 ## Task
 
@@ -243,8 +248,8 @@ outputs and continue without failing.
    direct-load instructions that later phases must migrate.
 3. Read `out/phase-01-prompt-inventory.md`,
    `out/phase-01-load-path-findings.md`, and
-   `out/phase-01-pdsl-scope-map.md` if they exist. If any are missing, record
-   each missing file as a pending runtime dependency and continue.
+   `out/phase-01-pdsl-scope-map.md`. If any are missing, stop immediately and
+   report each missing file as a runtime dependency failure.
 4. Write `out/phase-02-rewrite-rules.md` with deterministic migration rules
    that separate prompt assets from task resources, define the forbidden
    direct-load patterns, preserve allowed orchestrator exceptions, and specify
@@ -281,8 +286,9 @@ outputs and continue without failing.
   that the shared context pack is session-scoped, limited to prompt assets,
   orchestrator-loaded, kit-aware, and incompatible with direct prompt reloads
   by prompt-consuming sub-agents.
-- [ ] Missing `out/phase-01-*.md` files did not block completion and are
-  explicitly reported as missing runtime dependencies when absent.
+- [ ] All three `out/phase-01-*.md` runtime dependencies were present and read
+  before contract-writing decisions were made; otherwise the phase stopped with
+  an explicit missing-runtime-dependency failure.
 - [ ] None of the four written files instruct prompt-consuming sub-agents to
   directly open `SKILL.md`, workflow files, requirement files, `AGENTS.md`,
   sysprompt files, or kit prompt files except when naming those patterns as

@@ -8,10 +8,39 @@ title = "Validation and gap closure"
 depends_on = [5]
 input_manifest = ""
 input_signature = ""
-input_files = ["workflows", "skills", "requirements", "architecture/specs", "skills/studio/agents.toml"]
-output_files = ["workflows", "skills", "requirements", "architecture/specs", "skills/studio/agents.toml"]
+input_files = [
+  "workflows",
+  "skills",
+  "requirements",
+  "architecture/specs",
+  "skills/studio/agents.toml",
+  "AGENTS.md",
+  ".bootstrap/config/AGENTS.md",
+  ".bootstrap/.gen/AGENTS.md",
+  ".bootstrap/config/kits/sdlc/AGENTS.md",
+  ".bootstrap/.core",
+]
+output_files = [
+  "workflows",
+  "skills",
+  "requirements",
+  "architecture/specs",
+  "skills/studio/agents.toml",
+  "AGENTS.md",
+  ".bootstrap/config/AGENTS.md",
+  ".bootstrap/.gen/AGENTS.md",
+  ".bootstrap/config/kits/sdlc/AGENTS.md",
+  ".bootstrap/.core",
+]
 outputs = ["out/phase-06-validation-report.md", "out/phase-06-remaining-findings.md"]
-inputs = ["out/phase-01-prompt-inventory.md", "out/phase-01-load-path-findings.md", "out/phase-05-path-prefix-remediation.md"]
+inputs = [
+  "out/phase-01-prompt-inventory.md",
+  "out/phase-01-load-path-findings.md",
+  "out/phase-04-agent-context-needs.md",
+  "out/phase-04-agent-migration.md",
+  "out/phase-05-pdsl-requirements-specs.md",
+  "out/phase-05-path-prefix-remediation.md",
+]
 ```
 
 ## Preamble
@@ -25,12 +54,13 @@ written, and report results against the acceptance criteria at the end.
 
 Validate the migrated prompt-bearing corpus and close any remaining
 deterministic migration gaps across `workflows/`, `skills/`, `requirements/`,
-`architecture/specs/`, and `skills/studio/agents.toml`. This phase verifies
-shared-context-pack compliance, removes residual direct prompt-loading and
-missing `.bootstrap` path-prefix issues, and confirms that prompt-bearing files
-use PDSL where required. The prior `out/*` entries listed under `inputs` are
-required runtime dependencies from earlier phases, not compile-time blockers
-for generating this phase file.
+`architecture/specs/`, `skills/studio/agents.toml`, `AGENTS.md`, and the live
+`.bootstrap` runtime copies. This phase refreshes `.bootstrap` from the edited
+source tree before validation, verifies shared-context-pack compliance, removes
+residual direct prompt-loading and missing `.bootstrap` path-prefix issues, and
+confirms that prompt-bearing files use PDSL where required. The prior `out/*`
+entries listed under `inputs` are required runtime dependencies from earlier
+phases, not compile-time blockers for generating this phase file.
 
 ## Prior Context
 
@@ -40,7 +70,10 @@ Phase 5 completed the main requirements-and-specs migration and path-prefix
 remediation work that this phase depends on.
 The plan brief classifies
 `out/phase-01-prompt-inventory.md`,
-`out/phase-01-load-path-findings.md`, and
+`out/phase-01-load-path-findings.md`,
+`out/phase-04-agent-context-needs.md`,
+`out/phase-04-agent-migration.md`,
+`out/phase-05-pdsl-requirements-specs.md`, and
 `out/phase-05-path-prefix-remediation.md`
 as runtime artifacts produced by earlier phases.
 Those files were absent during compilation of this phase file, which did not
@@ -55,7 +88,10 @@ Execution produces `out/phase-06-validation-report.md` and
 ### Already Decided (pre-resolved during planning)
 
 - **Execution scope**: `workflows/`, `skills/`, `requirements/`,
-  `architecture/specs/`, and `skills/studio/agents.toml`
+  `architecture/specs/`, `skills/studio/agents.toml`, `AGENTS.md`,
+  `.bootstrap/config/AGENTS.md`, `.bootstrap/.gen/AGENTS.md`,
+  `.bootstrap/config/kits/sdlc/AGENTS.md`, and refreshed `.bootstrap/.core/`
+  runtime copies
 - **Primary validation targets**: forbidden prompt-load patterns, missing
   `.bootstrap` path prefixes, and non-PDSL prompt-bearing files still in scope
 - **Runtime dependency policy**: `out/*` files listed under `inputs` are
@@ -77,7 +113,9 @@ items as remaining findings.
 - MUST read project files only from the runtime-read paths listed in the Task
   section
 - MUST keep all changes within `workflows/`, `skills/`, `requirements/`,
-  `architecture/specs/`, `skills/studio/agents.toml`,
+  `architecture/specs/`, `skills/studio/agents.toml`, `AGENTS.md`,
+  `.bootstrap/config/AGENTS.md`, `.bootstrap/.gen/AGENTS.md`,
+  `.bootstrap/config/kits/sdlc/AGENTS.md`, `.bootstrap/.core/`,
   `out/phase-06-validation-report.md`, and
   `out/phase-06-remaining-findings.md`
 - MUST preserve semantics when applying any deterministic remediation
@@ -88,12 +126,15 @@ items as remaining findings.
 ### Runtime Dependency Handling
 
 - `out/phase-01-prompt-inventory.md`,
-  `out/phase-01-load-path-findings.md`, and
+  `out/phase-01-load-path-findings.md`,
+  `out/phase-04-agent-context-needs.md`,
+  `out/phase-04-agent-migration.md`,
+  `out/phase-05-pdsl-requirements-specs.md`, and
   `out/phase-05-path-prefix-remediation.md`
   are required runtime inputs produced by earlier phases
 - Those `out/*` inputs are runtime dependencies, not compile-time blockers for
   generating this phase file
-- At execution time, MUST read all three runtime dependency files before using
+- At execution time, MUST read all five runtime dependency files before using
   them to scope PDSL candidates or compare remaining findings
 - If any required runtime dependency is missing at execution time, MUST stop and
   report the exact missing path as a runtime dependency failure
@@ -126,6 +167,8 @@ items as remaining findings.
   orchestration error
 - Sub-agents MAY still read non-prompt resource inputs such as target files,
   code, or artifact documents according to their task contract
+- Validator checks MUST detect direct prompt-bootstrap verbs such as `open`,
+  `read`, `load`, `inspect`, and `follow` when they target prompt assets.
 - Validator checks MUST detect direct `Open and follow ...SKILL.md`
 - Validator checks MUST detect direct `Open and follow ...workflows/...`
 - Validator checks MUST detect direct `Open and follow ...requirements/...`
@@ -139,6 +182,9 @@ items as remaining findings.
   required prompt assets cannot be resolved
 - Invalid failure handling includes telling the agent to load the missing
   prompt file itself
+- Validation MUST compare migrated agent declarations against
+  `out/phase-04-agent-context-needs.md` rather than treating token presence
+  alone as proof of compliance
 
 ### PDSL Compliance
 
@@ -168,6 +214,9 @@ items as remaining findings.
   session
 - LLMs MUST NOT infer executable behavior from `NOTES` unless another
   executable block references it
+- Validation MUST NOT treat a lone `UNIT` header as sufficient proof of PDSL
+  conformance when the file still contains unresolved prose-only executable
+  behavior
 
 ### Scope And Reporting Rules
 
@@ -225,9 +274,12 @@ items as remaining findings.
 - Required earlier-phase outputs:
   `out/phase-01-prompt-inventory.md`,
   `out/phase-01-load-path-findings.md`,
+  `out/phase-04-agent-context-needs.md`,
+  `out/phase-04-agent-migration.md`,
+  `out/phase-05-pdsl-requirements-specs.md`,
   `out/phase-05-path-prefix-remediation.md`
 - These files are required at execution time to define the prompt-bearing
-  baseline and prior remediation state
+  baseline, deferred-item inventory, and prior remediation state
 - Their absence during phase compilation did not invalidate this phase file
 
 ### Corpus Under Validation
@@ -237,6 +289,11 @@ items as remaining findings.
 - `requirements/`
 - `architecture/specs/`
 - `skills/studio/agents.toml`
+- `AGENTS.md`
+- `.bootstrap/config/AGENTS.md`
+- `.bootstrap/.gen/AGENTS.md`
+- `.bootstrap/config/kits/sdlc/AGENTS.md`
+- refreshed `.bootstrap/.core/` runtime copies
 
 ### Deliverables
 
@@ -247,40 +304,71 @@ items as remaining findings.
 
 1. Read the required runtime dependency files from earlier phases:
    `out/phase-01-prompt-inventory.md`,
-   `out/phase-01-load-path-findings.md`, and
+   `out/phase-01-load-path-findings.md`,
+   `out/phase-04-agent-context-needs.md`,
+   `out/phase-04-agent-migration.md`,
+   `out/phase-05-pdsl-requirements-specs.md`, and
    `out/phase-05-path-prefix-remediation.md`.
    If any file is missing at execution time, stop immediately and report the
    exact missing runtime dependency instead of continuing validation.
-2. Read the validation corpus with targeted scans:
-   `workflows/`, `skills/`, `requirements/`, `architecture/specs/`, and
-   `skills/studio/agents.toml`.
-3. Build the validation baseline and capture raw findings with deterministic
+2. Refresh runtime mirrors before validation.
+   EXECUTE:
+   ```bash
+   make update
+   ```
+   If the bootstrap refresh fails, stop and report the exact command failure
+   instead of validating stale runtime copies.
+3. Read the validation corpus with targeted scans:
+   `workflows/`, `skills/`, `requirements/`, `architecture/specs/`,
+   `skills/studio/agents.toml`, `AGENTS.md`, `.bootstrap/config/AGENTS.md`,
+   `.bootstrap/.gen/AGENTS.md`, `.bootstrap/config/kits/sdlc/AGENTS.md`, and
+   refreshed `.bootstrap/.core/` copies.
+4. Build the validation baseline and capture raw findings with deterministic
    scans.
    EXECUTE:
    ```bash
-   rg -n \
-     -e 'Open and follow .*SKILL\.md' \
-     -e 'Open and follow .*workflows/' \
-     -e 'Open and follow .*requirements/' \
-     -e 'Open and follow .*AGENTS\.md' \
-     -e 'Open and follow .*sysprompts/' \
-     workflows skills requirements architecture/specs skills/studio/agents.toml
+   rg -n -i \
+     -e '(open|read|load|inspect|follow)( and follow)? .*SKILL\.md' \
+     -e '(open|read|load|inspect|follow)( and follow)? .*workflows/' \
+     -e '(open|read|load|inspect|follow)( and follow)? .*requirements/' \
+     -e '(open|read|load|inspect|follow)( and follow)? .*AGENTS\.md' \
+     -e '(open|read|load|inspect|follow)( and follow)? .*sysprompts/' \
+     -e '(open|read|load|inspect|follow)( and follow)? .*config/kits/.*/AGENTS\.md' \
+     workflows skills requirements architecture/specs .bootstrap AGENTS.md skills/studio/agents.toml
    ```
    EXECUTE:
    ```bash
    rg -n \
-     -e 'Open and follow (\.core/|config/AGENTS\.md|config/sysprompts/)' \
-     -e 'prompt_context_requirements' \
+     -e '(^|[^.])(skills/studio/|workflows/|requirements/|architecture/specs/).+\.md' \
+     -e '(^|[^.])(\.core/|config/AGENTS\.md|config/sysprompts/)' \
+     workflows skills requirements architecture/specs .bootstrap AGENTS.md skills/studio/agents.toml
+   ```
+   EXECUTE:
+   ```bash
+   rg -n \
+     -e 'requires_shared_context_pack\\s*[=:]\\s*true' \
+     -e 'required_assets' \
      -e 'prompt_context_view' \
-     workflows skills requirements architecture/specs skills/studio/agents.toml
+     skills/studio/agents .bootstrap/.core/skills/studio/agents -g '*.md'
+   ```
+   Use `out/phase-04-agent-context-needs.md` to confirm that every migrated
+   prompt-consuming agent has the expected semantic asset requirements and does
+   not merely mention the field names.
+   EXECUTE:
+   ```bash
+   rg -L '^UNIT ' workflows skills requirements .bootstrap/.core/workflows .bootstrap/.core/requirements .bootstrap/.core/skills -g '*.md'
    ```
    EXECUTE:
    ```bash
-   rg -L '^UNIT ' workflows skills requirements -g '*.md'
+   rg -n 'matches\\(' workflows skills requirements .bootstrap/.core/workflows .bootstrap/.core/requirements .bootstrap/.core/skills -g '*.md'
    ```
    Use `out/phase-01-prompt-inventory.md` to identify which files are
    prompt-bearing before classifying non-PDSL files as conversion candidates.
-4. Close every deterministic remaining gap in place.
+   Use `out/phase-05-pdsl-requirements-specs.md` and
+   `out/phase-04-agent-migration.md` to identify migrated files that still need
+   manual confirmation that their executable behavior is not hidden in prose
+   behind a superficial `UNIT` header.
+5. Close every deterministic remaining gap in place.
    Replace residual forbidden prompt-load instructions in prompt-consuming
    contracts with shared-context-pack-compliant wording.
    Add missing `.bootstrap` path prefixes for Studio prompt-asset references
@@ -290,18 +378,26 @@ items as remaining findings.
    semantics-preserving.
    Do not rewrite prose specification content in `architecture/specs/` unless
    the issue is a concrete prompt-path or validation-law defect.
-5. Re-run the same scans from step 3 and confirm that every deterministic issue
+6. If step 5 modified any source-side prompt surfaces that feed `.bootstrap`
+   runtime copies, refresh bootstrap again before final validation.
+   EXECUTE:
+   ```bash
+   make update
+   ```
+   If this second bootstrap refresh fails, stop and report the exact command
+   failure instead of validating stale runtime copies.
+7. Re-run the same scans from step 4 and confirm that every deterministic issue
    class is either resolved or explicitly justified as an allowed
    orchestrator/controller exception.
    Any remaining prompt-consuming forbidden-pattern hit MUST be recorded as an
    unresolved finding.
-6. Write `out/phase-06-validation-report.md` with the scans run, files
+8. Write `out/phase-06-validation-report.md` with the scans run, files
    modified, findings closed, remaining findings count, and final `PASS` or
    `FAIL` status.
    Write `out/phase-06-remaining-findings.md` with every unresolved or
    intentionally deferred finding, including the blocking reason and why it was
    not safely fixable in this phase.
-7. Self-verify against the acceptance criteria before reporting completion.
+9. Self-verify against the acceptance criteria before reporting completion.
    Confirm the runtime dependency reads happened first, the deliverables exist,
    the phase result is evidence-backed, this file remains within the line
    budget, and there are no unresolved placeholder variables outside code
@@ -309,12 +405,17 @@ items as remaining findings.
 
 ## Acceptance Criteria
 
-- All three earlier-phase `out/*` runtime dependency files were read before
+- All six earlier-phase `out/*` runtime dependency files were read before
   validation decisions were made; if any was missing, execution stopped with an
   explicit missing-runtime-dependency failure
-- The deterministic scans from Task step 3 and Task step 5 were run against
-  `workflows/`, `skills/`, `requirements/`, `architecture/specs/`, and
-  `skills/studio/agents.toml`
+- `make update` completed successfully before validation scans were run, so the
+  `.bootstrap` runtime copies were refreshed from the edited source tree
+- If step 5 changed any source-side prompt surfaces, a second `make update`
+  completed successfully before the final validation scans were run
+- The deterministic scans from Task step 4 and Task step 7 were run against
+  `workflows/`, `skills/`, `requirements/`, `architecture/specs/`,
+  `skills/studio/agents.toml`, `AGENTS.md`, the relevant `.bootstrap/AGENTS`
+  files, and refreshed `.bootstrap/.core/` runtime copies
 - Every deterministic forbidden prompt-load or missing `.bootstrap` prefix
   issue in scope was either fixed or recorded in
   `out/phase-06-remaining-findings.md` with a concrete justification
@@ -322,6 +423,14 @@ items as remaining findings.
   `out/phase-01-prompt-inventory.md` were treated as PDSL conversion
   candidates, and any non-mechanical conversion need was recorded as a
   remaining finding
+- Files that rely on `matches()` references or that still appeared prose-heavy
+  after the `^UNIT` scan were checked against PDSL support structures and were
+  either confirmed valid or recorded as remaining findings
+- Phase-4 and Phase-5 deferred or blocked items were reconciled against
+  `out/phase-04-agent-context-needs.md`,
+  `out/phase-04-agent-migration.md`, and
+  `out/phase-05-pdsl-requirements-specs.md` before final PASS or FAIL was
+  determined
 - `out/phase-06-validation-report.md` and
   `out/phase-06-remaining-findings.md` both exist and contain the required
   summary information

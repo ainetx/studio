@@ -10,6 +10,8 @@ input_manifest = ""
 input_signature = ""
 input_files = [
   "architecture/specs/shared-context-pack.md",
+  "AGENTS.md",
+  ".bootstrap/config/AGENTS.md",
   "skills/studio/SKILL.md",
   "skills/studio/protocol.md",
   "skills/studio/routing.md",
@@ -20,6 +22,8 @@ input_files = [
   "workflows/workspace.md",
 ]
 output_files = [
+  "AGENTS.md",
+  ".bootstrap/config/AGENTS.md",
   "skills/studio/SKILL.md",
   "skills/studio/protocol.md",
   "skills/studio/routing.md",
@@ -49,7 +53,15 @@ written, and report results against the acceptance criteria at the end.
 
 ## What
 
-Migrate the top-level Constructor Studio orchestration surface to the shared-context-pack model. This phase updates only the root workflow entrypoints plus `skills/studio/SKILL.md`, `skills/studio/protocol.md`, and `skills/studio/routing.md` so prompt-asset discovery, reuse, validation, and dispatch flow through orchestrator-owned shared loaders instead of direct prompt-file reads in prompt-consuming agents. It also produces two `out/` artifacts that document the migration plan and the pack-builder contract. Do not edit leaf workflow fragments or leaf sub-agent prompt files in this phase.
+Migrate the top-level Constructor Studio orchestration surface to the
+shared-context-pack model. This phase updates the root workflow entrypoints,
+project/bootstrap `AGENTS.md` surfaces, and `skills/studio/SKILL.md`,
+`skills/studio/protocol.md`, and `skills/studio/routing.md` so prompt-asset
+discovery, reuse, validation, and dispatch flow through orchestrator-owned
+shared loaders instead of direct prompt-file reads in prompt-consuming agents.
+It also produces two `out/` artifacts that document the migration plan and the
+pack-builder contract. Do not edit leaf workflow fragments or leaf sub-agent
+prompt files in this phase.
 
 ## Prior Context
 
@@ -64,7 +76,10 @@ Migrate the top-level Constructor Studio orchestration surface to the shared-con
 ### Already Decided (pre-resolved during planning)
 
 - **Runtime dependency policy**: Treat `out/phase-02-rewrite-rules.md`, `out/phase-02-agent-context-contract.md`, and `out/phase-02-path-prefix-policy.md` as required runtime inputs for phase execution.
-- **Write scope**: Modify only `skills/studio/SKILL.md`, `skills/studio/protocol.md`, `skills/studio/routing.md`, the five top-level workflow files, and the two `out/phase-03-*.md` artifacts.
+- **Write scope**: Modify only `AGENTS.md`, `.bootstrap/config/AGENTS.md`,
+  `skills/studio/SKILL.md`, `skills/studio/protocol.md`,
+  `skills/studio/routing.md`, the five top-level workflow files, and the two
+  `out/phase-03-*.md` artifacts.
 - **Git handling**: `git_commit_mode = commit`; you may stage only files written by this phase and create one signed commit at the end.
 - **Git constraints**: Do not push, reset, rebase, stash, or use `git checkout --`.
 
@@ -77,9 +92,19 @@ Migrate the top-level Constructor Studio orchestration surface to the shared-con
 ### Scope And Phase Boundary
 
 - MUST treat this phase as a top-level migration only.
-- MUST modify only `skills/studio/SKILL.md`, `skills/studio/protocol.md`, `skills/studio/routing.md`, `workflows/generate.md`, `workflows/analyze.md`, `workflows/plan.md`, `workflows/pdsl.md`, `workflows/workspace.md`, `out/phase-03-orchestrator-migration.md`, and `out/phase-03-pack-builder-contract.md`.
+- MUST modify only `AGENTS.md`, `.bootstrap/config/AGENTS.md`,
+  `skills/studio/SKILL.md`, `skills/studio/protocol.md`,
+  `skills/studio/routing.md`, `workflows/generate.md`,
+  `workflows/analyze.md`, `workflows/plan.md`, `workflows/pdsl.md`,
+  `workflows/workspace.md`, `out/phase-03-orchestrator-migration.md`, and
+  `out/phase-03-pack-builder-contract.md`.
 - MUST NOT edit leaf workflow fragments, leaf sub-agent prompt files, or unrelated repo files in this phase.
 - MUST preserve the three phase-2 `out/*` artifacts as runtime dependencies; MUST NOT delete, rename, inline, or relax them because they were absent during compilation.
+- MUST treat `AGENTS.md` and `.bootstrap/config/AGENTS.md` as top-level
+  project/bootstrap prompt assets in scope for this phase.
+- MUST keep `.bootstrap/.core/` and `.bootstrap/.gen/AGENTS.md` synchronized
+  via the canonical bootstrap refresh step in Phase 6 rather than hand-editing
+  those generated/runtime copies here.
 - MUST NOT revert unrelated work already present in the repository.
 
 ### Shared Context Pack Law
@@ -134,6 +159,9 @@ Migrate the top-level Constructor Studio orchestration surface to the shared-con
 
 - `architecture/specs/shared-context-pack.md`
   Scope to enforce: session lifetime, prompt-context requirements, prompt-context view, orchestrator responsibilities, validation, forbidden patterns, and failure handling.
+- `AGENTS.md` and `.bootstrap/config/AGENTS.md`
+  Scope to enforce: project/bootstrap navigation and top-level prompt-routing
+  rules that must stay compatible with shared-context-pack loading.
 - `skills/studio/SKILL.md`
   Scope to enforce: phase-gate behavior, bootstrap loading order, dispatch ownership, and git/contributing payload propagation.
 - `skills/studio/protocol.md`
@@ -160,22 +188,58 @@ These three `out/*` files are required at execution time. They are not compile-t
 
 ## Task
 
-1. Read `architecture/specs/shared-context-pack.md`, `skills/studio/SKILL.md`, `skills/studio/protocol.md`, `skills/studio/routing.md`, `workflows/generate.md`, `workflows/analyze.md`, `workflows/plan.md`, `workflows/pdsl.md`, and `workflows/workspace.md`. Record every top-level place where prompt assets are loaded directly, routing still assumes direct file opens, `.bootstrap` path prefixes are missing, or session-pack reuse is absent.
+1. Read `architecture/specs/shared-context-pack.md`, `AGENTS.md`,
+   `.bootstrap/config/AGENTS.md`, `skills/studio/SKILL.md`,
+   `skills/studio/protocol.md`, `skills/studio/routing.md`,
+   `workflows/generate.md`, `workflows/analyze.md`, `workflows/plan.md`,
+   `workflows/pdsl.md`, and `workflows/workspace.md`. Record every top-level
+   place where prompt assets are loaded directly, routing still assumes direct
+   file opens, `.bootstrap` path prefixes are missing, session-pack reuse is
+   absent, or project/bootstrap AGENTS surfaces still imply legacy prompt
+   bootstrap.
 2. Read `out/phase-02-rewrite-rules.md`, `out/phase-02-agent-context-contract.md`, and `out/phase-02-path-prefix-policy.md`. Extract the rewrite rules, prompt-context contract constraints, and path-prefix policy that must remain true after this migration.
-3. Write `out/phase-03-orchestrator-migration.md` with a deterministic migration inventory: touched files, current behavior, target behavior, shared-loader ownership, direct-load removals, session-reuse points, and any remaining downstream dependencies that later phases must address.
+3. Write `out/phase-03-orchestrator-migration.md` with a deterministic
+   migration inventory: touched files, current behavior, target behavior,
+   shared-loader ownership, direct-load removals, session-reuse points,
+   project/bootstrap AGENTS changes, runtime mirror refresh requirements, and
+   any remaining downstream dependencies that later phases must address.
 4. Write `out/phase-03-pack-builder-contract.md` defining the top-level shared-context-pack builder contract: session scope, `etag` freshness, pack extension rules, `prompt_context_requirements` resolution, `prompt_context_view` derivation, pre-dispatch validation, failure handling, runtime logging expectations, and compaction-safe/session-reuse behavior.
-5. Update `skills/studio/SKILL.md`, `skills/studio/protocol.md`, and `skills/studio/routing.md` so the top-level Studio bootstrap and routing rules make orchestrator-owned shared-context-pack loading the only legal prompt-asset loading path for prompt-consuming agents, preserve dispatch ownership boundaries, and keep compile/execute phase routing aligned with the pack-builder contract.
+5. Update `AGENTS.md`, `.bootstrap/config/AGENTS.md`, `skills/studio/SKILL.md`,
+   `skills/studio/protocol.md`, and `skills/studio/routing.md` so the
+   top-level Studio bootstrap and routing rules make orchestrator-owned
+   shared-context-pack loading the only legal prompt-asset loading path for
+   prompt-consuming agents, preserve dispatch ownership boundaries, and keep
+   compile/execute phase routing aligned with the pack-builder contract.
 6. Update `workflows/generate.md`, `workflows/analyze.md`, `workflows/plan.md`, `workflows/pdsl.md`, and `workflows/workspace.md` so their bootstrap and router text uses `.bootstrap`-prefixed canonical paths, removes or rewrites direct prompt-loading instructions that should now be satisfied by the shared context pack, and keeps each router compact instead of inlining downstream prompt bodies.
-7. Run deterministic verification on the touched top-level files and the two new `out/` artifacts. Confirm that forbidden direct prompt-loading patterns are gone from prompt-consuming agent paths, `.bootstrap` path-prefix normalization is present where required, the phase-2 runtime inputs are still referenced as dependencies, and only the files listed in this phase changed.
+7. Run deterministic verification on the touched top-level files and the two
+   new `out/` artifacts. Confirm that forbidden direct prompt-loading patterns
+   are gone from prompt-consuming agent paths, `.bootstrap` path-prefix
+   normalization is present where required, project/bootstrap `AGENTS.md`
+   surfaces align with shared-context-pack ownership, the phase-2 runtime
+   inputs are still referenced as dependencies, and only the files listed in
+   this phase changed.
 8. Self-verify every acceptance criterion. If all criteria pass, stage only the files written by this phase and create one signed commit that follows the contributing guide and the `git_commit_mode = commit` constraint.
 
 ## Acceptance Criteria
 
-- `out/phase-03-orchestrator-migration.md` exists and identifies every touched top-level file plus the current-versus-target prompt-loading responsibility for each.
+- `out/phase-03-orchestrator-migration.md` exists and identifies every touched
+  top-level file plus the current-versus-target prompt-loading responsibility
+  for each, including `AGENTS.md` and `.bootstrap/config/AGENTS.md`.
 - `out/phase-03-pack-builder-contract.md` exists and defines session-scoped pack reuse, `etag` freshness, `prompt_context_requirements`, `prompt_context_view`, pre-dispatch validation, failure handling, and runtime logging expectations.
-- `skills/studio/SKILL.md`, `skills/studio/protocol.md`, `skills/studio/routing.md`, `workflows/generate.md`, `workflows/analyze.md`, `workflows/plan.md`, `workflows/pdsl.md`, and `workflows/workspace.md` no longer tell prompt-consuming sub-agents to load prompt assets directly from disk; any remaining direct prompt loads in those files are limited to orchestrator-owned or dedicated shared-loader responsibilities.
+- `AGENTS.md`, `.bootstrap/config/AGENTS.md`, `skills/studio/SKILL.md`,
+  `skills/studio/protocol.md`, `skills/studio/routing.md`,
+  `workflows/generate.md`, `workflows/analyze.md`, `workflows/plan.md`,
+  `workflows/pdsl.md`, and `workflows/workspace.md` no longer tell
+  prompt-consuming sub-agents to load prompt assets directly from disk; any
+  remaining direct prompt loads in those files are limited to
+  orchestrator-owned or dedicated shared-loader responsibilities.
 - All touched top-level prompt-asset references use `.bootstrap`-prefixed canonical paths where core assets are referenced, and the three phase-2 `out/*` inputs remain explicit execution-time dependencies.
-- No file outside `skills/studio/SKILL.md`, `skills/studio/protocol.md`, `skills/studio/routing.md`, `workflows/generate.md`, `workflows/analyze.md`, `workflows/plan.md`, `workflows/pdsl.md`, `workflows/workspace.md`, `out/phase-03-orchestrator-migration.md`, and `out/phase-03-pack-builder-contract.md` is created or modified.
+- No file outside `AGENTS.md`, `.bootstrap/config/AGENTS.md`,
+  `skills/studio/SKILL.md`, `skills/studio/protocol.md`,
+  `skills/studio/routing.md`, `workflows/generate.md`, `workflows/analyze.md`,
+  `workflows/plan.md`, `workflows/pdsl.md`, `workflows/workspace.md`,
+  `out/phase-03-orchestrator-migration.md`, and
+  `out/phase-03-pack-builder-contract.md` is created or modified.
 - Every new runtime-loadable instruction unit introduced by this phase is `<= 200` lines or is explicitly structured as a compact router/reference exemption, and verification includes a search showing zero forbidden direct prompt-load patterns in the touched prompt-consuming paths.
 - The execution report contains no unresolved template variables outside fenced code blocks and records whether the single signed commit was created.
 

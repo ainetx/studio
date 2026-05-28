@@ -66,10 +66,14 @@ Leaf sub-agent contracts, workflow fragments, and runtime mirrors under
 
 ## Runtime Mirror Refresh Requirement
 
-Phase 3 updates only canonical source files plus phase `out/` artifacts. The
-runtime mirrors under `.bootstrap/.core/` and `.bootstrap/.gen/` remain
-unchanged until the dedicated refresh and validation work in Phase 6. No
-hand-edited runtime mirror changes are allowed in this phase.
+Phase 3 updates canonical source files plus phase `out/` artifacts. Before
+Phase 4 or Phase 5 depends on the new controller contract for live runtime
+enforcement, the canonical bootstrap refresh step MUST refresh the runtime
+mirrors under `.bootstrap/.core/` and `.bootstrap/.gen/` so they match the
+Phase 3 canonical sources. This phase does not hand-edit runtime mirrors; the
+refresh MUST happen through the canonical bootstrap refresh step. Phase 6 still
+owns the final parity validation pass after those refreshed runtime surfaces
+are in place.
 
 ## Downstream Dependencies For Later Phases
 
@@ -77,8 +81,12 @@ hand-edited runtime mirror changes are allowed in this phase.
   leaf sub-agent contracts and `skills/studio/agents.toml`.
 - Phase 4 must remove remaining leaf direct-load instructions from
   `skills/studio/agents/**/*.md`.
+- Phase 4 must run the canonical bootstrap refresh step before relying on the
+  new controller contract from refreshed `.bootstrap/.core/` or `.bootstrap/.gen/`
+  runtime surfaces.
 - Phase 5 must migrate prompt-bearing requirements and specs that are still
   consumed directly as prompt assets.
-- Phase 6 must refresh `.bootstrap/.core/` and `.bootstrap/.gen/`, then verify
-  that runtime mirrors and generated prompt surfaces reflect the canonical
-  top-level changes from Phase 3.
+- Phase 5 must continue only against runtime mirrors produced by that canonical
+  bootstrap refresh step, not stale pre-Phase-3 copies.
+- Phase 6 must verify that refreshed runtime mirrors and generated prompt
+  surfaces reflect the canonical top-level changes from Phase 3.

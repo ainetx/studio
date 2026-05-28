@@ -24,17 +24,20 @@ PURPOSE:
   Load required files before any workspace phase work begins.
 
 DO:
-  REQUIRE {cf-studio-path}/config/AGENTS.md is loaded and followed FIRST
-  REQUIRE {cf-studio-path}/.gen/AGENTS.md is loaded and followed after config/AGENTS.md
   IF {cfs_mode} == off:
     REQUIRE {cf-studio-path}/.core/skills/studio/SKILL.md is loaded and followed FIRST
+    REQUIRE {cf-studio-path}/config/AGENTS.md is loaded and followed after SKILL.md
+  ELSE:
+    REQUIRE {cf-studio-path}/config/AGENTS.md is loaded and followed FIRST
+  REQUIRE {cf-studio-path}/.gen/AGENTS.md is loaded and followed after config/AGENTS.md
   REQUIRE {cf-studio-path}/.core/workflows/shared/stop-token-policy.md is loaded and followed
     WHEN any workspace decision prompt is emitted
 
 RULES:
-  - MUST load config/AGENTS.md first
-  - MUST load .gen/AGENTS.md after config/AGENTS.md
   - MUST load SKILL.md first when cfs_mode is off
+  - MUST load config/AGENTS.md after SKILL.md when cfs_mode is off
+  - MUST load config/AGENTS.md first when cfs_mode is not off
+  - MUST load .gen/AGENTS.md after config/AGENTS.md
   - MUST load stop-token-policy.md before any workspace decision prompt
 
 NOTES:

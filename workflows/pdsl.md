@@ -61,9 +61,18 @@ WHEN:
   PDSL_MODE == unset
 
 DO:
-  IF user intent matches a mode alias:
-    SET PDSL_MODE = matched mode
-    LOAD matching mode file
+  IF user intent matches a new alias:
+    SET PDSL_MODE = new
+    LOAD {cf-studio-path}/.core/workflows/pdsl/new.md
+    STOP_TURN
+  ELSE IF user intent matches a transform alias:
+    SET PDSL_MODE = transform
+    LOAD {cf-studio-path}/.core/workflows/pdsl/transform.md
+    STOP_TURN
+  ELSE IF user intent matches a review alias:
+    SET PDSL_MODE = review
+    LOAD {cf-studio-path}/.core/workflows/pdsl/review.md
+    STOP_TURN
   ELSE:
     EMIT_MENU PdslModeMenu
     WAIT user.reply

@@ -91,8 +91,10 @@ path-prefix or direct-load remediations in the required `out/` summaries.
   at runtime and MUST ignore unrelated source code or artifact content files.
 - MUST treat missing runtime `out/*` inputs during execution as dependency
   failures for this phase; MUST_NOT reconstruct them from memory.
-- MUST_NOT edit `workflows/`, `skills/`, `.bootstrap/.core/`, source code,
-  tests, or unrelated artifacts in this phase.
+- MUST_NOT hand-edit `workflows/`, `skills/`, or `.bootstrap/.core/` in this
+  phase; runtime mirrors will be refreshed canonically in Phase 6 via
+  `make update`.
+- MUST_NOT edit source code, tests, or unrelated artifacts in this phase.
 - MUST preserve semantic meaning when rewriting a file; the format may change,
   but the behavioral contract MUST remain intact.
 

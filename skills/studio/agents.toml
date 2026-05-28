@@ -53,8 +53,8 @@
 # `cpt-studio-algo-agent-integration-generate-shims:p1:`.
 
 # Shared contracts intentionally excluded from agent registration:
-#   - cf-generate-author-worker.md (loaded by all author-tier stubs)
-#   - author-production-rules.md (loaded by author worker agents)
+#   - cf-generate-author-worker.md (consumed via `prompt_context_view` by all author-tier stubs)
+#   - author-production-rules.md (resolved into `prompt_context_view` for the author-worker chain)
 # These files are not dispatchable agents and have no agents.toml entry by design.
 
 # codegen runs in isolation but dispatches nested cf-*
@@ -174,8 +174,9 @@ description = """\
 Invoke when turning the migrate-scanner's findings into a categorized migration \
 plan — read-only; groups items by execution category A (auto-fixable string \
 substitutions), B (needs-review context-sensitive), and C (cascade operations: \
-workspace rename, member-repo cascade, agent-config regeneration). Emits a plan \
-the orchestrator presents to the user for review BEFORE dispatching the migrator."""
+workspace rename only, member-repo cascade, agent-config regeneration). Emits a \
+plan with resolved user-presentable Category C items for the orchestrator to \
+present before dispatching the migrator."""
 prompt_file = "agents/cf-migrate-planner.md"
 requires_shared_context_pack = true
 mode = "readonly"
@@ -192,7 +193,10 @@ Invoke when applying a pre-approved migration plan to disk — write-capable: \
 category A substitutions mechanically, category B items via interactive walk, \
 category C operations printed for manual execution. Returns a migration manifest \
 of every change applied. Operates in-place (isolation = false) so its edits are \
-visible to the verifier without requiring a commit."""
+visible to the verifier without requiring a commit. Uses `cf_studio_path` as \
+the managed-tree boundary input, must never modify `{cf_studio_path}/.core/`, \
+and must preserve planner-approved Category C semantics without unresolved \
+placeholders or silent downgrades."""
 prompt_file = "agents/cf-migrate-migrator.md"
 requires_shared_context_pack = true
 mode = "readwrite"
@@ -209,8 +213,9 @@ Invoke when re-running scanning after a migrator pass to close the migration \
 loop — read-only; confirms the migrator's manifest landed correctly on disk, \
 re-runs scanner patterns over the changed-files surface to catch regressions, \
 and surfaces residue (regressed, missed-by-plan, or noticed-but-not-in-plan \
-items) for the orchestrator to feed back into another migrator pass. Bounded \
-by the orchestrator's 3-iteration cap."""
+items) for the orchestrator to feed back into another migrator pass. Uses \
+`cf_studio_path` as the managed-tree boundary input. Bounded by the \
+orchestrator's 3-iteration cap."""
 prompt_file = "agents/cf-migrate-verifier.md"
 requires_shared_context_pack = true
 mode = "readonly"
@@ -243,8 +248,10 @@ context_window = "high"
 description = """\
 Invoke when an analyze/review request targets a commit, branch, worktree, \
 patch, or uncommitted changes — resolves the Git diff scope, changed files, \
-hunks, and review targets so the orchestrator does not perform semantic \
-diff scanning itself."""
+omissions, and review targets while leaving `changed_hunks` empty in this \
+structural-only mode, and only emits `risk_hotspots` when direct targets were \
+explicitly named, so the orchestrator does not perform semantic diff scanning \
+itself."""
 prompt_file = "agents/cf-diff-scope-resolver.md"
 requires_shared_context_pack = true
 mode = "readonly"
@@ -282,7 +289,9 @@ Invoke when running the kit-checklist semantic review on an artifact target \
 plus its cross-refs — consumes checklist/compliance prompt assets through \
 `prompt_context_view`, walks every category, and emits Findings (severity, \
 mechanical, path, line, evidence_quote, root_cause, \
-suggested_fix) against the artifact-mode semantic-review contract."""
+suggested_fix) against the artifact-mode semantic-review contract. Missing a \
+contract-required checklist asset is fail-closed; only truly optional RELAXED \
+reviews degrade to a limited sweep, never by reopening prompt files from disk."""
 prompt_file = "agents/cf-semantic-reviewer-artifact.md"
 requires_shared_context_pack = true
 mode = "readonly"
@@ -551,7 +560,7 @@ description = """\
 Invoke when the generate-author selector chooses junior for simple, bounded \
 create/fix tasks: one file, complete inputs, low-risk prose or mechanical \
 edits, and no architectural/code/security ambiguity. Consumes the shared author \
-contract and returns a manifest."""
+execution prompt assets and returns a manifest."""
 prompt_file = "agents/cf-generate-author-junior.md"
 requires_shared_context_pack = true
 mode = "readwrite"
@@ -566,7 +575,7 @@ context_window = "medium"
 description = """\
 Invoke when the generate-author selector chooses middle for standard artifact \
 or small code create/fix tasks with clear inputs, moderate cross-references, \
-or small mechanical review-loop batches. Consumes the shared author contract and \
+or small mechanical review-loop batches. Consumes the shared author execution prompt assets and \
 returns a manifest."""
 prompt_file = "agents/cf-generate-author-middle.md"
 requires_shared_context_pack = true
@@ -582,7 +591,7 @@ context_window = "high"
 description = """\
 Invoke when the generate-author selector chooses senior for complex artifacts, \
 code changes, multi-file writes, strict-rule outputs, or non-mechanical fixes \
-that require careful judgment. Consumes the shared author contract and returns a \
+that require careful judgment. Consumes the shared author execution prompt assets and returns a \
 manifest."""
 prompt_file = "agents/cf-generate-author-senior.md"
 requires_shared_context_pack = true
@@ -600,7 +609,7 @@ Invoke when the generate-author selector chooses lead for high-risk or broad \
 generation/fix tasks: cross-system architecture, security/concurrency/data \
 integrity concerns, workflow/agent prompt changes, large finding batches, or \
 uncertain scope where cheaper tiers are likely to fail. Consumes the shared author \
-contract and returns a manifest."""
+execution prompt assets and returns a manifest."""
 prompt_file = "agents/cf-generate-author-lead.md"
 requires_shared_context_pack = true
 mode = "readwrite"
@@ -616,7 +625,7 @@ description = """\
 Invoke when the generate-author selector chooses coder-casual for small, \
 code-only create/fix tasks with complete inputs, at most two source/test files, \
 no security/concurrency/data-model risk, and no prompt/artifact writing. Consumes \
-the shared author contract and returns a manifest."""
+the shared author execution prompt assets and returns a manifest."""
 prompt_file = "agents/cf-generate-coder-casual.md"
 requires_shared_context_pack = true
 mode = "readwrite"
@@ -632,7 +641,7 @@ description = """\
 Invoke when the generate-author selector chooses coder-smart for code-only \
 tasks that need deeper implementation judgment: behavior changes, tests, \
 refactors, API boundaries, or moderate security/concurrency/data implications, \
-without prompt/workflow authoring. Consumes the shared author contract and returns \
+without prompt/workflow authoring. Consumes the shared author execution prompt assets and returns \
 a manifest."""
 prompt_file = "agents/cf-generate-coder-smart.md"
 requires_shared_context_pack = true
@@ -649,7 +658,7 @@ description = """\
 Invoke when the generate-author selector chooses prompt-engineer-casual for \
 small prompt/workflow/agent wording or routing edits with local scope and no \
 state-machine, handoff, or multi-file semantic redesign. Consumes the shared \
-author contract and returns a manifest."""
+author execution prompt assets and returns a manifest."""
 prompt_file = "agents/cf-generate-prompt-engineer-casual.md"
 requires_shared_context_pack = true
 mode = "readwrite"
@@ -665,7 +674,7 @@ description = """\
 Invoke when the generate-author selector chooses prompt-engineer-smart for \
 prompt/workflow/agent/skill changes that affect state, routing, handoffs, \
 sub-agent contracts, validation criteria, or multi-file prompt semantics. Consumes \
-the shared author contract and returns a manifest."""
+the shared author execution prompt assets and returns a manifest."""
 prompt_file = "agents/cf-generate-prompt-engineer-smart.md"
 requires_shared_context_pack = true
 mode = "readwrite"

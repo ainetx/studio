@@ -113,15 +113,22 @@ PURPOSE:
   dual write-confirmation + phase-gate requirement.
 
 STATE:
-  CF_PHASE_GATE: armed | released_for_dispatch | released_for_inline_write
+  CF_PHASE_GATE:
+    armed
+    | released_for_dispatch
+    | released_for_orchestrator_write
+    | released_for_inline_write
+    | user_bypass
     default: armed
-    reset: start_of_assistant_turn
+    reset: per canonical PhaseSkipGate rules in SKILL.md
 
   write_confirmation_obtained: unset | true
     default: unset
     scope: per_write_command
 
 RULES:
+  - MUST preserve the canonical CF_PHASE_GATE model and reset semantics from
+    {cf-studio-path}/.core/skills/studio/SKILL.md
   - MUST use {cfs_cmd} --json <subcommand> for all CLI invocations
     EXCEPT init, delegate, and update (run those without --json)
   - MUST obtain explicit user confirmation before any write-capable command
@@ -134,7 +141,8 @@ RULES:
     both are independently required
 
 INVARIANTS:
-  - MUST keep CF_PHASE_GATE = armed outside released write windows
+  - MUST keep this unit aligned with the canonical Phase-Skip Gate model in
+    SKILL.md and MUST treat only released_for_* states as write-eligible here
   - MUST_NOT write files while CF_PHASE_GATE == armed
   - MUST_NOT write files while write_confirmation_obtained != true
 

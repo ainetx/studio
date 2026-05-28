@@ -23,6 +23,22 @@ dispatch. Missing required prompt context is an orchestration error.
         "match_tags": ["generate-author", "worker-contract"],
         "section_tags": [],
         "required_when": null
+      },
+      {
+        "asset_key": "studio_mode_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["skill"],
+        "match_tags": ["constructor-studio-mode"],
+        "section_tags": [],
+        "required_when": null
+      },
+      {
+        "asset_key": "author_production_rules",
+        "accepted_origins": ["core"],
+        "accepted_types": ["instruction"],
+        "match_tags": ["author-production-rules"],
+        "section_tags": [],
+        "required_when": null
       }
     ],
     "optional_assets": []
@@ -31,4 +47,5 @@ dispatch. Missing required prompt context is an orchestration error.
 ```
 
 Follow the `generate_author_worker_contract` delivered in
-`prompt_context_view`; do not open prompt files from disk.
+`prompt_context_view`, along with the required shared mode/rules assets; do not
+open prompt files from disk.

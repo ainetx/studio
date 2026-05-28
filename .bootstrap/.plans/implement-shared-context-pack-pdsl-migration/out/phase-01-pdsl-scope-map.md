@@ -4,8 +4,8 @@
 
 | Bucket | Count | Notes |
 | --- | ---: | --- |
-| Already PDSL | 129 | All workflow files, most core skill/agent contracts, and `architecture/specs/PDSL.md`. |
-| Mixed or partial PDSL / special runtime prompt surfaces | 4 | AGENTS surfaces that are prompt-bearing but not primary PDSL rewrite targets. |
+| Already PDSL | 132 | All workflow files, most core skill/agent contracts, runtime kit workflow contracts, and `architecture/specs/PDSL.md`. |
+| Mixed or partial PDSL / special runtime prompt surfaces | 7 | AGENTS and bootstrap `SKILL.md` surfaces that are prompt-bearing but not primary PDSL rewrite targets. |
 | Prose-first rewrite candidates | 46 | Requirements set, prompt-bearing specs, and skill/agent contracts that still rely on prose structure. |
 | Out of scope or excluded | 8 | Support docs, registry-only files, deprecated references, and content-reference examples. |
 
@@ -14,6 +14,7 @@
 | Group | Included paths | Follow-up note |
 | --- | --- | --- |
 | Workflow system | `workflows/**/*.md` | Phase 3 should normalize shared-context loading and path prefixes without first needing wholesale PDSL conversion. |
+| Runtime kit workflows | `.bootstrap/config/kits/sdlc/workflows/{pr-review,pr-status,migrate-openspec}.md` | These are active runtime workflow contracts and should stay in the path-normalization/shared-context tranche rather than a prose-to-PDSL rewrite tranche. |
 | Core skill prompts | `skills/studio/{SKILL.md,protocol.md,routing.md,migrate-from-cypilot.md}` | Mostly structural cleanup and shared-context-pack adoption, not syntax migration. |
 | PDSL-shaped agent contracts | `skills/studio/agents/{author-production-rules,cf-analyze-planner,cf-brainstorm-expert,cf-brainstorm-facilitator,cf-brainstorm-panel,cf-code-bug-finder,cf-codegen,cf-deterministic-validator,cf-diff-scope-resolver,cf-generate-author,cf-generate-author-worker,cf-generate-collector,cf-generate-planner,cf-migrate-migrator,cf-migrate-planner,cf-migrate-scanner,cf-migrate-verifier,cf-pdsl-author,cf-pdsl-reviewer,cf-pdsl-transformer,cf-phase-compiler,cf-phase-runner,cf-pr-review,cf-prompt-bug-finder,cf-ralphex,cf-semantic-reviewer-artifact,cf-semantic-reviewer-code,cf-semantic-reviewer-consistency,cf-semantic-reviewer-prompt,storytelling-context-pack,storytelling-export,storytelling-gate,storytelling-preflight,storytelling-wrap}.md` | These agents still need prompt-context declarations and direct-load cleanup even though their block structure is already PDSL-shaped. |
 | Normative PDSL spec | `architecture/specs/PDSL.md` | Keep as the baseline reference spec; do not treat it as a conversion target in early phases. |
@@ -25,6 +26,9 @@
 | `AGENTS.md` | Managed bootstrap locator block only; not a full behavioral contract. | Keep as source prompt surface; normalize only if path syntax changes. |
 | `.bootstrap/config/AGENTS.md` | Runtime adapter prompt with imperative rules but not PDSL block structure. | In scope for shared-context-pack classification and path review, not for early full rewrite. |
 | `.bootstrap/.gen/AGENTS.md` | Generated quick-reference prompt surface with placeholders. | Treat as generated runtime surface; avoid canonical editing. |
+| `.bootstrap/.gen/SKILL.md` | Generated runtime handoff surface; prompt-bearing but intentionally tiny and routing-focused. | Treat as generated runtime surface; keep in inventory/path review, not a primary rewrite target. |
+| `.bootstrap/config/SKILL.md` | Runtime extension surface loaded by Protocol Guard, but currently minimal and prose-first. | Keep visible as an active runtime input even if it remains lightly customized. |
+| `.bootstrap/config/kits/sdlc/SKILL.md` | Active kit runtime skill surface with routing, command references, and workflow dispatch rules. | In scope for shared-context-pack review and classification, but not the first place to force full PDSL normalization. |
 | `.bootstrap/config/kits/sdlc/AGENTS.md` | Kit prompt quick-reference, mostly lookup content. | In scope for path/shared-context review, not primary PDSL migration. |
 
 ## Prose-First Rewrite Candidates
@@ -62,6 +66,7 @@
 ## Runtime And Bootstrap Notes
 
 - `AGENTS.md` is canonical source; `.bootstrap/config/AGENTS.md` and `.bootstrap/.gen/AGENTS.md` are runtime mirrors and should not be treated as canonical rewrite targets.
+- The active bootstrap skill chain is broader than the AGENTS mirrors: `.bootstrap/.gen/SKILL.md` routes to `.bootstrap/config/kits/sdlc/SKILL.md`, and that kit skill dispatches into three runtime workflow contracts that are already PDSL-shaped.
 - `workflows/pdsl.md` is already PDSL-shaped but still points at root-relative prompt paths, so it belongs in the path-normalization tranche rather than the syntax-conversion tranche.
 - Proxy workflows `workflows/{auto-config,brainstorm}.md` are already compact PDSL wrappers; their main migration need is shared-context-pack-safe loading through the routed orchestrator.
 

@@ -15,6 +15,11 @@ requirements, specs, and agent prompt files.
   behavior, routing, review criteria, validation, or methodology.
 - Treat a file as a task resource when its primary role is target content to be
   analyzed, transformed, validated, or reported on.
+- Generated documents, including `.bootstrap/.plans/**/out/*.md`, must be
+  classified by actual content and downstream usage, not by path alone.
+- If a generated out-phase document is later followed as a contract, rewrite
+  rule set, validation surface, or executable prompt/instruction asset, treat
+  it as a prompt asset for shared-context-pack purposes.
 - If a file mixes both, extract only the prompt-bearing sections into the
   shared context pack and keep the full file in ordinary runtime inputs.
 - Never place source code, plan artifacts, user deliverables, PR diffs, or
@@ -22,9 +27,9 @@ requirements, specs, and agent prompt files.
 
 ### 2. Loader Authority Is Limited To Controllers
 
-- Only a top-level orchestrator, a dedicated shared-context-pack builder, or
-  another explicitly designated top-level controller may load prompt assets
-  from disk.
+- Only a dispatching controller, a dedicated shared-context-pack builder acting
+  on behalf of that controller, or another explicitly designated top-level
+  runtime controller may load prompt assets from disk.
 - Prompt-consuming sub-agents must receive prompt material only through
   `prompt_context_view`.
 - Missing prompt context is an orchestration defect, not a license for a
@@ -46,7 +51,7 @@ sub-agents:
 These paths may still be named when:
 
 - documenting forbidden examples
-- documenting orchestrator-only exceptions
+- documenting controller-only exceptions
 - classifying a path family in policy/spec text
 
 ### 4. Preserve Behavior During PDSL Normalization
@@ -64,10 +69,10 @@ These paths may still be named when:
 
 | Family | Target form | Required migration result |
 | --- | --- | --- |
-| Top-level orchestrator workflows | PDSL controller contracts | Keep controller-owned disk loads, but route them through session pack construction and `prompt_context_view` generation. |
-| Workflow fragments used only by orchestrators | PDSL controller contracts | Convert root-relative prompt loads to controller-safe references and remove ad hoc prompt reload wording. |
-| Prompt-consuming agent contracts | PDSL consumer contracts | Replace direct prompt-load instructions with semantic `prompt_context_requirements` plus a hard rule that `prompt_context_view` is the sole prompt source. |
-| Shared runtime skill/bootstrap surfaces | Controller/runtime exceptions | Preserve only the minimal controller bootstrap needed to discover, load, and hand off prompt assets; do not turn runtime mirrors into canonical authoring targets unless a phase explicitly requires it. |
+| Dispatching controller workflows | PDSL controller contracts | Keep controller-owned disk loads, but route them through session pack construction and `prompt_context_view` generation. |
+| Workflow fragments used only by controllers | PDSL controller contracts | Convert root-relative prompt loads to controller-safe references and remove ad hoc prompt reload wording. |
+| Prompt-consuming agent contracts | PDSL consumer contracts | Replace direct prompt-load instructions with semantic `prompt_context_requirements` plus a hard rule that `prompt_context_view` is the sole prompt source and carries executable prompt text slices plus provenance. |
+| Shared runtime skill/bootstrap surfaces | Controller/runtime exceptions | Preserve only the minimal dispatching-controller or runtime-controller bootstrap needed to discover, load, and hand off prompt assets; do not turn runtime mirrors into canonical authoring targets unless a phase explicitly requires it. |
 | Requirements corpus | PDSL-compatible prompt assets | Keep checklist or methodology prose when it is reference content, but move executable gating behavior, menus, state, and failure handling into PDSL blocks during migration. |
 | Prompt-bearing specs | PDSL-compatible prompt assets | Keep reference/spec prose when it defines concepts or schemas, but express executable operating rules, menus, states, and authority boundaries in explicit PDSL blocks when those rules are consumed as instructions. |
 
@@ -81,6 +86,16 @@ These paths may still be named when:
 - When a canonical prompt asset has a runtime mirror under `.bootstrap`,
   controller surfaces should load the runtime path and publish the result into
   the shared context pack.
+- Project/generated prompt surfaces under `.github/prompts/**`,
+  `.claude/agents/**`, `.claude/skills/**`, `.cursor/agents/**`,
+  `.cursor/commands/**`, and `.codex/agents/**` are prompt assets when they
+  instruct agent behavior, regardless of extension. Controllers may load them
+  only to publish their executable prompt text into `prompt_context_view`;
+  prompt-consuming sub-agents must not reopen those files directly.
+- Generated out-phase documents under `.bootstrap/.plans/**/out/*.md` follow
+  the same content-and-usage rule: controller roles may load them into the
+  session pack only when those files are being used as executable instruction
+  surfaces, not merely because they live under that path family.
 - `agents.toml` remains registry metadata, not a prompt asset; migration work
   may extend it with prompt-context declarations, but it is not itself a
   prompt body.
@@ -90,7 +105,10 @@ These paths may still be named when:
 - `SHARED_CONTEXT_PACK` stays session-scoped.
 - Assets are reused and incrementally enriched across workflow runs in the same
   chat session.
-- Asset freshness remains `etag`-based.
+- Asset freshness remains `etag`-based, and every reused asset must be
+  revalidated before reuse.
+- If revalidation marks an asset stale, later phases must refresh or replace it
+  in the session pack before deriving `prompt_context_view`.
 - Asset origin semantics remain `core`, `kit`, or `project`.
 - Kit prompt assets remain first-class shared-context-pack assets rather than
   ad hoc disk reads inside sub-agents.
