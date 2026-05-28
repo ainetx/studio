@@ -187,6 +187,7 @@ Phases MUST declare dependencies in TOML frontmatter.
 - Independent phases MAY run in parallel.
 - The final synthesis/integration phase depends on all required prior phases.
 - The plan workflow MUST present phases sequentially by default even when parallel execution is possible.
+- Dependencies on prior `out/` artifacts are execution-time dependencies between phases. They determine ordering and runtime reads, but MUST NOT be interpreted as a requirement that those files already exist during brief generation or phase compilation.
 
 ## Single-Context Bypass
 

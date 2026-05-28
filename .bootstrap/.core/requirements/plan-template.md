@@ -67,6 +67,7 @@ Field rules:
 - `input_manifest` and `input_signature` MUST be empty strings when no raw-input package is assigned to the phase; otherwise they MUST point to the authoritative `input/manifest.json` and its matching signature.
 - `input_files` and `inputs` are runtime-read items and MUST have matching Task read steps.
 - `output_files` are created or modified project files; `outputs` are intermediate files in `out/`.
+- `inputs` entries that point into `out/` are runtime artifacts from earlier phases. They MUST remain declared in frontmatter and Task steps, but their non-existence MUST NOT invalidate phase compilation.
 
 ### Section 2: Preamble
 

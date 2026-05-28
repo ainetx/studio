@@ -136,6 +136,11 @@ RULES:
       MUST include specific input/*.md chunk files assigned to that phase in
       both input_files metadata and Load Instructions with runtime-read steps
       for every listed chunk
+  - MUST treat `phase.inputs` entries as execution-time dependencies by default
+  - IF a `phase.inputs` entry points under `out/`:
+      MUST describe it in the brief as a runtime artifact from an earlier phase,
+      MUST preserve it in phase metadata and runtime Task reads,
+      and MUST NOT require it to exist at brief-generation or phase-compilation time
 ```
 
 ## 3.2A Stop After Briefs & Ask For Next Step
