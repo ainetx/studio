@@ -64,6 +64,7 @@ Spaider.code-workspace
 .bootstrap/.plans/analyze-path-skills-cypilot-scripts-cypilot/
 .bootstrap/.plans/analyze-path-current-branch-vs-main-comprehensive/
 .bootstrap/.plans/implement-thin-orchestrator-workflows/
+.bootstrap/.plans/implement-shared-context-pack-pdsl-migration/
 
 # Artifacts
 .prs/*
