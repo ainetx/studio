@@ -40,7 +40,7 @@ WHEN:
   User requests same-chat native phase execution
 
 DO:
-  OPEN workflows/shared/inline-fallback-probe.md
+  OPEN {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md
   RE-RUN inline-fallback-probe.md
 
   IF SUB_AGENT_SESSION_APPROVED == true AND INLINE_FALLBACK == false:

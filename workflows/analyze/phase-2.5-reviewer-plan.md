@@ -83,7 +83,7 @@ MENU StorageChoiceMenu:
       SET REVIEWER_PLAN_RESOLVED = disk
       CONTINUE PlannerDispatch
     stop_token ->
-      LOAD workflows/shared/stop-token-policy.md
+      LOAD {cf-studio-path}/.core/workflows/shared/stop-token-policy.md
       STOP_TURN
     no|skip|3 ->
       EMIT "Decomposition is mandatory while sub-agents are approved. Reply enter/memory or disk."

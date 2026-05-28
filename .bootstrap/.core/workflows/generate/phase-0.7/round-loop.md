@@ -165,7 +165,7 @@ DO:
       STOP_TURN
 
   # After while-loop exits:
-  LOAD workflows/generate/phase-0.7/wrap-handoff.md
+  LOAD {cf-studio-path}/.core/workflows/generate/phase-0.7/wrap-handoff.md
 
 RULES:
   - MUST emit pre-dispatch checkpoint line after agent availability check resolves
@@ -606,7 +606,7 @@ DO:
   RETURN flattened contributions array
 
 NOTES:
-  Open, load, and follow workflows/generate/phase-0.7/state-schema.md § envelope
+  Open, load, and follow {cf-studio-path}/.core/workflows/generate/phase-0.7/state-schema.md § envelope
   for the full envelope schema.
 ```
 

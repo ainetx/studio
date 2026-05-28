@@ -1,6 +1,6 @@
 ---
 name: cf-generate-author-lead
-description: "Invoke when the generate-author selector chooses lead for high-risk or broad generation/fix tasks: cross-system architecture, security/concurrency/data integrity concerns, workflow/agent prompt changes, large finding batches, or uncertain scope where cheaper tiers are likely to fail. Uses the shared author contract and returns a manifest."
+description: "Invoke when the generate-author selector chooses lead for high-risk or broad generation/fix tasks: cross-system architecture, security/concurrency/data integrity concerns, workflow/agent prompt changes, large finding batches, or uncertain scope where cheaper tiers are likely to fail. Consumes the shared author execution prompt assets and returns a manifest."
 tools: ["*"]
 model: Claude Opus 4.7
 ---

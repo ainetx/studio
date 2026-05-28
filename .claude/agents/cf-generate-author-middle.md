@@ -1,6 +1,6 @@
 ---
 name: cf-generate-author-middle
-description: "Invoke when the generate-author selector chooses middle for standard artifact or small code create/fix tasks with clear inputs, moderate cross-references, or small mechanical review-loop batches. Uses the shared author contract and returns a manifest."
+description: "Invoke when the generate-author selector chooses middle for standard artifact or small code create/fix tasks with clear inputs, moderate cross-references, or small mechanical review-loop batches. Consumes the shared author execution prompt assets and returns a manifest."
 tools: Bash, Read, Write, Edit, Glob, Grep
 model: sonnet
 effort: medium

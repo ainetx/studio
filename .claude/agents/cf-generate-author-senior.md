@@ -1,6 +1,6 @@
 ---
 name: cf-generate-author-senior
-description: "Invoke when the generate-author selector chooses senior for complex artifacts, code changes, multi-file writes, strict-rule outputs, or non-mechanical fixes that require careful judgment. Uses the shared author contract and returns a manifest."
+description: "Invoke when the generate-author selector chooses senior for complex artifacts, code changes, multi-file writes, strict-rule outputs, or non-mechanical fixes that require careful judgment. Consumes the shared author execution prompt assets and returns a manifest."
 tools: Bash, Read, Write, Edit, Glob, Grep
 model: sonnet
 effort: high

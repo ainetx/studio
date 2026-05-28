@@ -14,5 +14,12 @@ Unresolved or intentionally deferred findings remaining after Phase 6 validation
 
 ## Explicit Non-Findings
 
-- Controller/orchestrator prompt-loading surfaces already documented by earlier phases were not reclassified as violations. This includes `skills/studio/protocol.md`, `workflows/{plan,workspace,pdsl}.md`, `workflows/analyze*.md`, and controller agents such as `cf-codegen`, `cf-pr-review`, `cf-ralphex`, `cf-phase-runner`, and `cf-phase-compiler`.
+- Top-level workflow/orchestrator prompt-loading surfaces already documented by
+  earlier phases were not reclassified as violations. This currently includes
+  `skills/studio/protocol.md`, `workflows/{plan,workspace,pdsl}.md`, and
+  `workflows/analyze*.md`.
+- The canonical controller-agent tranche previously deferred by earlier phases
+  (`cf-codegen`, `cf-pr-review`, `cf-ralphex`, `cf-phase-runner`,
+  `cf-phase-compiler`) was remediated during the final canonical review loop
+  and therefore is not part of the remaining-findings set.
 - Reference-oriented prompt-bearing files such as checklists, templates, and registry/spec examples were not treated as PDSL-conversion failures solely because they lack `UNIT` headers.

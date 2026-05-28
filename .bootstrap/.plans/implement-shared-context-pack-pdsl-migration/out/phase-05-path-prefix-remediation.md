@@ -6,8 +6,8 @@
 | --- | --- | --- |
 | `requirements/storytelling.md` | Root-relative shared block reference to `requirements/storytelling-shared.md`. | Replaced with the runtime prompt path `{cf-studio-path}/.core/requirements/storytelling-shared.md` and documented that the dispatching controller publishes the needed prompt text through `prompt_context_view`. |
 | `requirements/storytelling.md` | Module-loading behavior was described without explicit runtime prompt-path normalization. | Added router-contract units that name `{cf-studio-path}/.core/requirements/storytelling-{phases,modes,preferences,export}.md` as the controller-owned prompt assets for the storytelling router. |
-| `architecture/specs/sysprompts.md` | Loading algorithm ended with direct per-agent injection semantics. | Updated the algorithm so matching project sysprompts are published into `SHARED_CONTEXT_PACK`, then delivered to prompt-consuming sub-agents via `prompt_context_view`. |
-| `architecture/specs/shared-context-pack.md` | Controller/consumer boundaries were still mostly prose-first. | Added explicit PDSL controller/consumer contracts that formalize fail-closed behavior when prompt context is missing or stale, eliminating any ambiguity about direct-read fallback. |
+| `architecture/specs/sysprompts.md` | Loading algorithm ended with direct per-agent injection semantics and did not say how project sysprompts are recorded in the pack. | Updated the algorithm so matching project sysprompts are published into `SHARED_CONTEXT_PACK` as `origin = "project"` assets, then delivered to prompt-consuming sub-agents via `prompt_context_view`. |
+| `architecture/specs/shared-context-pack.md` | Base shared-context wording still allowed a compliant reading that supported only `core`/`kit` origins even when the controller model included project prompt assets. | Clarified the normative contract so controllers that model project prompt surfaces must support `origin = "project"` end-to-end, while keeping the existing fail-closed controller/consumer boundary intact. |
 
 ## Valid Exceptions Left In Place
 
@@ -18,4 +18,4 @@
 ## No-Change Findings
 
 - No migrated file required a remaining direct read of `SKILL.md`, `workflows/*.md`, `requirements/*.md`, `AGENTS.md`, or kit prompt assets by a prompt-consuming sub-agent.
-- No additional `{cf-studio-path}` normalization was required for the other migrated files because their controller-owned prompt references were already runtime-prefixed or were intentionally relative within a controller-owned `config/AGENTS.md` example.
+- No additional `{cf-studio-path}` normalization was required for the shared-context/sysprompt alignment fix because the remaining issue was origin-contract consistency, not unresolved runtime path prefixes.

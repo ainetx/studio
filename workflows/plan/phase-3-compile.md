@@ -279,7 +279,7 @@ PURPOSE:
 
 DO:
   REQUIRE Session Sub-Agent Approval Gate (SKILL.md) is resolved before this option runs
-  OPEN workflows/shared/inline-fallback-probe.md
+  OPEN {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md
   FOLLOW inline-fallback-probe.md
 
   IF INLINE_FALLBACK == true:

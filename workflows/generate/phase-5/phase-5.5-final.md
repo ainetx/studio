@@ -39,5 +39,5 @@ RULES:
   - MUST proceed to phase-6/index.md
   - phase-6/index.md MUST NOT proceed without a completed Validation Results body
     (canonical template fields filled with actual values)
-  - Open, load, and follow workflows/generate/phase-6/index.md § prerequisite guard
+  - Open, load, and follow {cf-studio-path}/.core/workflows/generate/phase-6/index.md § prerequisite guard
 ```

@@ -49,7 +49,7 @@ RULES:
   - MUST NOT dispatch write-capable author before Phase 3 yes
   - MUST NOT create files before confirmation
   - MUST NOT create incomplete or placeholder files
-  - Open, load, and follow skills/studio/protocol.md § Agent-safe invocation
+  - Open, load, and follow {cf-studio-path}/.core/skills/studio/protocol.md § Agent-safe invocation
     for no-auto-approval rule (--yes/-y/--force forbidden unless user explicitly
     requested non-interactive behavior)
 ```

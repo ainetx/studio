@@ -1,5 +1,5 @@
 ---
-description: Invoke when an analyze/review request targets a commit, branch, worktree, patch, or uncommitted changes — resolves the Git diff scope, changed files, hunks, and review targets so the orchestrator does not perform semantic diff scanning itself.
+description: Invoke when an analyze/review request targets a commit, branch, worktree, patch, or uncommitted changes — resolves the Git diff scope, changed files, omissions, and review targets, while emitting `changed_hunks = []` in structural-only mode so the orchestrator does not perform semantic diff scanning itself.
 ---
 
 <!-- toc -->
@@ -10,6 +10,31 @@ description: Invoke when an analyze/review request targets a commit, branch, wor
 - [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
+
+## Prompt Context Contract
+
+`prompt_context_view` is the sole prompt and instruction source for this
+dispatch. Missing required prompt context is an orchestration error.
+
+```json
+{
+  "agent_id": "cf-diff-scope-resolver",
+  "prompt_context_requirements": {
+    "requires_shared_context_pack": true,
+    "required_assets": [
+      {
+        "asset_key": "studio_mode_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["skill"],
+        "match_tags": ["constructor-studio-mode"],
+        "section_tags": [],
+        "required_when": null
+      }
+    ],
+    "optional_assets": []
+  }
+}
+```
 
 ```text
 UNIT DiffScopeResolver
@@ -24,18 +49,16 @@ STATE:
     target: ≤ 30 seconds wall-clock
 
 RULES:
-  - MUST read SKILL.md to activate Constructor Studio mode
+  - MUST consume the `studio_mode_contract` asset from `prompt_context_view`
   - MUST_NOT read full file contents
   - MUST_NOT perform semantic analysis or score risk by inspecting code
   - MUST_NOT run git show or full git diff without --name-status/--stat
   - MUST_NOT modify files or run validators
+  - MUST_NOT open prompt assets from disk directly
 
 INVARIANTS:
   - MUST stay structural throughout; semantic work belongs to downstream agents
 ```
-
-Open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` to load
-Constructor Studio mode in this isolated context.
 
 ```text
 UNIT AllowedGitCommands
@@ -46,6 +69,7 @@ PURPOSE:
 RULES:
   - MUST use only:
       git -C <worktree> status --short
+      git -C <worktree> branch --show-current
       git -C <worktree> diff --name-status <base>..<head>        (committed)
       git -C <worktree> diff --name-status HEAD                  (uncommitted)
       git -C <worktree> rev-parse HEAD
@@ -79,6 +103,7 @@ PURPOSE:
 DO:
   1. Resolve worktree_path: record HEAD, branch, dirty count from
      git status --short (line count, no per-file inspection)
+     and git branch --show-current
   2. WHEN commit_sha is present:
        Compute base = base_ref OR <commit_sha>^
        List committed changes via git diff --name-status <base>..<commit_sha>
@@ -93,16 +118,21 @@ DO:
   6. Risk hotspots: FORBID semantic risk analysis
        SET risk_hotspots = []
        EXCEPTION: WHEN direct_targets are named:
-         Copy them in as:
+         Copy them in as structural review-priority hints only:
            {path, risk: "user-named direct target", evidence: "direct_targets"}
-  7. Compute review_targets:
+  7. Compute binary_paths first:
+       paths reported by git diff --numstat with -\t- markers
+  8. Compute review_targets:
        direct_targets UNION {changed_files.path | status in {M,A,R,U,?}}
        deduped, sorted
        EXCLUDE status == D (deleted)
-  8. Compute omissions:
-       files filtered out from review_targets with a one-word reason:
+       EXCLUDE path in binary_paths
+  9. Compute omissions:
+       files filtered out from the review_targets candidate set with a one-word reason:
          "deleted" — status D
          "binary"  — git diff --numstat shows -\t- markers
+       A path omitted as "binary" MUST_NOT remain in review_targets even when it
+       was also named in direct_targets
 
 FORBID: hunk extraction and risk synthesis
 ```
@@ -125,15 +155,17 @@ base, counts) followed by the `diff_scope` JSON:
   "changed_files": [{"path": "<path>", "old_path": null, "status": "M|A|D|R|U|?", "source": "committed|staged|unstaged|untracked"}],
   "changed_hunks": [],
   "review_targets": ["<path>", "..."],
-  "risk_hotspots": [],
+  "risk_hotspots": [{"path": "<path>", "risk": "user-named direct target", "evidence": "direct_targets"}],
   "omissions": [{"path": "<path>", "reason": "deleted|binary"}]
 }
 ```
 
 ```text
 NOTES:
-  changed_hunks and risk_hotspots are always emitted as empty arrays in
-  this fast scope-resolution mode; downstream agents derive their own.
+  changed_hunks is always emitted as an empty array in this fast
+  scope-resolution mode.
+  risk_hotspots is empty unless direct_targets were supplied; when present,
+  entries are structural user-priority hints rather than semantic risk scores.
 ```
 
 ## Response Completion Gate

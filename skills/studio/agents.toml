@@ -478,6 +478,7 @@ guards G3-G5 (§8), envelope-emit contract with 12 parse-time invariants \
 and deterministic envelope rendering. Returns the `envelope` object the \
 orchestrator flattens into `contributions[]`."""
 prompt_file = "agents/cf-brainstorm-panel.md"
+requires_shared_context_pack = true
 mode = "readonly"
 isolation = true
 model = "cf:tier:balanced"
@@ -547,6 +548,7 @@ coder-casual/coder-smart, and prompt/workflow/agent instructions to \
 prompt-engineer-casual/prompt-engineer-smart. The selector is read-only and \
 does not write files."""
 prompt_file = "agents/cf-generate-author.md"
+requires_shared_context_pack = true
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -694,6 +696,7 @@ input-access tier (local → MCP → skill → CLI → user-fallback), load \
 preferences.json, and return the structured handle (target_type / \
 file_count / primary_language / preferences_loaded / input_access_*)."""
 prompt_file = "agents/storytelling-preflight.md"
+requires_shared_context_pack = true
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -712,6 +715,7 @@ next_action. Plan-gate is the only gate authorized to emit chat (4-option \
 Go/Edit/Pivot/Cancel approval menu); other gates return parsing artefacts \
 the orchestrator emits."""
 prompt_file = "agents/storytelling-gate.md"
+requires_shared_context_pack = true
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -728,6 +732,7 @@ strategy (snippets/anchors/hybrid). Returns anchors, plan_anchor_map, \
 depth_mode_flags, overview, and total_extracted_bytes; portions in the \
 inline E2 loop read from this pack instead of re-reading source."""
 prompt_file = "agents/storytelling-context-pack.md"
+requires_shared_context_pack = true
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -744,6 +749,7 @@ links, Open Questions, Glossary, Bookmarked Takeaways, Suggested Next \
 Steps) from accumulated session state. Does NOT auto-fill open_questions \
 or glossary — only user-driven entries are carried forward."""
 prompt_file = "agents/storytelling-wrap.md"
+requires_shared_context_pack = true
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -761,6 +767,7 @@ graph, and mode-specific extras (review→comments.md, onboarding→\
 next-steps-checklist.md, decision→decision-record.md). All artifact bodies \
 use relative paths; refuses export for mode=socratic per AP-#34."""
 prompt_file = "agents/storytelling-export.md"
+requires_shared_context_pack = true
 mode = "readwrite"
 isolation = false
 model = "cf:tier:cheap"

@@ -27,13 +27,13 @@ RULES:
 
 DO:
   IF EXPLAIN_MODE == false AND PROMPT_REVIEW == false AND PROMPT_BUG_REVIEW == false:
-    LOAD workflows/analyze/phase-4-output/output-standard.md
+    LOAD {cf-studio-path}/.core/workflows/analyze/phase-4-output/output-standard.md
   IF PROMPT_REVIEW == true OR PROMPT_BUG_REVIEW == true:
-    LOAD workflows/analyze/phase-4-output/output-prompt-review.md
+    LOAD {cf-studio-path}/.core/workflows/analyze/phase-4-output/output-prompt-review.md
   IF EXPLAIN_MODE == true:
-    LOAD workflows/analyze/phase-4-output/output-storytelling.md
+    LOAD {cf-studio-path}/.core/workflows/analyze/phase-4-output/output-storytelling.md
   IF actionable findings exist AND EXPLAIN_MODE == false:
-    LOAD workflows/analyze/phase-4-output/remediation-handoff.md
+    LOAD {cf-studio-path}/.core/workflows/analyze/phase-4-output/remediation-handoff.md
 ```
 
 ## Phase 4: Output

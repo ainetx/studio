@@ -208,7 +208,7 @@ PURPOSE:
   Dispatch the phase runner for native same-chat phase execution (option [2] native menu).
 
 DO:
-  OPEN workflows/shared/inline-fallback-probe.md
+  OPEN {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md
   RE-RUN inline-fallback-probe.md immediately before dispatch
     (do NOT trust the earlier menu state; INLINE_FALLBACK is re-derived per workflow run)
 

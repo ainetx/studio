@@ -1,6 +1,6 @@
 ---
 name: cf-pdsl-author
-description: "Invoke when cf-pdsl new mode must create a new prompt, workflow, skill, or agent instruction file as a compact PDSL contract with explicit state, menus, UX prompts, stop points, authority boundaries, and completion gates."
+description: "Invoke when cf-pdsl new mode must create a new prompt, workflow, skill, or agent instruction file as a compact PDSL contract using the shared-context-pack PDSL spec with explicit state, menus, UX prompts, stop points, authority boundaries, and completion gates."
 tools: grep, view, edit, bash
 model: claude-sonnet-4-6
 ---

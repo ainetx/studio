@@ -9,6 +9,47 @@ description: Invoke when reviewing a GitHub pull request with structured checkli
 
 <!-- /toc -->
 
+## Prompt Context Contract
+
+`prompt_context_view` is the sole prompt and instruction source for this
+dispatch. Missing required prompt context is an orchestration error.
+
+```json
+{
+  "agent_id": "cf-pr-review",
+  "prompt_context_requirements": {
+    "requires_shared_context_pack": true,
+    "required_assets": [
+      {
+        "asset_key": "studio_mode_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["skill"],
+        "match_tags": ["constructor-studio-mode"],
+        "section_tags": [],
+        "required_when": null
+      },
+      {
+        "asset_key": "analyze_workflow_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["workflow"],
+        "match_tags": ["cf-analyze"],
+        "section_tags": [],
+        "required_when": null
+      },
+      {
+        "asset_key": "inline_fallback_probe_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["workflow-fragment", "instruction"],
+        "match_tags": ["inline-fallback-probe"],
+        "section_tags": [],
+        "required_when": "INLINE_FALLBACK == unset"
+      }
+    ],
+    "optional_assets": []
+  }
+}
+```
+
 ```text
 UNIT PrReviewAgent
 
@@ -22,30 +63,36 @@ INPUT:
   review_intent: defect-oriented | checklist | scope-only
 
 RULES:
-  - MUST load {cf-studio-path}/.core/skills/studio/SKILL.md to load Constructor Studio mode
-  - MUST load analyze workflow only — full AGENTS.md rule stack is not required
+  - MUST consume `studio_mode_contract` and `analyze_workflow_contract` from
+    `prompt_context_view`
   - MUST_NOT write project files
   - MUST_NOT modify workflows
-  - MUST_NOT invoke other Constructor Studio agents
+  - MUST_NOT invoke arbitrary Constructor Studio agents
+  - MAY dispatch only analyze-scoped reviewer and validator agents needed by
+    the loaded analyze workflow contract
+  - MUST keep nested dispatch bounded to PR-local diff, validation, and review
+    scope
+  - MUST_NOT open prompt assets from disk directly
   - All output is chat-only
-  - REQUIRE INLINE_FALLBACK is set before any nested sub-agent dispatch
+  - REQUIRE `inline_fallback_probe_contract` in `prompt_context_view` when
+    INLINE_FALLBACK is unset
 
 DO:
-  1. Load {cf-studio-path}/.core/skills/studio/SKILL.md.
-  2. IF INLINE_FALLBACK == unset:
-       STOP — load {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md
+  1. IF INLINE_FALLBACK == unset:
+       STOP — follow `inline_fallback_probe_contract` from
+       `prompt_context_view`
        WAIT user.reply
        STOP_TURN
-  3. Open and follow {cf-studio-path}/.core/workflows/analyze.md targeting PR review mode.
-  4. Fetch fresh PR data.
-  5. DISPATCH nested cf-* sub-agents: diff-scope-resolver, cf-deterministic-validator,
-     semantic reviewers.
-  6. Apply review checklist through Phase 4 (Output).
-  7. Produce structured review report.
-  8. EMIT bullet-list summary of finding count by severity plus any CRITICAL or
+  2. Follow `analyze_workflow_contract` targeting PR review mode.
+  3. Fetch fresh PR data.
+  4. DISPATCH only the analyze-scoped sub-agents needed for diff-scope
+     resolution, deterministic validation, and semantic review.
+  5. Apply review checklist through Phase 4 (Output).
+  6. Produce structured review report.
+  7. EMIT bullet-list summary of finding count by severity plus any CRITICAL or
      HIGH findings by title and file path.
-  9. IF actionable issues exist: EMIT Remediation Handoff menu.
-  10. STOP_TURN
+  8. IF actionable issues exist: EMIT Remediation Handoff menu.
+  9. STOP_TURN
 
 INVARIANTS:
   - MUST_NOT end response with only a review summary when actionable issues exist
@@ -73,8 +120,8 @@ ON_ERROR:
 
 NOTES:
   Authority boundary: reads PR diffs, artifact files, and checklists only.
-  Detailed analysis stays within this agent context; only the summary and
-  handoff menu return to the main conversation.
+  Nested dispatch is limited to analyze-scoped reviewer and validator agents;
+  only the summary and handoff menu return to the main conversation.
 
 ## Response Completion Gate
 
@@ -85,8 +132,8 @@ RULES:
   - MUST run analyze workflow through Phase 4 for the PR diff/changes
   - MUST return structured review report to main conversation
   - MUST end with Remediation Handoff menu when actionable issues exist
-  - MUST satisfy SKILL.md invariant (Constructor Studio mode loaded)
+  - MUST satisfy the `studio_mode_contract` invariant
   - VALID stopping state: INLINE_FALLBACK was unset at a nested dispatch site and
-    inline-fallback-probe.md was loaded as a hard interaction boundary pending
-    user 1/2 reply
+    `inline_fallback_probe_contract` was followed as a hard interaction
+    boundary pending user 1/2 reply
 ```

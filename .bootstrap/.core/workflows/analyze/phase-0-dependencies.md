@@ -52,20 +52,20 @@ DO:
                                     SET CODE_BUG_REVIEW = true
   FORBID opening code methodology files in the orchestrator
   FORBID opening prompt methodology files in the orchestrator
-  LOAD workflows/shared/inline-fallback-probe.md
+  LOAD {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md
   IF CHANGE_REVIEW == true:
-    LOAD workflows/analyze/phase-0-change-review-scope.md
+    LOAD {cf-studio-path}/.core/workflows/analyze/phase-0-change-review-scope.md
   LOAD {cf-studio-path}/.core/requirements/raw-input-overflow.md
   IF ARTIFACT_REVIEW == true AND rules.md is loaded:
     dependencies are resolved
     IF artifact review dependencies are missing:
       ask for missing checklist/template/example only when ARTIFACT_REVIEW == true
   REQUIRE all dependencies available before proceeding to Phase 1
-  LOAD workflows/analyze/phase-0.1-plan-escalation-gate.md
+  LOAD {cf-studio-path}/.core/workflows/analyze/phase-0.1-plan-escalation-gate.md
   IF (target_paths has more than one entry AND no explicit scope named)
      OR (CONSISTENCY_REVIEW == true AND fewer than two paths captured)
      OR (ARTIFACT_REVIEW == true AND artifact not in artifacts.toml):
-    LOAD workflows/analyze/phase-0.5-scope.md
+    LOAD {cf-studio-path}/.core/workflows/analyze/phase-0.5-scope.md
   CONTINUE workflows/analyze/phase-1-file-check.md
 
 RULES:

@@ -1,6 +1,6 @@
 ---
 name: cf-generate-prompt-engineer-casual
-description: "Invoke when the generate-author selector chooses prompt-engineer-casual for small prompt/workflow/agent wording or routing edits with local scope and no state-machine, handoff, or multi-file semantic redesign. Uses the shared author contract and returns a manifest."
+description: "Invoke when the generate-author selector chooses prompt-engineer-casual for small prompt/workflow/agent wording or routing edits with local scope and no state-machine, handoff, or multi-file semantic redesign. Consumes the shared author execution prompt assets and returns a manifest."
 tools: Bash, Read, Write, Edit, Glob, Grep
 model: haiku
 effort: medium

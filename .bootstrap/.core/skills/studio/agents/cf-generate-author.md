@@ -20,6 +20,31 @@ description: "Invoke when a generate author write/fix dispatch is needed to clas
 
 <!-- /toc -->
 
+## Prompt Context Contract
+
+`prompt_context_view` is the sole prompt and instruction source for this
+dispatch. Missing required prompt context is an orchestration error.
+
+```json
+{
+  "agent_id": "cf-generate-author",
+  "prompt_context_requirements": {
+    "requires_shared_context_pack": true,
+    "required_assets": [
+      {
+        "asset_key": "studio_mode_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["skill"],
+        "match_tags": ["constructor-studio-mode"],
+        "section_tags": [],
+        "required_when": null
+      }
+    ],
+    "optional_assets": []
+  }
+}
+```
+
 ```text
 UNIT GenerateAuthorSelector
 
@@ -27,10 +52,11 @@ PURPOSE:
   Classify task domain and complexity, then select the cheapest capable author agent.
 
 RULES:
-  - MUST open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` before acting
+  - MUST consume the `studio_mode_contract` asset from `prompt_context_view`
   - MUST_NOT write files
   - MUST_NOT invoke other Cyber Constructor agents
   - MUST select the lowest domain-specific agent that is sufficient
+  - MUST_NOT open prompt assets from disk directly
 ```
 
 ## Selection Principle

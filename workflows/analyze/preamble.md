@@ -42,7 +42,7 @@ STATE:
 
 DO:
   ALWAYS load {cf-studio-path}/.core/skills/studio/SKILL.md WHEN {cfs_mode} == off
-  ALWAYS load skills/studio/protocol.md FIRST
+  ALWAYS load {cf-studio-path}/.core/skills/studio/protocol.md FIRST
   Initialize all flags to their defaults (listed in STATE above)
   Match methodology flags from user request:
     IF code/codebase/implementation analysis:
@@ -121,7 +121,7 @@ ALWAYS open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` WHEN {cfs
 
 **Type**: Analysis
 
-ALWAYS open and follow `skills/studio/protocol.md` FIRST
+ALWAYS open and follow `{cf-studio-path}/.core/skills/studio/protocol.md` FIRST
 
 Initialize per-run analyze flags before matching: `SEMANTIC_ONLY=false`, `CHANGE_REVIEW=false`, `CODE_REVIEW=false`, `CODE_BUG_REVIEW=false`, `CONSISTENCY_REVIEW=false`, `PROMPT_REVIEW=false`, `PROMPT_BUG_REVIEW=false`, `EXPLAIN_MODE=false`, `ARTIFACT_REVIEW=false`, `CF_PHASE_GATE=armed`. Phase 0 (`phase-0-dependencies.md`) only MATCHES conditions and SETS flags to true; it MUST NOT re-initialize them to false. CHANGE_REVIEW is set true by phase-0-dependencies.md; ARTIFACT_REVIEW is set true by phase-0-dependencies.md when the resolved target is an artifact and no prompt/code methodology has taken ownership.
 

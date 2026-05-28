@@ -1,6 +1,6 @@
 ---
 name: cf-migrate-migrator
-description: "Invoke when applying a pre-approved migration plan to disk — write-capable: category A substitutions mechanically, category B items via interactive walk, category C operations printed for manual execution. Returns a migration manifest of every change applied. Operates in-place (isolation = false) so its edits are visible to the verifier without requiring a commit."
+description: "Invoke when applying a pre-approved migration plan to disk — write-capable: category A substitutions mechanically, category B items via interactive walk, category C operations printed for manual execution. Returns a migration manifest of every change applied. Operates in-place (isolation = false) so its edits are visible to the verifier without requiring a commit. Uses `cf_studio_path` as the managed-tree boundary input, must never modify `{cf_studio_path}/.core/`, and must preserve planner-approved Category C semantics without unresolved placeholders or silent downgrades."
 tools: Bash, Read, Write, Edit, Glob, Grep
 model: haiku
 effort: low

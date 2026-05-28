@@ -121,8 +121,8 @@ When a prior output under `out/` is not yet present, describe it as a runtime de
    - Keep MUST/MUST NOT requirements; skip Prerequisites, Load Dependencies, Tasks, Next Steps
 2. **Template**: Read `{kit}/artifacts/ADR/template.md` (lines 10-48, ~38 lines)
    - Inline → Input section
-3. **Project context**: Read `workflows/plan.md` (lines 1-80, ~80 lines)
-   - Runtime read → add `Read workflows/plan.md` to Task
+3. **Project context**: Read `{cf-studio-path}/.core/workflows/plan.md` (lines 1-80, ~80 lines)
+   - Runtime read → add `Read {cf-studio-path}/.core/workflows/plan.md` to Task
 ```
 
 ## Fill Rules

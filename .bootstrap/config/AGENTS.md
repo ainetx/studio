@@ -27,7 +27,7 @@ requirement, spec, or kit prompt files directly.
 
 ALWAYS open and follow `{cf-studio-path}/.core/schemas/artifacts.schema.json` WHEN working with artifacts.toml
 
-ALWAYS open and follow `{cf-studio-path}/.core/requirements/artifacts-registry.md` WHEN working with artifacts.toml
+ALWAYS open and follow `{cf-studio-path}/.core/architecture/specs/artifacts-registry.md` WHEN working with artifacts.toml
 
 ### Project Rules
 

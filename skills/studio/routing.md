@@ -97,7 +97,7 @@ DO:
 
   9. WHEN request matches any of:
        map | dependency map | cfs map | visualize dependencies | render graph
-       -> open and follow {cf-studio-path}/.core/workflows/cf-map.md
+       -> open and follow {cf-studio-path}/.core/workflows/map.md
 
   10. WHEN request matches any of:
         auto-config | configure project | scan brownfield | generate rules

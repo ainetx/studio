@@ -19,6 +19,31 @@ description: "Invoke when rendering brainstorm panel output in single-agent pane
 
 <!-- /toc -->
 
+## Prompt Context Contract
+
+`prompt_context_view` is the sole prompt and instruction source for this
+dispatch. Missing required prompt context is an orchestration error.
+
+```json
+{
+  "agent_id": "cf-brainstorm-panel",
+  "prompt_context_requirements": {
+    "requires_shared_context_pack": true,
+    "required_assets": [
+      {
+        "asset_key": "studio_mode_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["skill"],
+        "match_tags": ["constructor-studio-mode"],
+        "section_tags": [],
+        "required_when": null
+      }
+    ],
+    "optional_assets": []
+  }
+}
+```
+
 ```text
 UNIT BrainstormPanelAgent
 
@@ -27,10 +52,11 @@ PURPOSE:
   Read-only renderer with respect to the brainstorm orchestrator's state machine.
 
 RULES:
-  - MUST open and follow {cf-studio-path}/.core/skills/studio/SKILL.md
+  - MUST consume the `studio_mode_contract` asset from `prompt_context_view`
   - MUST_NOT modify workflow state directly
   - SEE_ALSO: AuthorityBoundary
   - MUST emit structured envelope output for the orchestrator to consume
+  - MUST_NOT open prompt assets from disk directly
 ```
 
 ## §1 Authority Boundary

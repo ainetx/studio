@@ -109,7 +109,7 @@ MENU InlineFallbackWarningMenu:
     continue ->
       CONTINUE with original MAX_ITER
     stop_token ->
-      LOAD workflows/shared/stop-token-policy.md
+      LOAD {cf-studio-path}/.core/workflows/shared/stop-token-policy.md
       CANCEL current Phase 5 entry before any validator/reviewer/author dispatch
       IF manifest.paths_written is non-empty (file-writing generate run with Phase 4 complete):
         EMIT Pre-Review Warning Handoff block (below)

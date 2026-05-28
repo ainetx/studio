@@ -127,5 +127,5 @@ DO:
 NOTES:
   The collector marks pre-filled sections [from brainstorm] and surfaces
   a Carryover Questions mini-section.
-  Open, load, and follow workflows/generate/phase-1-collect.md.
+  Open, load, and follow {cf-studio-path}/.core/workflows/generate/phase-1-collect.md.
 ```

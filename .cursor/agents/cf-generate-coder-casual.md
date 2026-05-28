@@ -1,6 +1,6 @@
 ---
 name: cf-generate-coder-casual
-description: "Invoke when the generate-author selector chooses coder-casual for small, code-only create/fix tasks with complete inputs, at most two source/test files, no security/concurrency/data-model risk, and no prompt/artifact writing. Uses the shared author contract and returns a manifest."
+description: "Invoke when the generate-author selector chooses coder-casual for small, code-only create/fix tasks with complete inputs, at most two source/test files, no security/concurrency/data-model risk, and no prompt/artifact writing. Consumes the shared author execution prompt assets and returns a manifest."
 tools: grep, view, edit, bash
 model: claude-haiku-4-5
 ---

@@ -8,13 +8,20 @@ Disposition legend:
 Shared-module note:
 - `cf-generate-author-worker.md` is now migrated to `prompt_context_view` prompt assets even though it remains intentionally absent from `agents.toml`.
 
+Post-phase addendum:
+- The five controller surfaces intentionally deferred in the Phase 4 execution
+  snapshot were later remediated during the final canonical review loop:
+  `cf-codegen`, `cf-pr-review`, `cf-ralphex`, `cf-phase-runner`, and
+  `cf-phase-compiler` now declare `prompt_context_requirements` and consume
+  `prompt_context_view` instead of directly reopening prompt assets from disk.
+
 | Agent | Disposition | Files changed | PDSL-normalized | Follow-up / reason |
 | --- | --- | --- | --- | --- |
-| `cf-codegen` | deferred | none | n/a | Explicit phase exception: controller/runtime contract. |
-| `cf-pr-review` | deferred | none | n/a | Explicit phase exception: top-level review controller. |
-| `cf-ralphex` | deferred | none | n/a | Explicit phase exception: autonomous orchestration surface. |
-| `cf-phase-runner` | deferred | none | n/a | Explicit phase exception: plan execution controller. |
-| `cf-phase-compiler` | deferred | none | n/a | Explicit phase exception: plan compilation controller. |
+| `cf-codegen` | deferred | none | n/a | Phase 4 execution snapshot only; remediated later in the final canonical review loop. |
+| `cf-pr-review` | deferred | none | n/a | Phase 4 execution snapshot only; remediated later in the final canonical review loop. |
+| `cf-ralphex` | deferred | none | n/a | Phase 4 execution snapshot only; remediated later in the final canonical review loop. |
+| `cf-phase-runner` | deferred | none | n/a | Phase 4 execution snapshot only; remediated later in the final canonical review loop. |
+| `cf-phase-compiler` | deferred | none | n/a | Phase 4 execution snapshot only; remediated later in the final canonical review loop. |
 | `cf-migrate-scanner` | migrated | `cf-migrate-scanner.md`, `agents.toml` | yes | Loader path replaced with `prompt_context_view` contract. |
 | `cf-migrate-planner` | migrated | `cf-migrate-planner.md`, `agents.toml` | yes | Loader path replaced with `prompt_context_view` contract. |
 | `cf-migrate-migrator` | migrated | `cf-migrate-migrator.md`, `agents.toml` | yes | Loader path replaced with `prompt_context_view` contract. |

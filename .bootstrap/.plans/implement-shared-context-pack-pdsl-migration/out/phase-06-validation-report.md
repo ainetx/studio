@@ -78,15 +78,29 @@ Supplemental helper scans used only to classify the exact-scan output:
   - `requires_shared_context_pack = true`
   - `required_assets`
   - `prompt_context_view`
-- Confirmed that the prominent direct prompt-load hits in `skills/studio/protocol.md`, `workflows/{plan,workspace,pdsl}.md`, `workflows/analyze*.md`, and controller agents such as `cf-codegen`, `cf-pr-review`, `cf-ralphex`, `cf-phase-runner`, and `cf-phase-compiler` remain orchestrator/controller exceptions already identified by earlier phases rather than newly missed leaf-agent violations.
+- Confirmed that, at Phase 6 execution time, the remaining prominent direct
+  prompt-load hits were concentrated in top-level workflow/orchestrator surfaces
+  such as `skills/studio/protocol.md`, `workflows/{plan,workspace,pdsl}.md`,
+  and `workflows/analyze*.md`, plus a small deferred controller tranche later
+  remediated by the final canonical review loop.
 
 ### No In-Scope Source Edits Applied
 
 No deterministic source-side fixes were applied in task step 5. The remaining hits were either:
 
-- allowed controller/orchestrator prompt-loading surfaces,
+- top-level workflow/orchestrator prompt-loading surfaces,
 - out-of-scope runtime kit workflow defects under `.bootstrap/config/kits/sdlc/workflows/`, or
 - non-mechanical prose-heavy storytelling modules already deferred by Phase 5.
+
+### Post-Phase Addendum
+
+After this Phase 6 execution report was written, the final canonical review loop
+remediated the previously deferred controller-agent tranche:
+`cf-codegen`, `cf-pr-review`, `cf-ralphex`, `cf-phase-runner`, and
+`cf-phase-compiler` now consume `prompt_context_view` and no longer instruct
+direct prompt-asset reloads from disk. The remaining unresolved findings stay
+limited to the runtime kit workflow defects and the deferred storytelling
+requirements listed in `out/phase-06-remaining-findings.md`.
 
 ## Files Modified During Phase 6
 

@@ -1,6 +1,6 @@
 ---
 name: cf-semantic-reviewer-consistency
-description: "Invoke when cross-checking terminology, references, normative claims, and scope across ≥ 2 target documents — loads consistency-checklist and emits Findings against the consistency contract."
+description: "Invoke when cross-checking terminology, references, normative claims, and scope across ≥ 2 target documents — consumes the consistency checklist via `prompt_context_view` and emits Findings against the consistency contract."
 tools: Bash, Read, Glob, Grep
 disallowedTools: Write, Edit
 model: sonnet

@@ -200,8 +200,8 @@ DO:
          1. Apply suggested action
          2. Skip — leave as-is
          3. Custom edit — type the replacement string
-         4. Stop walking — remaining B-items recorded as `deferred_not_walked` in
-            manifest; any C-items still proceed normally if selected.
+        4. Stop walking — remaining B-items recorded as `deferred_no_interactive` in
+           manifest; any C-items still proceed normally if selected.
 
        Suggested: 1 (Apply) when planner's suggested_action is `auto-fixable` or `safe-to-apply`;
                   2 (skip) otherwise.
@@ -298,11 +298,19 @@ DO:
 
     Walked:
     - {file}:{line}: {outcome — "applied" / "kept" / "custom: {new}"}
+    Deferred:
+    - {file}:{line}: deferred_no_interactive — reason: {"ci_mode" | "user_stopped_walking"}
 
     ### Category C (P_c printed for manual execution)
 
     Printed (not auto-executed):
     - {command}
+
+    ### Noticed But Not In Plan
+
+    Informational only:
+    - {file}:{line}: {kind_or_pattern_key} — noticed while applying plan; no edit applied
+      Suggested follow-up: {why_it_needs_review_or_planner_addition}
 
     ### Files modified
 

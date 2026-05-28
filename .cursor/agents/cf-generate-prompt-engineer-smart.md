@@ -1,6 +1,6 @@
 ---
 name: cf-generate-prompt-engineer-smart
-description: "Invoke when the generate-author selector chooses prompt-engineer-smart for prompt/workflow/agent/skill changes that affect state, routing, handoffs, sub-agent contracts, validation criteria, or multi-file prompt semantics. Uses the shared author contract and returns a manifest."
+description: "Invoke when the generate-author selector chooses prompt-engineer-smart for prompt/workflow/agent/skill changes that affect state, routing, handoffs, sub-agent contracts, validation criteria, or multi-file prompt semantics. Consumes the shared author execution prompt assets and returns a manifest."
 tools: grep, view, edit, bash
 model: claude-sonnet-4-6
 ---

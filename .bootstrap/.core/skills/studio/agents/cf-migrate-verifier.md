@@ -19,6 +19,31 @@ description: Invoke when re-running scanning after a migrator pass to close the 
 
 <!-- /toc -->
 
+## Prompt Context Contract
+
+`prompt_context_view` is the sole prompt and instruction source for this
+dispatch. Missing required prompt context is an orchestration error.
+
+```json
+{
+  "agent_id": "cf-migrate-verifier",
+  "prompt_context_requirements": {
+    "requires_shared_context_pack": true,
+    "required_assets": [
+      {
+        "asset_key": "studio_mode_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["skill"],
+        "match_tags": ["constructor-studio-mode"],
+        "section_tags": [],
+        "required_when": null
+      }
+    ],
+    "optional_assets": []
+  }
+}
+```
+
 ```text
 UNIT MigrateVerifierInit
 
@@ -29,7 +54,7 @@ PURPOSE:
 DO:
   REQUIRE plan is provided by orchestrator
   REQUIRE migration_manifest is provided by orchestrator
-  Open and follow {cf-studio-path}/.core/skills/studio/SKILL.md
+  REQUIRE prompt_context_view includes `studio_mode_contract`
   CONTINUE MigrateVerifierProcedure
 
 SEE_ALSO: MigrateVerifierHardRules
@@ -51,7 +76,7 @@ After the Migrator applies changes, verify the migration is complete:
   "plan": "<Planner's full Markdown output>",
   "migration_manifest": "<Migrator's full Markdown output>",
   "project_root": "<absolute path>",
-  "cf_constructor_path": "<absolute path>"
+  "cf_studio_path": "<absolute path>"
 }
 ```
 
@@ -154,7 +179,16 @@ PURPOSE:
 DO:
   REQUIRE changed-files surface from manifest's Files modified list
   Skip directories the Migrator never touched
-  Re-run only the A-pattern subset the Migrator was supposed to handle
+  Re-run only the Scanner-emitted A-pattern subset the Migrator was supposed to handle:
+    cypilot_path
+    curly_cypilot_path
+    github_cyber_pilot
+    github_kit_sdlc
+    gh_prefix_kit
+    proper_noun
+    cpt_command_backtick
+    cpt_command_spaced
+    kit_slug_cypilot_sdlc
   Flag new matches (not in original Scanner output) as regressed_or_missed
   Flag matches that WERE in original Scanner output but NOT in Migrator manifest as missed_by_plan
 
@@ -275,6 +309,8 @@ INVARIANTS:
   - MUST preserve: cpt. / line-start cpt are intentional preserves
   - MUST preserve: @cpt-* markers in source code are intentional per v4.0.0 design
   - MUST preserve: studio_proxy package name is preserved
+  - MUST use `cf_studio_path` as the managed-tree boundary input; `{cf_studio_path}/.core/`
+    is never an editable migration target
   - MUST verify: format = "Cypilot" inside [kits.<slug>] or [kit.<slug>] TOML tables
     MUST have been rewritten to format = "CFS" by the Migrator;
     any remaining format = "Cypilot" is a missed_migration regression
@@ -296,5 +332,6 @@ RULES:
       status + per-category counts + detailed residue + C-item status + recommendation
   - MUST use exactly one of the three documented recommendation forms:
       clean / residue / iteration-cap
-  - MUST satisfy the SKILL.md invariant (when SKILL.md was loaded for variable resolution)
+  - MUST satisfy the SKILL.md invariant when the controller supplied
+    `studio_mode_contract`
 ```

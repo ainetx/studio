@@ -51,7 +51,7 @@ PURPOSE:
   Select a lifecycle strategy before finalizing phase boundaries.
 
 DO:
-  OPEN workflows/plan/plan-lifecycle.md
+  OPEN {cf-studio-path}/.core/workflows/plan/plan-lifecycle.md
   FOLLOW plan-lifecycle.md (presents lifecycle menu, records selection, defines normative rules)
   CONTINUE Phase2DecomposeByStrategy
 ```

@@ -1,6 +1,6 @@
 ---
 name: cf-migrate-planner
-description: "Invoke when turning the migrate-scanner's findings into a categorized migration plan — read-only; groups items by execution category A (auto-fixable string substitutions), B (needs-review context-sensitive), and C (cascade operations: workspace rename, member-repo cascade, agent-config regeneration). Emits a plan the orchestrator presents to the user for review BEFORE dispatching the migrator."
+description: "Invoke when turning the migrate-scanner's findings into a categorized migration plan — read-only; groups items by execution category A (auto-fixable string substitutions), B (needs-review context-sensitive), and C (cascade operations: workspace rename only, member-repo cascade, agent-config regeneration). Emits a plan with resolved user-presentable Category C items for the orchestrator to present before dispatching the migrator."
 tools: grep, view, bash
 readonly: true
 model: claude-sonnet-4-6

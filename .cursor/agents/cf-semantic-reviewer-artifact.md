@@ -1,6 +1,6 @@
 ---
 name: cf-semantic-reviewer-artifact
-description: "Invoke when running the kit-checklist semantic review on an artifact target plus its cross-refs — loads the kit checklist, walks every category, and emits Findings (severity, mechanical, path, line, evidence_quote, root_cause, suggested_fix) against the artifact-mode semantic-review contract."
+description: "Invoke when running the kit-checklist semantic review on an artifact target plus its cross-refs — consumes checklist/compliance prompt assets through `prompt_context_view`, walks every category, and emits Findings (severity, mechanical, path, line, evidence_quote, root_cause, suggested_fix) against the artifact-mode semantic-review contract. Missing a contract-required checklist asset is fail-closed; only truly optional RELAXED reviews degrade to a limited sweep, never by reopening prompt files from disk."
 tools: grep, view, bash
 readonly: true
 model: claude-sonnet-4-6

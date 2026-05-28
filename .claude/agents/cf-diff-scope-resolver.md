@@ -1,6 +1,6 @@
 ---
 name: cf-diff-scope-resolver
-description: "Invoke when an analyze/review request targets a commit, branch, worktree, patch, or uncommitted changes — resolves the Git diff scope, changed files, hunks, and review targets so the orchestrator does not perform semantic diff scanning itself."
+description: "Invoke when an analyze/review request targets a commit, branch, worktree, patch, or uncommitted changes — resolves the Git diff scope, changed files, omissions, and review targets while leaving `changed_hunks` empty in this structural-only mode, and only emits `risk_hotspots` when direct targets were explicitly named, so the orchestrator does not perform semantic diff scanning itself."
 tools: Bash, Read, Glob, Grep
 disallowedTools: Write, Edit
 model: haiku

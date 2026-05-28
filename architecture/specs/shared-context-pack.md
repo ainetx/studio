@@ -254,8 +254,20 @@ Every prompt asset in the shared context pack MUST declare an `origin`:
 - `kit` -> task-relevant prompt assets contributed by an active kit
 - `project` -> project-level prompt assets such as configured sysprompts
 
-This specification requires support for `core` and `kit`. `project` is allowed
-for future-proofing and local extension compatibility.
+This specification requires support for `core` and `kit` in every
+implementation. When the active controller model includes project prompt
+surfaces such as configured sysprompts, project `AGENTS.md`, or other
+project-level instruction assets, that implementation MUST also support
+`project` origin end-to-end.
+
+Support for `project` origin is not satisfied by schema acceptance alone. The
+controller MUST be able to discover, load, validate, retain, select, and
+deliver required project-origin prompt assets through `SHARED_CONTEXT_PACK` and
+`prompt_context_view`.
+
+An implementation that omits required project-origin prompt assets while
+claiming compliance with a controller model that includes project prompt
+surfaces is non-compliant with this specification.
 
 ---
 
@@ -478,9 +490,11 @@ The dispatching controller MUST:
 5. refresh or replace stale assets in the pack before any downstream selection
 6. discover only the missing core prompt assets
 7. discover only the missing kit prompt assets
-8. load each newly required prompt asset once
-9. extend `SHARED_CONTEXT_PACK`
-10. derive one `prompt_context_view` per sub-agent dispatch
+8. discover only the missing project prompt assets whenever project prompt
+   surfaces are part of the active controller model
+9. load each newly required prompt asset once
+10. extend `SHARED_CONTEXT_PACK`
+11. derive one `prompt_context_view` per sub-agent dispatch
 
 ### Selection Algorithm
 
@@ -543,9 +557,12 @@ it remains a runtime task resource.
 
 When those surfaces are used as instructions, a dispatching controller,
 dedicated shared-context-pack builder, or top-level runtime controller MAY load
-them from disk to populate the session pack. Prompt-consuming sub-agents MUST
-receive the needed instruction text only through `prompt_context_view` and MUST
-NOT reopen those files directly.
+them from disk to populate the session pack. When the active controller model
+includes those project prompt surfaces, the controller MUST classify them as
+`origin = "project"` assets and make required ones available through
+`SHARED_CONTEXT_PACK` and `prompt_context_view`. Prompt-consuming sub-agents
+MUST receive the needed instruction text only through `prompt_context_view` and
+MUST NOT reopen those files directly.
 
 ---
 

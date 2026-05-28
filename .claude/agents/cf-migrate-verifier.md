@@ -1,6 +1,6 @@
 ---
 name: cf-migrate-verifier
-description: "Invoke when re-running scanning after a migrator pass to close the migration loop — read-only; confirms the migrator's manifest landed correctly on disk, re-runs scanner patterns over the changed-files surface to catch regressions, and surfaces residue (regressed, missed-by-plan, or noticed-but-not-in-plan items) for the orchestrator to feed back into another migrator pass. Bounded by the orchestrator's 3-iteration cap."
+description: "Invoke when re-running scanning after a migrator pass to close the migration loop — read-only; confirms the migrator's manifest landed correctly on disk, re-runs scanner patterns over the changed-files surface to catch regressions, and surfaces residue (regressed, missed-by-plan, or noticed-but-not-in-plan items) for the orchestrator to feed back into another migrator pass. Uses `cf_studio_path` as the managed-tree boundary input. Bounded by the orchestrator's 3-iteration cap."
 tools: Bash, Read, Glob, Grep
 disallowedTools: Write, Edit
 model: sonnet

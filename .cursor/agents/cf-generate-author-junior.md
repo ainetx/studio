@@ -1,6 +1,6 @@
 ---
 name: cf-generate-author-junior
-description: "Invoke when the generate-author selector chooses junior for simple, bounded create/fix tasks: one file, complete inputs, low-risk prose or mechanical edits, and no architectural/code/security ambiguity. Uses the shared author contract and returns a manifest."
+description: "Invoke when the generate-author selector chooses junior for simple, bounded create/fix tasks: one file, complete inputs, low-risk prose or mechanical edits, and no architectural/code/security ambiguity. Consumes the shared author execution prompt assets and returns a manifest."
 tools: grep, view, edit, bash
 model: claude-haiku-4-5
 ---

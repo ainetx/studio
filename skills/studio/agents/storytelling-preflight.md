@@ -20,6 +20,31 @@ description: Invoke at storytelling workflow phase E0 to resolve input access ti
 
 <!-- /toc -->
 
+## Prompt Context Contract
+
+`prompt_context_view` is the sole prompt and instruction source for this
+dispatch. Missing required prompt context is an orchestration error.
+
+```json
+{
+  "agent_id": "storytelling-preflight",
+  "prompt_context_requirements": {
+    "requires_shared_context_pack": true,
+    "required_assets": [
+      {
+        "asset_key": "studio_mode_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["skill"],
+        "match_tags": ["constructor-studio-mode"],
+        "section_tags": [],
+        "required_when": null
+      }
+    ],
+    "optional_assets": []
+  }
+}
+```
+
 ```text
 UNIT StorytellingPreflightAgent
 
@@ -27,7 +52,7 @@ PURPOSE:
   Resolve metadata about a target file or directory at storytelling phase E0.
 
 RULES:
-  - MUST load {cf-studio-path}/.core/skills/studio/SKILL.md on entry
+  - REQUIRE prompt_context_view includes `studio_mode_contract`
   - MUST_NOT read bulk content
   - MUST_NOT invoke downstream storytelling phases
   - MUST_NOT generate narrative output
@@ -36,6 +61,7 @@ RULES:
   - MUST treat each dispatch as a pure function over the JSON Inputs;
     ignore ambient transcript and any context not present in the dispatch payload
   - MUST execute all six steps in order; skipping any step is a contract violation
+  - MUST_NOT open prompt assets from disk directly
 
 NOTES:
   Dispatched once per storytelling session start with raw_path, user_prompt,

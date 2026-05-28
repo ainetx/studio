@@ -70,7 +70,7 @@ Reproduce the canonical `Validation Results` block returned by `cf-deterministic
 - Categories Summary: Total {N}; PASS {N}; FAIL {N}; PARTIAL {N}; N/A {N}; Unsupported-N/A violations {N} (AP-003 violations — see `{cf-studio-path}/.core/requirements/agent-compliance.md`)
 
 ### 4. Agent Self-Test
-- Open, load, and follow `workflows/analyze/agent-self-test.md` § Agent Self-Test (STRICT mode — AFTER completing work) and copy its canonical questions into this table; if RELAXED mode uses a justified subset, state that explicitly.
+- Open, load, and follow `{cf-studio-path}/.core/workflows/analyze/agent-self-test.md` § Agent Self-Test (STRICT mode — AFTER completing work) and copy its canonical questions into this table; if RELAXED mode uses a justified subset, state that explicitly.
 | Question | Answer | Evidence |
 |----------|--------|----------|
 | {question} | YES/NO | {evidence} |

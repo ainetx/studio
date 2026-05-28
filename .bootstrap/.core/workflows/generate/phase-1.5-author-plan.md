@@ -27,7 +27,7 @@ PURPOSE:
   optional unless an explicit auto-skip condition applies.
 
 DO:
-  LOAD workflows/generate/phase-1.5/state-contract.md FIRST
+  LOAD {cf-studio-path}/.core/workflows/generate/phase-1.5/state-contract.md FIRST
     (canonical contract for AUTHOR_PLAN_OFFER_RESOLVED values, continuation
      states, terminal cancellation states, when AUTHOR_EXECUTION_PLAN and
      AUTHOR_PLAN_CACHE_DIR may be non-null, and mandatory-vs-optional offer
@@ -43,8 +43,8 @@ PURPOSE:
   Define load order for Phase 1.5 sub-modules.
 
 DO:
-  1. LOAD workflows/generate/phase-1.5/offer-dispatch.md
-  2. LOAD workflows/generate/phase-1.5/disk-mode.md
+  1. LOAD {cf-studio-path}/.core/workflows/generate/phase-1.5/offer-dispatch.md
+  2. LOAD {cf-studio-path}/.core/workflows/generate/phase-1.5/disk-mode.md
        ONLY when AUTHOR_PLAN_OFFER_RESOLVED == disk
 
 NOTES:

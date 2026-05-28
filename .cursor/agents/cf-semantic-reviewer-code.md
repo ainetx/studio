@@ -1,6 +1,6 @@
 ---
 name: cf-semantic-reviewer-code
-description: "Invoke when running the code-checklist semantic review on code targets against a design artifact — loads only the code-checklist methodology, walks every category, and emits Findings against the code-checklist review contract."
+description: "Invoke when running the code-checklist semantic review on code targets against a design artifact — consumes the review methodology via `prompt_context_view`, walks every category, and emits Findings against the code-checklist review contract."
 tools: grep, view, bash
 readonly: true
 model: claude-sonnet-4-6

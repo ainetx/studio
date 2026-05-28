@@ -124,7 +124,7 @@ MENU Phase54ApprovalMenu:
 
     ^(stop|enough|done)$ ->
       TREAT as option 4
-      LOAD workflows/shared/stop-token-policy.md
+      LOAD {cf-studio-path}/.core/workflows/shared/stop-token-policy.md
 
   INVALID:
     EMIT "Reply not recognized. Expected `1`, `2:`, `2: <IDs>`, `3`, or `4`. Reply again."

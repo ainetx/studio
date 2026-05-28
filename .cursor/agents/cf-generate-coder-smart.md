@@ -1,6 +1,6 @@
 ---
 name: cf-generate-coder-smart
-description: "Invoke when the generate-author selector chooses coder-smart for code-only tasks that need deeper implementation judgment: behavior changes, tests, refactors, API boundaries, or moderate security/concurrency/data implications, without prompt/workflow authoring. Uses the shared author contract and returns a manifest."
+description: "Invoke when the generate-author selector chooses coder-smart for code-only tasks that need deeper implementation judgment: behavior changes, tests, refactors, API boundaries, or moderate security/concurrency/data implications, without prompt/workflow authoring. Consumes the shared author execution prompt assets and returns a manifest."
 tools: grep, view, edit, bash
 model: claude-sonnet-4-6
 ---

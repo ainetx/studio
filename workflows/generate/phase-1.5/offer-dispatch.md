@@ -50,11 +50,11 @@ MENU MandatoryOfferMenu:
     disk | save | 2 ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = disk
       CONTINUE PlannerDispatch
-      THEN LOAD workflows/generate/phase-1.5/disk-mode.md
+      THEN LOAD {cf-studio-path}/.core/workflows/generate/phase-1.5/disk-mode.md
     stop_token ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = cancelled_by_stop_token
       SET CF_PHASE_GATE = armed
-      LOAD workflows/shared/stop-token-policy.md
+      LOAD {cf-studio-path}/.core/workflows/shared/stop-token-policy.md
       STOP current generate sub-flow
       FORBID entering Phase 3 or Phase 4
     no | skip | 3 ->
@@ -104,7 +104,7 @@ MENU OptionalOfferMenu:
     disk | save | 2 ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = disk
       CONTINUE PlannerDispatch
-      THEN LOAD workflows/generate/phase-1.5/disk-mode.md
+      THEN LOAD {cf-studio-path}/.core/workflows/generate/phase-1.5/disk-mode.md
     no | skip | 3 ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = declined
       SET AUTHOR_EXECUTION_PLAN = null
@@ -112,7 +112,7 @@ MENU OptionalOfferMenu:
     stop_token ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = cancelled_by_stop_token
       SET CF_PHASE_GATE = armed
-      LOAD workflows/shared/stop-token-policy.md
+      LOAD {cf-studio-path}/.core/workflows/shared/stop-token-policy.md
       STOP current generate sub-flow
       FORBID entering Phase 3 or Phase 4
   INVALID:

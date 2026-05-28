@@ -70,6 +70,8 @@ RULES:
     `{cf-studio-path}/config/sysprompts/*.md` are prompt assets when used as
     operating instructions
   - A dispatching controller MAY load those prompt assets from disk
+  - When loaded into `SHARED_CONTEXT_PACK`, those assets MUST be recorded with
+    `origin = "project"`
   - Prompt-consuming sub-agents MUST receive the selected prompt text through
     `prompt_context_view`
   - Prompt-consuming sub-agents MUST_NOT reopen project sysprompt files
@@ -277,7 +279,7 @@ Workflows load project system prompts at specific points:
 2. Read `{cf-studio-path}/config/AGENTS.md`
 3. For each `WHEN` rule, match the action description against current context
 4. Load matching system prompt files in declaration order
-5. Publish matching prompt text into the shared context pack
+5. Publish matching prompt text into `SHARED_CONTEXT_PACK` as `origin = "project"` assets
 6. Derive `prompt_context_view` for any prompt-consuming sub-agent
 
 ### Interaction with Kit Prompts

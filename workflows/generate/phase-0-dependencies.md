@@ -26,7 +26,7 @@ DO:
     from skills/studio/protocol.md
   NOTE: {cfs_cmd}, {cf-studio-path}, {project_root} resolved by protocol.md;
         on context loss re-run `{cfs_cmd} --json info` before any path-dependent step
-  LOAD workflows/shared/inline-fallback-probe.md
+  LOAD {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md
     (evaluates SKILL.md § Session Sub-Agent Approval Gate; assigns INLINE_FALLBACK)
   REQUIRE inline-fallback-probe completes before Phase 1 and before any sub-agent dispatch
 

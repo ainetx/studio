@@ -1,6 +1,6 @@
 ---
 name: cf-prompt-bug-finder
-description: "Invoke when running the prompt-bug-finding methodology on prompt / instruction targets — loads only prompt-bug-finding.md and emits Findings for behavioral defects, routing bugs, unsafe defaults, hidden failure modes, and handoff breakage."
+description: "Invoke when running the prompt-bug-finding methodology on prompt / instruction targets — consumes that methodology via `prompt_context_view` and emits Findings for behavioral defects, routing bugs, unsafe defaults, hidden failure modes, and handoff breakage."
 tools: ["read", "search"]
 model: Claude Sonnet 4.6
 ---

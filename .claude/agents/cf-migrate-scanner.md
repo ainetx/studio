@@ -1,6 +1,6 @@
 ---
 name: cf-migrate-scanner
-description: "Invoke when scanning a project for residual cypilot/cpt/Cypilot/Cyber Pilot references that the mechanical `cfs init --migrate-from-cypilot=yes` did not touch (source code, CI, docs, agent configs, workspaces, build files) — read-only post-deterministic cleanup; emits a structured findings list for the planner to categorize. Dispatched by the `migrate from cypilot` orchestrator after user approval."
+description: "Invoke when scanning a project for residual cypilot/cpt/Cypilot/Cyber Pilot references that the mechanical `cfs init --migrate-from-cypilot=yes` did not touch (source code, CI, docs, agent configs, workspaces, build files) — read-only post-deterministic cleanup; consumes Constructor Studio mode via `prompt_context_view` and emits a structured findings list for the planner to categorize. Dispatched by the `migrate from cypilot` orchestrator after user approval."
 tools: Bash, Read, Glob, Grep
 disallowedTools: Write, Edit
 model: sonnet

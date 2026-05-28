@@ -1,6 +1,6 @@
 ---
 name: cf-code-bug-finder
-description: "Invoke when running the code bug-finding methodology on code targets — loads only bug-finding.md and emits Findings for correctness, logic, reliability, security, concurrency, performance, and integration defects."
+description: "Invoke when running the code bug-finding methodology on code targets — loads that methodology via `prompt_context_view` and emits Findings for correctness, logic, reliability, security, concurrency, performance, and integration defects."
 tools: ["read", "search"]
 model: Claude Sonnet 4.6
 ---

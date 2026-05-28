@@ -12,6 +12,56 @@ description: Invoke when running the kit-checklist semantic review on an artifac
 
 <!-- /toc -->
 
+## Prompt Context Contract
+
+`prompt_context_view` is the sole prompt and instruction source for this
+dispatch. Missing required prompt context is an orchestration error.
+
+```json
+{
+  "agent_id": "cf-semantic-reviewer-artifact",
+  "prompt_context_requirements": {
+    "requires_shared_context_pack": true,
+    "required_assets": [
+      {
+        "asset_key": "studio_mode_contract",
+        "accepted_origins": ["core"],
+        "accepted_types": ["skill"],
+        "match_tags": ["constructor-studio-mode"],
+        "section_tags": [],
+        "required_when": null
+      },
+      {
+        "asset_key": "agent_compliance",
+        "accepted_origins": ["core"],
+        "accepted_types": ["requirement"],
+        "match_tags": ["agent-compliance"],
+        "section_tags": [],
+        "required_when": null
+      }
+    ],
+    "optional_assets": [
+      {
+        "asset_key": "artifact_review_checklist",
+        "accepted_origins": ["core", "kit", "project"],
+        "accepted_types": ["checklist", "rule"],
+        "match_tags": ["artifact-review", "checklist"],
+        "section_tags": [],
+        "required_when": "checklist_path != null || rules_mode == STRICT"
+      },
+      {
+        "asset_key": "kit_validation_rules",
+        "accepted_origins": ["kit"],
+        "accepted_types": ["rule", "checklist"],
+        "match_tags": ["kit-rules", "validation"],
+        "section_tags": [],
+        "required_when": "kit_rules_path != null"
+      }
+    ]
+  }
+}
+```
+
 ```text
 UNIT SemanticReviewerArtifact
 
@@ -20,18 +70,16 @@ PURPOSE:
   and its cross-refs, and emit Findings.
 
 RULES:
-  - MUST read SKILL.md to activate Constructor Studio mode
-  - MUST read agent-compliance.md (AP-001..AP-008) and apply self-check before output
+  - MUST consume `studio_mode_contract` and `agent_compliance` from
+    `prompt_context_view`
   - MUST_NOT modify files
   - MUST_NOT run validator subprocesses (the deterministic-validator agent does that)
   - MUST_NOT invoke other Constructor Studio agents
+  - MUST_NOT open prompt assets from disk directly
+  - MUST treat `artifact_review_checklist` as required prompt context whenever
+    `checklist_path != null || rules_mode == STRICT`
+  - MUST fail closed whenever that required checklist prompt context is absent
 ```
-
-Open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` to load
-Constructor Studio mode in this isolated context.
-
-Open and follow `{cf-studio-path}/.core/requirements/agent-compliance.md`
-(anti-patterns AP-001..AP-008 — apply self-check before output).
 
 ## Inputs (dispatched-prompt contract)
 
@@ -57,36 +105,63 @@ PURPOSE:
   Execute ordered review steps; emit PARTIAL_CHECKPOINT when budget is exhausted.
 
 DO:
+  SET checklist_required =
+    (checklist_path != null || rules_mode == STRICT)
   REQUIRE full read of every target_path completes before emitting PASS
-  IF full read cannot complete within available context budget:
+  REQUIRE full read of every declared cross_ref_path completes before emitting PASS
+  IF full read of target_paths or declared cross_ref_paths cannot complete within available context budget:
     EMIT PARTIAL_CHECKPOINT (see schema below)
     STOP_TURN
 
-  1. Open, load, and follow checklist_path and the kit rules' Validation section
+  1. IF checklist_required AND `artifact_review_checklist` is absent from
+       `prompt_context_view`:
+       EMIT review_result:
+         {"type":"VALIDATION_REPORT","status":"FAIL","reviewer":"artifact"}
+       EMIT Findings:
+         [{"id":"F-CONTEXT-CHECKLIST","severity":"high","mechanical":false,
+           "path":null,"line":null,"category":"prompt-context",
+           "evidence_quote":"artifact_review_checklist missing from prompt_context_view",
+           "root_cause":"orchestrator did not supply the checklist asset required by the prompt-context contract",
+           "suggested_fix":"re-dispatch with artifact_review_checklist resolved into prompt_context_view",
+           "mechanical_rationale":"This is an orchestration contract failure, not a deterministic file-local defect."}]
+       STOP_TURN
+     Load `artifact_review_checklist` when it is present in `prompt_context_view`
+     and load `kit_validation_rules` when that asset is present
   2. Read every target_path in full via Read tool (fresh read this turn)
-  3. Walk EVERY checklist category individually
+  3. Read every declared cross_ref_path in full via Read tool (fresh read this turn)
+     before any PASS outcome is allowed
+  4. Walk EVERY checklist category individually
      Produce per-category status: PASS | FAIL | PARTIAL | N/A
      Include evidence: quoted line(s) and line numbers
-  4. For each FAIL or PARTIAL category, emit one or more Findings
+  5. For each FAIL or PARTIAL category, emit one or more Findings
 
 ON_ERROR:
   kit_rules_path == null AND rules_mode == RELAXED ->
     Skip loading the Validation section
-  checklist_path == null ->
-    Fall back to the kit's default checklist for the target KIND
-    IF no kit applies:
-      Restrict review to placeholder / empty-section / ID-format sweep
-      Mark every other per-category status PARTIAL
-        with reason: "no checklist for RELAXED non-kit"
+  artifact_review_checklist missing from prompt_context_view ->
+    IF checklist_required:
+      EMIT review_result:
+        {"type":"VALIDATION_REPORT","status":"FAIL","reviewer":"artifact"}
+      EMIT Findings:
+        [{"id":"F-CONTEXT-CHECKLIST","severity":"high","mechanical":false,
+          "path":null,"line":null,"category":"prompt-context",
+          "evidence_quote":"artifact_review_checklist missing from prompt_context_view",
+          "root_cause":"orchestrator did not supply the checklist asset required by the prompt-context contract",
+          "suggested_fix":"re-dispatch with artifact_review_checklist resolved into prompt_context_view",
+          "mechanical_rationale":"This is an orchestration contract failure, not a deterministic file-local defect."}]
+      STOP_TURN
+    Restrict review to placeholder / empty-section / ID-format sweep
+    Mark every other per-category status PARTIAL
+      with reason: "no checklist asset supplied in RELAXED mode"
   template_path == null ->
     Skip template-structure checks (required H2 sections, ordering)
-    Mark related categories PARTIAL with reason: "no checklist for RELAXED non-kit"
+    Mark related categories PARTIAL with reason: "no template for structure checks"
 ```
 
 PARTIAL_CHECKPOINT schema (emit as a `json`-fenced block in place of the Validation Report):
 
 ```json
-{"type":"PARTIAL_CHECKPOINT","reviewer":"artifact","reason":"context_exhausted","unread_paths":[...],"resume_inputs":{...}}
+{"type":"PARTIAL_CHECKPOINT","reviewer":"artifact","reason":"context_exhausted","unread_paths":{"target_paths":[...],"cross_ref_paths":[...]},"resume_inputs":{...}}
 ```
 
 ## Mechanical-vs-judgmental classification
@@ -149,11 +224,10 @@ RULES:
   - MUST have review_result JSON block before the Validation Report block
   - MUST have per-category status with evidence for every applicable checklist category
   - MUST have findings JSON block (empty array when all categories PASS)
-  - SHOULD have non-empty mechanical_rationale on every finding object
-    (when missing, orchestrator substitutes
-    "<no rationale provided by {agent_name}>" and continues;
-    fallback behavior defined in
-    {cf-studio-path}/.core/workflows/generate/phase-5/phase-5.3-findings.md)
+  - MUST have non-empty mechanical_rationale on every finding object
+  - MUST fail closed when any finding omits mechanical_rationale:
+    the response is incomplete, MUST_NOT be surfaced as fix-ready output,
+    and MUST be rejected for re-run rather than patched by orchestrator substitution
   - MUST perform AP-001..AP-008 self-check before output
     (results in a short trailer block)
   - MUST satisfy the SKILL.md invariant
