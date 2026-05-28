@@ -1,0 +1,111 @@
+[plan]
+task = "Rewrite all project prompt files to follow the shared-context-pack spec, convert prompt-bearing files to PDSL where applicable via cf-pdsl, and normalize instruction-load paths to use {cf-studio-path}-prefixed prompt references"
+type = "implement"
+target = "PROMPTS"
+target_key = "feature-title:shared-context-pack-pdsl-migration"
+kit_path = ".bootstrap/config/kits/sdlc"
+created = "2026-05-28T08:59:57Z"
+lifecycle = "gitignore"
+execution_status = "in_progress"
+lifecycle_status = "pending"
+plan_dir = ".bootstrap/.plans/implement-shared-context-pack-pdsl-migration"
+active_plan_dir = ".bootstrap/.plans/implement-shared-context-pack-pdsl-migration"
+input_signature = "2c9194e92be9e0550e1c3a0bf37e17914d1072a46a4838ecc41e14d4ca24ce2c"
+total_phases = 6
+compile_runtime_inputs_policy = "Files listed under phase.inputs that live under out/ are runtime artifacts produced during phase execution. During phase compilation they MUST be treated as future execution-time dependencies, not as compile-time blockers. The compiler SHOULD reference them in the compiled phase contract and MAY read them only if they already exist."
+
+[[phases]]
+number = 1
+title = "Inventory and classification"
+slug = "inventory-and-classification"
+file = "phase-01-inventory-and-classification.md"
+brief_file = "brief-01-inventory-and-classification.md"
+status = "done"
+kind = "delivery"
+depends_on = []
+input_files = ["workflows", "skills", "requirements", "architecture/specs", "skills/studio/agents.toml", "AGENTS.md", ".bootstrap/config/AGENTS.md", ".bootstrap/.gen/AGENTS.md", ".bootstrap/config/kits/sdlc/AGENTS.md"]
+output_files = []
+outputs = ["out/phase-01-prompt-inventory.md", "out/phase-01-load-path-findings.md", "out/phase-01-pdsl-scope-map.md"]
+inputs = []
+template_sections = []
+checklist_sections = []
+
+[[phases]]
+number = 2
+title = "Migration rules and target contract"
+slug = "migration-rules-and-target-contract"
+file = "phase-02-migration-rules-and-target-contract.md"
+brief_file = "brief-02-migration-rules-and-target-contract.md"
+status = "pending"
+kind = "delivery"
+depends_on = [1]
+input_files = ["architecture/specs/shared-context-pack.md", "architecture/specs/PDSL.md", "workflows/pdsl.md", "skills/studio/agents.toml"]
+output_files = ["architecture/specs/shared-context-pack.md"]
+outputs = ["out/phase-02-rewrite-rules.md", "out/phase-02-agent-context-contract.md", "out/phase-02-path-prefix-policy.md"]
+inputs = ["out/phase-01-prompt-inventory.md", "out/phase-01-load-path-findings.md", "out/phase-01-pdsl-scope-map.md"]
+template_sections = []
+checklist_sections = []
+
+[[phases]]
+number = 3
+title = "Top-level orchestrators and shared loaders"
+slug = "top-level-orchestrators-and-shared-loaders"
+file = "phase-03-top-level-orchestrators-and-shared-loaders.md"
+brief_file = "brief-03-top-level-orchestrators-and-shared-loaders.md"
+status = "pending"
+kind = "delivery"
+depends_on = [2]
+input_files = ["workflows", "skills/studio", "requirements", "architecture/specs/shared-context-pack.md", "AGENTS.md", ".bootstrap/config/AGENTS.md"]
+output_files = ["workflows", "skills/studio/SKILL.md", "skills/studio/protocol.md", "skills/studio/routing.md", "AGENTS.md", ".bootstrap/config/AGENTS.md"]
+outputs = ["out/phase-03-orchestrator-migration.md", "out/phase-03-pack-builder-contract.md"]
+inputs = ["out/phase-02-rewrite-rules.md", "out/phase-02-agent-context-contract.md", "out/phase-02-path-prefix-policy.md"]
+template_sections = []
+checklist_sections = []
+
+[[phases]]
+number = 4
+title = "Leaf sub-agent migration"
+slug = "leaf-sub-agent-migration"
+file = "phase-04-leaf-sub-agent-migration.md"
+brief_file = "brief-04-leaf-sub-agent-migration.md"
+status = "pending"
+kind = "delivery"
+depends_on = [3]
+input_files = ["skills/studio/agents", "skills/studio/agents.toml", "workflows/pdsl.md", "architecture/specs/shared-context-pack.md"]
+output_files = ["skills/studio/agents", "skills/studio/agents.toml"]
+outputs = ["out/phase-04-agent-migration.md", "out/phase-04-agent-context-needs.md"]
+inputs = ["out/phase-02-rewrite-rules.md", "out/phase-02-agent-context-contract.md", "out/phase-03-pack-builder-contract.md"]
+template_sections = []
+checklist_sections = []
+
+[[phases]]
+number = 5
+title = "Requirements and specs migration"
+slug = "requirements-and-specs-migration"
+file = "phase-05-requirements-and-specs-migration.md"
+brief_file = "brief-05-requirements-and-specs-migration.md"
+status = "pending"
+kind = "delivery"
+depends_on = [4]
+input_files = ["requirements", "architecture/specs", "workflows/pdsl.md", "architecture/specs/PDSL.md"]
+output_files = ["requirements", "architecture/specs"]
+outputs = ["out/phase-05-pdsl-requirements-specs.md", "out/phase-05-path-prefix-remediation.md"]
+inputs = ["out/phase-01-pdsl-scope-map.md", "out/phase-02-rewrite-rules.md", "out/phase-04-agent-context-needs.md"]
+template_sections = []
+checklist_sections = []
+
+[[phases]]
+number = 6
+title = "Validation and gap closure"
+slug = "validation-and-gap-closure"
+file = "phase-06-validation-and-gap-closure.md"
+brief_file = "brief-06-validation-and-gap-closure.md"
+status = "pending"
+kind = "delivery"
+depends_on = [5]
+input_files = ["workflows", "skills", "requirements", "architecture/specs", "skills/studio/agents.toml", "AGENTS.md", ".bootstrap/config/AGENTS.md", ".bootstrap/.gen/AGENTS.md", ".bootstrap/config/kits/sdlc/AGENTS.md", ".bootstrap/.core"]
+output_files = ["workflows", "skills", "requirements", "architecture/specs", "skills/studio/agents.toml", "AGENTS.md", ".bootstrap/config/AGENTS.md", ".bootstrap/.gen/AGENTS.md", ".bootstrap/config/kits/sdlc/AGENTS.md", ".bootstrap/.core"]
+outputs = ["out/phase-06-validation-report.md", "out/phase-06-remaining-findings.md"]
+inputs = ["out/phase-01-prompt-inventory.md", "out/phase-01-load-path-findings.md", "out/phase-04-agent-context-needs.md", "out/phase-04-agent-migration.md", "out/phase-05-pdsl-requirements-specs.md", "out/phase-05-path-prefix-remediation.md"]
+template_sections = []
+checklist_sections = []
