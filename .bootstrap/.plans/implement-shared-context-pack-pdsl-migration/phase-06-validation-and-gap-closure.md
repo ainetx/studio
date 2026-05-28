@@ -23,27 +23,32 @@ written, and report results against the acceptance criteria at the end.
 
 ## What
 
-Validate the migrated prompt-bearing corpus and close any remaining deterministic
-migration gaps across `workflows/`, `skills/`, `requirements/`,
+Validate the migrated prompt-bearing corpus and close any remaining
+deterministic migration gaps across `workflows/`, `skills/`, `requirements/`,
 `architecture/specs/`, and `skills/studio/agents.toml`. This phase verifies
 shared-context-pack compliance, removes residual direct prompt-loading and
 missing `.bootstrap` path-prefix issues, and confirms that prompt-bearing files
-use PDSL where required. When a remaining issue cannot be resolved safely
-without new design decisions, record it explicitly instead of guessing.
+use PDSL where required. The prior `out/*` entries listed under `inputs` are
+required runtime dependencies from earlier phases, not compile-time blockers
+for generating this phase file.
 
 ## Prior Context
 
-This is phase 6 of 6 in `implement-shared-context-pack-pdsl-migration`.
+This is phase 6 of 6 in
+`implement-shared-context-pack-pdsl-migration`.
 Phase 5 completed the main requirements-and-specs migration and path-prefix
 remediation work that this phase depends on.
-The runtime validation baseline comes from `out/phase-01-prompt-inventory.md`,
+The plan brief classifies
+`out/phase-01-prompt-inventory.md`,
 `out/phase-01-load-path-findings.md`, and
-`out/phase-05-path-prefix-remediation.md`.
-This phase must validate the top-level prompt-bearing corpus only; it does not
-re-plan the migration or reopen earlier scope decisions.
+`out/phase-05-path-prefix-remediation.md`
+as runtime artifacts produced by earlier phases.
+Those files were absent during compilation of this phase file, which did not
+block compilation.
+At execution time they are required validation inputs and must be read before
+making final in-scope remediation decisions.
 Execution produces `out/phase-06-validation-report.md` and
-`out/phase-06-remaining-findings.md` and may modify in-scope corpus files only
-when the remediation is deterministic.
+`out/phase-06-remaining-findings.md`.
 
 ## User Decisions
 
@@ -53,12 +58,15 @@ when the remediation is deterministic.
   `architecture/specs/`, and `skills/studio/agents.toml`
 - **Primary validation targets**: forbidden prompt-load patterns, missing
   `.bootstrap` path prefixes, and non-PDSL prompt-bearing files still in scope
+- **Runtime dependency policy**: `out/*` files listed under `inputs` are
+  earlier-phase runtime dependencies that must be preserved as Task reads, not
+  treated as compile-time blockers
 - **Fallback for unresolved cases**: keep the file unchanged and record the gap
   in `out/phase-06-remaining-findings.md`
 
 ### Decisions Needed During This Phase
 
-None. Apply deterministic fixes directly and report ambiguous or speculative
+None. Apply deterministic fixes directly and record ambiguous or speculative
 items as remaining findings.
 
 ## Rules
@@ -76,6 +84,21 @@ items as remaining findings.
 - MUST NOT guess when a remaining issue requires new design intent; leave the
   file unchanged and record the issue
 - MUST self-verify against every acceptance criterion before reporting
+
+### Runtime Dependency Handling
+
+- `out/phase-01-prompt-inventory.md`,
+  `out/phase-01-load-path-findings.md`, and
+  `out/phase-05-path-prefix-remediation.md`
+  are required runtime inputs produced by earlier phases
+- Those `out/*` inputs are runtime dependencies, not compile-time blockers for
+  generating this phase file
+- At execution time, MUST read all three runtime dependency files before using
+  them to scope PDSL candidates or compare remaining findings
+- If any required runtime dependency is missing at execution time, MUST stop and
+  report the exact missing path as a runtime dependency failure
+- MUST NOT replace a missing runtime dependency with ad hoc rescans or inferred
+  baseline data
 
 ### Shared Context Pack Compliance
 
@@ -165,13 +188,13 @@ items as remaining findings.
 ### Validation Law
 
 - Prompt assets for sub-agents must come from `prompt_context_view`, not direct
-  disk reads.
+  disk reads
 - Direct prompt-load instructions are invalid in prompt-consuming sub-agents
-  even when the referenced files exist.
+  even when the referenced files exist
 - Allowed direct prompt loading is limited to orchestrators or explicit
-  shared-context-pack builders.
+  shared-context-pack builders
 - Missing prompt context is a deterministic validation failure, not a reason to
-  fall back to ad hoc file opening.
+  fall back to ad hoc file opening
 
 ### Forbidden Pattern Set
 
@@ -197,25 +220,37 @@ items as remaining findings.
 - Context and rationale may stay in prose, but behavior-bearing instructions
   must not rely on prose-only hidden semantics
 
-### Runtime Inputs
+### Runtime Dependencies
 
-- Prior findings:
+- Required earlier-phase outputs:
   `out/phase-01-prompt-inventory.md`,
   `out/phase-01-load-path-findings.md`,
   `out/phase-05-path-prefix-remediation.md`
-- Corpus under validation:
-  `workflows/`, `skills/`, `requirements/`, `architecture/specs/`, and
-  `skills/studio/agents.toml`
-- Deliverables:
-  `out/phase-06-validation-report.md` and
-  `out/phase-06-remaining-findings.md`
+- These files are required at execution time to define the prompt-bearing
+  baseline and prior remediation state
+- Their absence during phase compilation did not invalidate this phase file
+
+### Corpus Under Validation
+
+- `workflows/`
+- `skills/`
+- `requirements/`
+- `architecture/specs/`
+- `skills/studio/agents.toml`
+
+### Deliverables
+
+- `out/phase-06-validation-report.md`
+- `out/phase-06-remaining-findings.md`
 
 ## Task
 
-1. Read the runtime baseline inputs:
+1. Read the required runtime dependency files from earlier phases:
    `out/phase-01-prompt-inventory.md`,
    `out/phase-01-load-path-findings.md`, and
    `out/phase-05-path-prefix-remediation.md`.
+   If any file is missing at execution time, stop immediately and report the
+   exact missing runtime dependency instead of continuing validation.
 2. Read the validation corpus with targeted scans:
    `workflows/`, `skills/`, `requirements/`, `architecture/specs/`, and
    `skills/studio/agents.toml`.
@@ -234,7 +269,7 @@ items as remaining findings.
    EXECUTE:
    ```bash
    rg -n \
-     -e 'Open and follow (\\.core/|config/AGENTS\\.md|config/sysprompts/)' \
+     -e 'Open and follow (\.core/|config/AGENTS\.md|config/sysprompts/)' \
      -e 'prompt_context_requirements' \
      -e 'prompt_context_view' \
      workflows skills requirements architecture/specs skills/studio/agents.toml
@@ -243,9 +278,8 @@ items as remaining findings.
    ```bash
    rg -L '^UNIT ' workflows skills requirements -g '*.md'
    ```
-   Use the prior findings files to distinguish already-known classes, and only
-   treat files identified as prompt-bearing in
-   `out/phase-01-prompt-inventory.md` as PDSL-conversion candidates.
+   Use `out/phase-01-prompt-inventory.md` to identify which files are
+   prompt-bearing before classifying non-PDSL files as conversion candidates.
 4. Close every deterministic remaining gap in place.
    Replace residual forbidden prompt-load instructions in prompt-consuming
    contracts with shared-context-pack-compliant wording.
@@ -257,38 +291,42 @@ items as remaining findings.
    Do not rewrite prose specification content in `architecture/specs/` unless
    the issue is a concrete prompt-path or validation-law defect.
 5. Re-run the same scans from step 3 and confirm that every deterministic issue
-   class is either resolved or explicitly justified as an allowed orchestrator
-   exception or a remaining finding.
-6. Write `out/phase-06-validation-report.md` with:
-   the scan commands used; files scanned; files modified; counts of findings
-   before and after remediation; a per-issue-class summary covering direct
-   prompt loads, missing `.bootstrap` prefixes, prompt-context-contract gaps,
-   and PDSL gaps; and an overall `PASS` or `FAIL` conclusion.
-7. Write `out/phase-06-remaining-findings.md` with one entry per unresolved
-   item, including file path, issue class, exact evidence, why it was not
-   auto-remediated, and the next deterministic follow-up needed.
-8. Self-verify against the acceptance criteria, including that this phase file
-   contains no unresolved variables outside fenced code blocks and remains
-   within the 600-line budget, then report results in the required format.
+   class is either resolved or explicitly justified as an allowed
+   orchestrator/controller exception.
+   Any remaining prompt-consuming forbidden-pattern hit MUST be recorded as an
+   unresolved finding.
+6. Write `out/phase-06-validation-report.md` with the scans run, files
+   modified, findings closed, remaining findings count, and final `PASS` or
+   `FAIL` status.
+   Write `out/phase-06-remaining-findings.md` with every unresolved or
+   intentionally deferred finding, including the blocking reason and why it was
+   not safely fixable in this phase.
+7. Self-verify against the acceptance criteria before reporting completion.
+   Confirm the runtime dependency reads happened first, the deliverables exist,
+   the phase result is evidence-backed, this file remains within the line
+   budget, and there are no unresolved placeholder variables outside code
+   fences.
 
 ## Acceptance Criteria
 
-- `out/phase-06-validation-report.md` exists and records the scans run, files
-  scanned, files modified, before-and-after finding counts, and final status
-- `out/phase-06-remaining-findings.md` exists and contains every unresolved or
-  deferred issue with file path, issue class, evidence, rationale, and next
-  step
-- Every remaining forbidden direct prompt-load pattern in scope is either
-  removed, justified as an allowed orchestrator exception, or listed in
-  `out/phase-06-remaining-findings.md`
-- Every remaining missing `.bootstrap` path-prefix issue in scope is either
-  fixed or listed in `out/phase-06-remaining-findings.md`
-- Every prompt-bearing file in `workflows/`, `skills/`, and `requirements/`
-  that still fails the PDSL baseline is either converted or listed in
-  `out/phase-06-remaining-findings.md`
-- This phase file contains no unresolved placeholder variables outside fenced
-  code blocks
-- This phase file is at most 600 lines long
+- All three earlier-phase `out/*` runtime dependency files were read before
+  validation decisions were made; if any was missing, execution stopped with an
+  explicit missing-runtime-dependency failure
+- The deterministic scans from Task step 3 and Task step 5 were run against
+  `workflows/`, `skills/`, `requirements/`, `architecture/specs/`, and
+  `skills/studio/agents.toml`
+- Every deterministic forbidden prompt-load or missing `.bootstrap` prefix
+  issue in scope was either fixed or recorded in
+  `out/phase-06-remaining-findings.md` with a concrete justification
+- Only files identified as prompt-bearing by
+  `out/phase-01-prompt-inventory.md` were treated as PDSL conversion
+  candidates, and any non-mechanical conversion need was recorded as a
+  remaining finding
+- `out/phase-06-validation-report.md` and
+  `out/phase-06-remaining-findings.md` both exist and contain the required
+  summary information
+- This phase file is `<= 600` lines and contains no unresolved placeholder
+  variables outside code fences
 
 ## Output Format
 
@@ -304,23 +342,6 @@ Acceptance criteria:
   ...
 Line count: {actual}/{budget}
 Notes: {any issues or decisions made}
-```
-
-Then generate a **copy-pasteable prompt** for the next phase inside a single code fence:
-
-```text
-Next phase prompt (copy-paste into new chat if needed):
-```
-
-```text
-I have a Studio execution plan at:
-  {cf-studio-path}/.plans/{task-slug}/plan.toml
-
-Phase {N} is complete ({status}).
-Please read the plan manifest, then execute Phase {N+1}: "{next_title}".
-The phase file is: {cf-studio-path}/.plans/{task-slug}/{next_phase_file}
-It is self-contained — follow its instructions exactly.
-After completion, report results and generate the prompt for the next phase.
 ```
 
 If this is the **last phase**, instead of a next-phase prompt output:
