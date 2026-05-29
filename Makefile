@@ -1,5 +1,5 @@
 # @cpt-algo:cpt-studio-spec-init-structure-change-infrastructure:p1
-.PHONY: test test-verbose test-quick test-coverage test-coverage-diff validate validate-examples validate-feature validate-code validate-code-feature self-check validate-kits validate-kits-sdlc vulture vulture-ci pylint install install-pipx install-proxy install-prompt-tests clean help check-pytest check-pytest-cov check-pipx check-vulture check-pylint check-versions check-prompt-tests update seed-cache ensure-bootstrap spec-coverage ci lint-ci test-prompts test-prompts-view
+.PHONY: test test-verbose test-quick test-coverage test-coverage-diff validate validate-examples validate-feature validate-code validate-code-feature self-check validate-kits validate-kits-sdlc vulture vulture-ci pylint install install-pipx install-proxy install-prompt-tests clean help check-pytest check-pytest-cov check-pipx check-vulture check-pylint check-versions check-prompt-tests update seed-cache ensure-bootstrap generate-agents spec-coverage ci lint-ci test-prompts test-prompts-view
 
 # Detect container architecture for act (arm64 on Apple Silicon, amd64 otherwise)
 UNAME_M := $(shell uname -m)
@@ -60,6 +60,7 @@ help:
 	@echo "  make test-prompts                  - Run cf-skill UX pilot (claude + codex)"
 	@echo "  make test-prompts-view             - Open promptfoo HTML report for last run"
 	@echo "  make update                        - Update .bootstrap from local source"
+	@echo "  make generate-agents               - Generate all local agent integrations"
 	@echo "  make clean                         - Remove Python cache files"
 	@echo "  make help                          - Show this help message"
 
@@ -235,6 +236,10 @@ ensure-bootstrap:
 		echo "Bootstrap studio entrypoint missing; running make update..."; \
 		$(MAKE) update; \
 	fi
+
+generate-agents: ensure-bootstrap
+	@echo "Generating all Constructor Studio agent integrations..."
+	$(PYTHON) $(BOOTSTRAP_STUDIO) generate-agents -y
 
 # Validate core methodology spec
 validate: ensure-bootstrap

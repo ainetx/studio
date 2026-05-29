@@ -5,6 +5,7 @@
 
 - [Prerequisites](#prerequisites)
 - [Development Setup](#development-setup)
+- [Generated Agent Integrations](#generated-agent-integrations)
 - [Project Architecture (Self-Hosted Bootstrap)](#project-architecture-self-hosted-bootstrap)
   - [Critical Rule](#critical-rule)
 - [Versioning](#versioning)
@@ -54,9 +55,28 @@ make install-proxy
 # Bootstrap: sync .bootstrap/ from local source
 make update
 
+# Generate local AI coding tool integrations
+make generate-agents
+
 # Run full CI locally (mirrors GitHub Actions exactly)
 make ci
 ```
+
+---
+
+## Generated Agent Integrations
+
+Host integration files are generated local artifacts and are intentionally not
+tracked in git. Before starting development, refresh both the self-hosted
+bootstrap and all agent integrations:
+
+```bash
+make update
+make generate-agents
+```
+
+`make generate-agents` runs Constructor Studio from `.bootstrap/.core/` and
+omits `--agent`, so it regenerates all supported host integrations.
 
 ---
 
@@ -88,9 +108,10 @@ studio/                           # Project root
 > Treat `.bootstrap/.core/` and `.bootstrap/.gen/` as generated bootstrap mirrors that are
 > intentionally **not tracked in git**. Always edit the canonical source files under project
 > root (`skills/`, `kits/`, `schemas/`, `architecture/`, `requirements/`, etc.).
-> Before starting work, run `make update` so your local bootstrap copy is in sync with the
-> canonical source. Re-run `make update` whenever you need to refresh the local bootstrap for
-> manual verification, but do not commit `.bootstrap/.core/` or `.bootstrap/.gen/`.
+> Before starting work, run `make update` and `make generate-agents` so your local bootstrap
+> copy and agent integrations are in sync with the canonical source. Re-run `make update`
+> whenever you need to refresh the local bootstrap for manual verification, but do not commit
+> `.bootstrap/.core/`, `.bootstrap/.gen/`, or generated host integration files.
 
 The `make update` command runs `cfs update --source . --force`, which:
 1. Copies canonical sources into `.bootstrap/.core/`
