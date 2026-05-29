@@ -20,18 +20,19 @@ description: "Invoke when a generate author write/fix dispatch is needed to clas
 
 <!-- /toc -->
 
-```text
-UNIT GenerateAuthorSelector
+## Dispatch Generator Contract
 
-PURPOSE:
-  Classify task domain and complexity, then select the cheapest capable author agent.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-RULES:
-  - MUST open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` before acting
-  - MUST_NOT write files
-  - MUST_NOT invoke other Cyber Constructor agents
-  - MUST select the lowest domain-specific agent that is sufficient
-```
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
+
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
+
 
 ## Selection Principle
 

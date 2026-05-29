@@ -81,6 +81,10 @@ _TMPL_DESCRIPTION = "description: {description}"
 _AGENT_TEMPLATE_HEADER = ["---", _TMPL_NAME, _TMPL_DESCRIPTION]
 _ALWAYS_FOLLOW_TARGET_PATH = "ALWAYS open and follow `{target_path}`"
 _FOLLOW_LINK_RE = re.compile(r"ALWAYS open and follow `([^`]+)`")
+_ENDPOINT_POINTER = (
+    "Constructor Studio endpoint only. Prompt source: {target_agent_path}. "
+    "Final prompt is supplied by the cf controller at dispatch time."
+)
 
 # Ownership marker injected into every generated file so developers know
 # not to hand-edit them.  Markdown files use an HTML comment; TOML files
@@ -126,6 +130,22 @@ def _extract_studio_follow_target(content: str) -> Optional[str]:
 # @cpt-end:cpt-studio-algo-agent-integration-generate-shims:p1:inst-extract-studio-follow-target
 
 
+def _extract_studio_endpoint_target(content: str) -> Optional[str]:
+    """Return the prompt-source target from a generated endpoint-only proxy."""
+    marker = "Prompt source: "
+    start = content.find(marker)
+    if start == -1:
+        return None
+    start += len(marker)
+    end = content.find(". Final prompt", start)
+    if end == -1:
+        return None
+    target = content[start:end].strip()
+    if target.startswith("{cf-studio-path}/"):
+        return target
+    return None
+
+
 # @cpt-begin:cpt-studio-algo-agent-integration-generate-shims:p1:inst-is-pure-studio-generated
 def _is_pure_studio_generated(
     content: str,
@@ -135,10 +155,10 @@ def _is_pure_studio_generated(
 ) -> bool:
     """Return True only if *content* is a pure Constructor Studio-generated stub with no user content.
 
-    A pure generated file consists of optional YAML frontmatter, optional
-    blank lines, and the ``ALWAYS open and follow`` directive — nothing else.
-    Files that contain a Constructor Studio follow-link *plus* additional user-authored
-    content are **not** considered pure generated and must be preserved.
+    A pure generated file consists of optional YAML frontmatter, the
+    generated-file marker, and optional blank lines — nothing else.
+    Files that contain any additional user-authored content are **not**
+    considered pure generated and must be preserved.
 
     Frontmatter is compared against the canonical generated shape: Constructor Studio
     stubs only ever write ``name`` and ``description``.  Any extra key
@@ -146,7 +166,8 @@ def _is_pure_studio_generated(
     When *expected_name* or *expected_description* are provided the corresponding
     frontmatter values must match exactly; a mismatch means the user edited them.
     """
-    if not _extract_studio_follow_target(content):
+    has_generated_marker = _GENERATED_MARKER in content
+    if not has_generated_marker and not _extract_studio_follow_target(content):
         return False
     # Strip generated-file ownership marker before structural checks
     stripped = _GENERATED_MARKER_RE.sub("", content)
@@ -172,13 +193,16 @@ def _is_pure_studio_generated(
             if expected_description is not None and fm.get("description") != expected_description:
                 return False
             stripped = stripped[end + 4:]  # skip past closing ---
-    # Remove all follow-link lines
-    lines = [
-        line for line in stripped.splitlines()
-        if not _FOLLOW_LINK_RE.search(line)
-    ]
-    # If only whitespace remains, the file is purely generated
-    return not any(line.strip() for line in lines)
+    nonblank = [line.strip() for line in stripped.splitlines() if line.strip()]
+    if not nonblank:
+        return True
+    if len(nonblank) == 1:
+        line = nonblank[0]
+        if _extract_studio_follow_target(line):
+            return True
+        if line.startswith("Constructor Studio endpoint only. Prompt source: "):
+            return True
+    return False
 # @cpt-end:cpt-studio-algo-agent-integration-generate-shims:p1:inst-is-pure-studio-generated
 
 
@@ -325,7 +349,11 @@ def _is_pure_studio_generated_toml(content: str, expected_content: Optional[str]
     instructions = data.get("developer_instructions")
     if not isinstance(instructions, str):
         return False
-    if not _extract_studio_follow_target(instructions.strip()):
+    stripped_instructions = instructions.strip()
+    if not (
+        _extract_studio_follow_target(stripped_instructions)
+        or _extract_studio_endpoint_target(stripped_instructions)
+    ):
         return False
     return data == expected_data
 # @cpt-end:cpt-studio-algo-agent-integration-generate-shims:p1:inst-is-pure-studio-generated-toml
@@ -369,12 +397,15 @@ def _expected_stale_studio_generated_toml(
     if toml_file.stem != name:
         return None
 
-    follow_target = _extract_studio_follow_target(instructions.strip())
-    if not follow_target:
+    target = (
+        _extract_studio_follow_target(instructions.strip())
+        or _extract_studio_endpoint_target(instructions.strip())
+    )
+    if not target:
         return None
 
     studio_root_resolved = studio_root.resolve()
-    suffix = follow_target[len("{cf-studio-path}/"):]
+    suffix = target[len("{cf-studio-path}/"):]
     suffix_parts = [p for p in suffix.split("/") if p not in ("", ".")]
     if any(part == ".." for part in suffix_parts):
         return None
@@ -389,10 +420,17 @@ def _expected_stale_studio_generated_toml(
     prompt_description = _extract_frontmatter_description(prompt_path)
     if not prompt_description:
         return None
+    description = data.get("description")
+    host_description = _build_host_registration_description(prompt_description, target)
+    if description not in (prompt_description, host_description):
+        return None
 
     rendered = _render_toml_agent(
-        {"name": name, "description": prompt_description},
-        follow_target,
+        {
+            "name": name,
+            "description": description,
+        },
+        target,
     )
     if extra_keys:
         # Append permitted extras in deterministic order, matching the generator's output ordering.
@@ -633,29 +671,41 @@ def _validate_agent_entry(
     if "/" in name or "\\" in name or ".." in name:
         sys.stderr.write(f"WARNING: skipping agent with unsafe name: {name!r}\n")
         return None
-    prompt_rel = info.get("prompt_file", "")
-    prompt_abs = None
-    if prompt_rel:
-        if not isinstance(prompt_rel, str):
-            sys.stderr.write(
-                f"WARNING: agent {name!r} prompt_file must be a string, "
-                f"got {type(prompt_rel).__name__!r}, skipping\n"
-            )
-            return None
-        candidate = (source_dir / prompt_rel).resolve()
+    raw_prompt_file = info.get("prompt_file")
+    prompt_source_abs: Optional[Path]
+    prompt_file_abs: Optional[Path]
+    prompt_file_value: Optional[str]
+    if raw_prompt_file is None:
+        prompt_source_abs = _default_agent_prompt_source(name, source_dir)
+        prompt_file_value = f"agents/{name}.md"
+    elif not isinstance(raw_prompt_file, str):
+        sys.stderr.write(
+            f"WARNING: agent {name!r} prompt_file must be a string, skipping\n"
+        )
+        return None
+    elif not raw_prompt_file.strip():
+        prompt_source_abs = None
+        prompt_file_value = ""
+    else:
+        prompt_file_value = raw_prompt_file
+        prompt_path = Path(raw_prompt_file)
+        prompt_source_abs = (
+            prompt_path.resolve()
+            if prompt_path.is_absolute()
+            else (source_dir / prompt_path).resolve()
+        )
+
+    if prompt_source_abs is not None:
         try:
-            candidate.relative_to(source_dir.resolve())
+            prompt_source_abs.relative_to(source_dir.resolve())
         except ValueError:
             sys.stderr.write(
-                f"WARNING: agent {name!r} prompt_file escapes source dir, skipping\n"
+                f"WARNING: agent {name!r} prompt source escapes source dir, skipping\n"
             )
             return None
-        if not candidate.is_file():
-            sys.stderr.write(
-                f"WARNING: agent {name!r} prompt_file not found: {candidate}, skipping\n"
-            )
-            return None
-        prompt_abs = candidate
+        prompt_file_abs = prompt_source_abs
+    else:
+        prompt_file_abs = None
 
     mode = info.get("mode", "readwrite")
     if mode not in _VALID_AGENT_MODES:
@@ -718,7 +768,9 @@ def _validate_agent_entry(
     return {
         "name": name,
         "description": info.get("description", f"Constructor Studio {name} subagent"),
-        "prompt_file_abs": prompt_abs,
+        "prompt_source_abs": prompt_source_abs,
+        "prompt_file_abs": prompt_file_abs,
+        "prompt_file": prompt_file_value,
         "mode": mode,
         "isolation": bool(info.get("isolation", False)),
         "model": model,
@@ -753,6 +805,27 @@ def _safe_relpath(path: Path, base: Path) -> str:
         return path.relative_to(base).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _default_agent_prompt_source(name: str, source_dir: Path) -> Path:
+    """Return the canonical prompt-source path for a legacy agents.toml entry."""
+    return (source_dir / "agents" / f"{name}.md").resolve()
+
+
+def _build_host_registration_description(description: str, prompt_source_path: str) -> str:
+    """Return the host-facing description for an empty registered agent endpoint."""
+    del prompt_source_path
+    base = " ".join((description or "").split())
+    scope_note = (
+        "Constructor Studio endpoint only; valid for dispatch from the cf skill/controller, "
+        "not for standalone loading or use outside Constructor Studio flows."
+    )
+    if not base:
+        return scope_note
+    if base.endswith("."):
+        return f"{base} {scope_note}"
+    return f"{base}. {scope_note}"
+
 
 def _target_path_from_root(target: Path, project_root: Path, studio_root: Optional[Path] = None) -> str:
     """Return agent-instruction path using ``{cf-studio-path}/`` variable prefix.
@@ -1079,7 +1152,7 @@ def _discover_kit_agents(
     tool-specific frontmatter.
 
     Returns a list of dicts, each with keys:
-    ``name``, ``description``, ``prompt_file_abs``, ``mode``, ``isolation``,
+    ``name``, ``description``, ``prompt_source_abs``, ``mode``, ``isolation``,
     ``model``, ``source_dir``.
     """
     seen_names: Set[str] = set()
@@ -1100,6 +1173,12 @@ def _discover_kit_agents(
         for name, info in agents_section.items():
             entry = _validate_agent_entry(name, info, source_dir, seen_names)
             if entry is None:
+                continue
+            prompt_source_abs = entry.get("prompt_source_abs")
+            if prompt_source_abs is not None and not prompt_source_abs.is_file():
+                sys.stderr.write(
+                    f"WARNING: agent {name!r} prompt source not found: {prompt_source_abs}, skipping\n"
+                )
                 continue
             seen_names.add(name)
             out.append(entry)
@@ -1166,7 +1245,7 @@ def _agent_template_claude(agent: Dict[str, Any]) -> List[str]:
 
     if agent["isolation"]:
         lines.append("isolation: worktree")
-    lines += ["---", _GENERATED_MARKER, "", "ALWAYS open and follow `{target_agent_path}`"]
+    lines += ["---", _GENERATED_MARKER, "", _ENDPOINT_POINTER, ""]
     return lines
 
 
@@ -1210,13 +1289,14 @@ def _agent_template_cursor(agent: Dict[str, Any]) -> List[str]:
     lines.append("---")
     lines.append(_GENERATED_MARKER)
     lines.append("")
+    lines.append(_ENDPOINT_POINTER)
+    lines.append("")
 
     comment = _format_unsupported_field_comment(agent)
     if comment:
         lines.append(comment)
         lines.append("")
 
-    lines.append("ALWAYS open and follow `{target_agent_path}`")
     return lines
 
 
@@ -1239,13 +1319,14 @@ def _agent_template_copilot(agent: Dict[str, Any]) -> List[str]:
     lines.append("---")
     lines.append(_GENERATED_MARKER)
     lines.append("")
+    lines.append(_ENDPOINT_POINTER)
+    lines.append("")
 
     comment = _format_unsupported_field_comment(agent)
     if comment:
         lines.append(comment)
         lines.append("")
 
-    lines.append("ALWAYS open and follow `{target_agent_path}`")
     return lines
 
 
@@ -1287,9 +1368,6 @@ def _render_toml_agent(agent: Dict[str, Any], target_agent_path: str) -> str:
         raw_desc = str(raw_desc) if raw_desc is not None else ""
     desc = " ".join(raw_desc.split())
     desc_escaped = _escape_toml_basic_string(desc)
-    safe_path = _escape_toml_multiline_string(target_agent_path)
-    prompt = f"ALWAYS open and follow `{safe_path}`"
-
     lines: List[str] = [
         _GENERATED_MARKER_TOML,
         f'name = "{_escape_toml_basic_string(name)}"',
@@ -1315,9 +1393,10 @@ def _render_toml_agent(agent: Dict[str, Any], target_agent_path: str) -> str:
         if tokens is not None:
             lines.append(f"model_context_window = {tokens}")
 
+    endpoint_pointer = _ENDPOINT_POINTER.format(target_agent_path=target_agent_path)
     lines += [
         'developer_instructions = """',
-        prompt,
+        _escape_toml_multiline_string(endpoint_pointer),
         '"""',
     ]
     return "\n".join(lines) + "\n"
@@ -1367,6 +1446,11 @@ def _agents_skill_outputs() -> list:
         {
             "path": ".agents/skills/cf-plan/SKILL.md",
             "target": "workflows/plan.md",
+            "template": list(_AGENTS_WORKFLOW_SKILL_TEMPLATE),
+        },
+        {
+            "path": ".agents/skills/cf-explore/SKILL.md",
+            "target": "workflows/explore.md",
             "template": list(_AGENTS_WORKFLOW_SKILL_TEMPLATE),
         },
         {
@@ -1513,6 +1597,22 @@ def _default_agents_config() -> dict:
                                 "disable-model-invocation: false",
                                 "user-invocable: true",
                                 "allowed-tools: Bash, Read, Write, Edit, Glob, Grep",
+                                "---",
+                                _GENERATED_MARKER,
+                                "",
+                                _ALWAYS_FOLLOW_TARGET_PATH,
+                            ],
+                        },
+                        {
+                            "path": ".claude/skills/cf-explore/SKILL.md",
+                            "target": "workflows/explore.md",
+                            "template": [
+                                "---",
+                                "name: cf-explore",
+                                _TMPL_DESCRIPTION,
+                                "disable-model-invocation: false",
+                                "user-invocable: true",
+                                "allowed-tools: Bash, Read, Glob, Grep",
                                 "---",
                                 _GENERATED_MARKER,
                                 "",
@@ -3113,12 +3213,19 @@ def _process_subagents(
         filename_fmt = tool_cfg.get("filename_format", "{name}.md")
         output_dir = (project_root / output_dir_rel).resolve()
 
-        # Build target_agent_paths from discovered kit agents
+        # Build target-agent prompt-source paths from discovered kit agents
         target_agent_paths: Dict[str, str] = {}
+        registration_descriptions: Dict[str, str] = {}
         for ka in kit_agents:
-            if ka.get("prompt_file_abs"):
-                target_agent_paths[ka["name"]] = _target_path_from_root(
-                    ka["prompt_file_abs"], project_root, studio_root,
+            prompt_source_abs = ka.get("prompt_source_abs") or ka.get("prompt_file_abs")
+            if prompt_source_abs:
+                target_agent_path = _target_path_from_root(
+                    prompt_source_abs, project_root, studio_root,
+                )
+                target_agent_paths[ka["name"]] = target_agent_path
+                registration_descriptions[ka["name"]] = _build_host_registration_description(
+                    ka["description"],
+                    target_agent_path,
                 )
 
         if output_format == "toml":
@@ -3133,8 +3240,10 @@ def _process_subagents(
                     subagents_result["skipped"] = True
                     subagents_result["skip_reason"] = subagents_result.get("skip_reason", "") or "one or more agents missing prompt target"
                     continue
+                rendered_agent = dict(ka)
+                rendered_agent["description"] = registration_descriptions.get(name, ka["description"])
                 toml_path = (output_dir / f"{name}.toml").resolve()
-                content = _render_toml_agent(ka, agent_path)
+                content = _render_toml_agent(rendered_agent, agent_path)
                 _write_or_skip(toml_path, content, subagents_result, project_root, dry_run)
             # Clean up stale TOML files: legacy combined file and renamed/removed agents
             desired_toml_names = {f"{ka['name']}.toml" for ka in kit_agents if target_agent_paths.get(ka["name"])}
@@ -3209,13 +3318,15 @@ def _process_subagents(
                         subagents_result["skipped"] = True
                         subagents_result["skip_reason"] = subagents_result.get("skip_reason", "") or "one or more agents missing prompt target"
                         continue
-                    template = template_fn(ka)
+                    rendered_agent = dict(ka)
+                    rendered_agent["description"] = registration_descriptions.get(name, ka["description"])
+                    template = template_fn(rendered_agent)
 
                     content = _render_template(
                         template,
                         {
                             "name": name,
-                            "description": ka["description"],
+                            "description": rendered_agent["description"],
                             "target_agent_path": target_agent_rel,
                         },
                     )
@@ -3842,10 +3953,9 @@ def cmd_generate_agents(argv: List[str]) -> int:
         ui.result(agents_result, human_fn=lambda d: _human_generate_agents_ok(d, agents_to_process, results, dry_run=args.dry_run))
         return 0 if not has_errors else 1
 
-    # ── EXISTING PATH: Legacy agents.toml flow (unchanged) ────────────────
+    # ── EXISTING PATH: Legacy agents.toml flow ────────────────────────────
     # @cpt-begin:cpt-studio-dod-project-extensibility-backward-compat:p1:inst-legacy-path
     # Backward compatibility: no v2.0 manifest → use existing _discover_kit_agents() flow.
-    # Existing repos with no manifest.toml MUST produce identical output.
 
     # Handle --show-layers flag in legacy mode (no layers to show)
     if getattr(args, "show_layers", False):
@@ -4261,7 +4371,7 @@ def _human_generate_agents_ok(
         ui.success("Agent integration complete!")
         ui.blank()
         ui.info("Your IDE will now:")
-        ui.hint("• Route /cf-generate, /cf-analyze, /cf-plan, and /cf-workspace to Constructor Studio workflows")
+        ui.hint("• Route /cf-generate, /cf-analyze, /cf-plan, /cf-explore, and /cf-workspace to Constructor Studio workflows")
         ui.hint("• Recognize the Constructor Studio skill in chat")
     else:
         ui.warn("Agent setup finished with some errors (see above).")
@@ -4853,7 +4963,6 @@ def _build_openai_agent_file(
 
     sandbox_mode = translated.get("sandbox_mode", "workspace-write")
     description = _apply_variables(agent.description or "", variables)
-    dev_instructions = _apply_variables(source_content, variables)
     model_str = _apply_variables(str(translated.get("model", "")), variables)
     toml_lines = [
         _GENERATED_MARKER_TOML,
@@ -4870,14 +4979,16 @@ def _build_openai_agent_file(
     context_window = translated.get("model_context_window")
     if context_window is not None:
         toml_lines.append(f"model_context_window = {int(context_window)}")
-    # Escape backslashes and triple-quotes in content to prevent TOML injection
-    safe_instructions = _escape_toml_multiline_string(dev_instructions)
+    dev_instructions = _apply_variables(source_content, variables)
+    append = getattr(agent, "append", "")
+    if append:
+        dev_instructions = (
+            dev_instructions.rstrip("\n")
+            + "\n"
+            + _apply_variables(str(append), variables)
+        )
     toml_lines.append('developer_instructions = """')
-    toml_lines.append(safe_instructions)
-    # Append content inside the triple-quoted string to prevent TOML injection.
-    if agent.append:
-        safe_append = _escape_toml_multiline_string(_apply_variables(agent.append, variables))
-        toml_lines.append(safe_append)
+    toml_lines.append(_escape_toml_multiline_string(dev_instructions))
     toml_lines.append('"""')
     content = "\n".join(toml_lines) + "\n"
     rel_out = path_template.replace("{id}", agent_id)
@@ -4938,20 +5049,15 @@ def _build_standard_agent_file(
     frontmatter_lines.extend(translated.get("frontmatter", []))
     frontmatter_lines.append("---")
 
-    body_prefix = translated.get("body_prefix", "")
+    content = "\n".join(frontmatter_lines) + "\n" + _GENERATED_MARKER + "\n\n"
+    content += translated.get("body_prefix", "")
+    content += source_content
     body_suffix = translated.get("body_suffix", "")
-    content = (
-        "\n".join(frontmatter_lines)
-        + "\n"
-        + _GENERATED_MARKER
-        + "\n"
-        + body_prefix
-        + source_content
-        + body_suffix
-    )
-
-    if agent.append:
-        content = content.rstrip("\n") + "\n" + agent.append
+    if body_suffix:
+        content = content.rstrip("\n") + body_suffix
+    append = getattr(agent, "append", "")
+    if append:
+        content = content.rstrip("\n") + "\n" + append
 
     # Sanitize variable values: strip newlines to prevent breaking YAML
     # frontmatter structure (consistent with TOML sanitization in OpenAI path).

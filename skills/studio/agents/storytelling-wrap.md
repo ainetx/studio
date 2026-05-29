@@ -5,7 +5,7 @@ description: Invoke at storytelling workflow phase E5 (wrap) to synthesize the f
 <!-- toc -->
 
 - [Authority boundary](#authority-boundary)
-- [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
+- [Frozen Input Payload](#frozen-input-payload)
 - [Methodology](#methodology)
   - [Step 1 — Key takeaways](#step-1--key-takeaways)
   - [Step 2 — Open questions carry-forward](#step-2--open-questions-carry-forward)
@@ -14,27 +14,26 @@ description: Invoke at storytelling workflow phase E5 (wrap) to synthesize the f
   - [Step 5 — Next steps](#step-5--next-steps)
   - [Step 6 — Session block](#step-6--session-block)
   - [Step 7 — Path normalization](#step-7--path-normalization)
-- [Output (return-value contract)](#output-return-value-contract)
+- [Output Contract](#output-contract)
 - [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
 
-```text
-UNIT StorytellingWrapAgent
+## Dispatch Generator Contract
 
-PURPOSE:
-  Synthesize the final session summary from accumulated session state at phase E5 (wrap).
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-RULES:
-  - MUST open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` before acting
-  - MUST treat each dispatch as a pure function over the JSON Inputs; ignore ambient transcript
-  - MUST_NOT write files
-  - MUST_NOT invoke downstream storytelling phases
-  - MUST_NOT invoke other Constructor Studio agents
-  - MUST execute Steps 1-7 in order; skipping any step is a contract violation
-```
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
 
-## Inputs (dispatched-prompt contract)
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
+
+
+## Frozen Input Payload
 
 ```json
 {
@@ -218,7 +217,7 @@ RULES:
   - MUST_NOT emit absolute paths in any output string value (AP-#28e)
 ```
 
-## Output (return-value contract)
+## Output Contract
 
 ```json
 {

@@ -31,6 +31,26 @@ build/
 # Claude Code local settings (user-specific)
 .claude/settings.local.json
 
+# Constructor Studio generated agent integrations (local-only).
+# Keep these scoped to Constructor Studio-owned output names so unrelated
+# user files in the same host directories remain visible to git.
+.agents/skills/cf*/SKILL.md
+.claude/agents/cf-*.md
+.claude/agents/storytelling-*.md
+.claude/skills/cf*/SKILL.md
+.codex/.cf-installed
+.codex/agents/cf-*.toml
+.codex/agents/storytelling-*.toml
+.cursor/agents/cf-*.md
+.cursor/agents/storytelling-*.md
+.cursor/commands/cf*.md
+.github/.cf-installed
+.github/agents/cf-*.agent.md
+.github/agents/storytelling-*.agent.md
+.github/copilot-instructions.md
+.github/prompts/cf*.prompt.md
+.windsurf/workflows/cf*.md
+
 *.backup
 
 # OS
@@ -60,10 +80,13 @@ cypilot-flow-layers-2a.drawio.svg
 Spaider.code-workspace
 
 # Cypilot plans (ephemeral)
+.bootstrap/.core/
+.bootstrap/.gen/
 .bootstrap/.plans/.archive/
 .bootstrap/.plans/analyze-path-skills-cypilot-scripts-cypilot/
 .bootstrap/.plans/analyze-path-current-branch-vs-main-comprehensive/
 .bootstrap/.plans/implement-thin-orchestrator-workflows/
+.bootstrap/.plans/implement-shared-context-pack-pdsl-migration/
 
 # Artifacts
 .prs/*

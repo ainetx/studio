@@ -13,7 +13,7 @@ findings with severity, evidence, risks, regressions, and recommended fixes. The
 template routes to `/cf-plan` (PHASED review plan) instead. The two diverge across
 7 load-bearing lines (heading, routing verb, lead-in, focus, closing) — well above the 3-line
 collapse threshold; collapsing would require inline conditionals that break the "self-contained
-final prompt usable in a fresh chat" contract. Open, load, and follow `workflows/generate/phase-6/prompt-templates.md`
+final prompt usable in a fresh chat" contract. Open, load, and follow `{cf-studio-path}/.core/workflows/generate/phase-6/prompt-templates.md`
 for the diff summary.
 -->
 

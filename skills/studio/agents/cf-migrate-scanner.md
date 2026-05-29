@@ -17,11 +17,19 @@ description: Invoke when scanning a project for residual cypilot/cpt/Cypilot/Cyb
 
 <!-- /toc -->
 
-You are the Constructor Studio **Migration Scanner** — a read-only sub-agent that finds residual cypilot/cpt/Cypilot/Cyber Pilot references the deterministic migration did not touch.
+## Dispatch Generator Contract
 
-You receive a project root path and produce a structured findings list. You modify NO files.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-Open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` to load Constructor Studio mode in this isolated context.
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
+
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
+
 
 ## Purpose
 
@@ -32,6 +40,9 @@ The deterministic migration (`cfs init --migrate-from-cypilot=yes`) handles inst
 - `project_root`: absolute path to the project root
 - `cf_studio_path`: absolute path to the Constructor Studio install dir (default `.cf-studio`)
 - `exclude_dirs`: list of paths to skip (typically `.git`, `{cf-studio-path}`, build caches like `__pycache__`, `node_modules`, `.venv`, `dist`, `build`)
+
+`cf_studio_path` is the canonical managed-tree input name for this migration
+chain. The Scanner, Migrator, and Verifier all use that exact field name.
 
 ## Context Budget & Fail-Safe
 
@@ -89,7 +100,7 @@ Run grep / rg across the project root with the following file globs and patterns
 | `github_cyber_pilot` | `github\.com/cyberfabric/cyber-pilot(?!-kit)` | GitHub URL (legacy cypilot main repo) |
 | `github_kit_sdlc` | `github\.com/cyberfabric/cyber-pilot-kit-sdlc` | GitHub URL (legacy cypilot SDLC kit) |
 | `gh_prefix_kit` | `github:cyberfabric/cyber-pilot-kit-sdlc` | Legacy kit source string |
-| `proper_noun` | `\bCypilot\b\|\bCyber Pilot\b` | Legacy proper noun in prose |
+| `proper_noun` | `(?:\bCypilot\b|\bCyber Pilot\b)` | Legacy proper noun in prose |
 | `cpt_command_backtick` | `` `cpt ` `` | Well-formed legacy command ref (backtick + space) |
 | `cpt_command_spaced` | ` cpt ` (space-padded) | Well-formed legacy command ref (space-padded) |
 | `cpt_other` | `\bcpt\b` minus the above | Any other `cpt` — needs review |
@@ -97,7 +108,7 @@ Run grep / rg across the project root with the following file globs and patterns
 | `cpt_marker` | `@cpt[-:]` | Marker syntax — per v4.0.0 design these can be intentional |
 | `kit_slug_cypilot_sdlc` | `\bcypilot-sdlc\b` | Legacy kit slug |
 | `cyber_pilot_kebab` | `\bcyber-pilot\b` (not part of URL) | Kebab form (e.g. in slugs) |
-| `workspace_file` | `\.cypilot-workspace\.toml\|\.bootstrap-workspace\.toml` | Legacy workspace file name |
+| `workspace_file` | `(?:\.cypilot-workspace\.toml|\.bootstrap-workspace\.toml)` | Legacy workspace file name |
 
 For each match, also classify into a SOURCE-FILE category:
 - `code` — source-code file (auto-fixable depends on pattern)
@@ -120,10 +131,10 @@ In addition to the project-wide pass, look specifically at these locations:
 3. **Root system prompts** — read `{project_root}/AGENTS.md` and `{project_root}/CLAUDE.md`. If either still contains `<!-- @cpt:root-agents -->` markers (legacy), flag as `hotspot_root_legacy_marker` (CRITICAL — deterministic migration failed silently OR didn't run).
 
 4. **Workspace files**:
-   - `.cypilot-workspace.toml` or `.bootstrap-workspace.toml` (legacy names) → recommend rename + content rewrite
+   - `.cypilot-workspace.toml` or `.bootstrap-workspace.toml` (legacy names) → recommend manual rename as Category C; any in-file rewrite work must come from the recorded line findings and hotspot scan, not from an implied extra rewrite step
    - `.studio-workspace.toml` (current name) → re-scan inside it for any `cypilot` / `cyber-pilot` references in source / branch URLs
 
-5. **Workspace member repos** (if workspace file is present): parse the workspace file's `sources` table. For each source's `path` (when it's a local path under the user's workspace root), record the member's name and path. Do NOT recurse into the member's filesystem (that's the member's own migration job). Mark as Phase-C: _"cascade `cfs init --migrate-from-cypilot=yes` into member repo `{name}` at `{path}`"_.
+5. **Workspace member repos** (if workspace file is present): parse the workspace file's `sources` table. For each source's `path` (when it's a local path under the user's workspace root), record the member's resolved name and absolute path. Do NOT recurse into the member's filesystem (that's the member's own migration job). Mark as Phase-C: _"cascade `cfs init --migrate-from-cypilot=yes` into member repo `<resolved-member-name>` at `<resolved-member-path>`"_.
 
 ### Step 3 — Filter intentional-keep cases
 
@@ -182,8 +193,8 @@ Total findings: {N}
 ... (counts only — no per-file findings; the per-file action is "regenerate via cfs generate-agents")
 
 #### workspace (M)
-- {workspace_file_path}: needs rename to .studio-workspace.toml
-- workspace member {name} at {path}: cascade migration recommended
+- {workspace_file_path}: manual rename to .studio-workspace.toml recommended
+- workspace member `<resolved-member-name>` at `<resolved-member-path>`: cascade migration recommended
 - ... (any in-file matches scanned as `doc` / `code` etc.)
 
 ### Suggested auto-classify hints (per pattern)

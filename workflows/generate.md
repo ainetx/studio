@@ -17,6 +17,7 @@ purpose: Universal workflow for creating or updating any artifact or code
 - [Agent Anti-Patterns (STRICT mode)](#agent-anti-patterns-strict-mode)
 - [Rules Mode Behavior](#rules-mode-behavior)
 - [Phase 0: Ensure Dependencies](#phase-0-ensure-dependencies)
+- [Phase 0.a: Explore / Brainstorm Applicability](#phase-0a-explore--brainstorm-applicability)
 - [Phase 0.1: Plan Escalation Gate](#phase-01-plan-escalation-gate)
 - [Phase 0.2: Review-Loop Configuration](#phase-02-review-loop-configuration)
 - [Phase 0.x: GIT_COMMIT_MODE Probe](#phase-0x-git_commit_mode-probe)
@@ -47,7 +48,7 @@ WHEN:
   project is BROWNFIELD
 
 DO:
-  REQUIRE workflows/generate/reverse-engineering.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/reverse-engineering.md is loaded and followed
 ```
 
 ## Overview
@@ -64,10 +65,27 @@ RULES:
   - Code generation mode: design/spec context first; load checklist during validation/review
     unless current rules explicitly require it during implementation
   - Config mode: create/update config files
-  - After protocol.md: TARGET_TYPE, RULES, KIND, PATH, MODE, and resolved
+  - After `{cf-studio-path}/.core/skills/studio/protocol.md`: TARGET_TYPE, RULES, KIND, PATH, MODE, and resolved
     phase-appropriate dependencies are known
   - Key variables: {cf-studio-path}/config/, {ARTIFACTS_REGISTRY}, {KITS_PATH}, {PATH}
   - Use {KITS_PATH}/artifacts/{KIND}/examples/ for style and quality guidance
+```
+
+```text
+UNIT GenerateSharedContextPack
+
+PURPOSE:
+  Keep generate-phase prompt loading controller-owned and pack-aware.
+
+RULES:
+  - Workflow fragments referenced by generate are controller-owned prompt
+    assets loaded from {cf-studio-path}/.core/workflows/...
+  - Before any downstream author or reviewer dispatch, the controller MUST
+    reuse or extend SHARED_CONTEXT_PACK, load the agent prompt source, and
+    synthesize a final dispatch prompt with only the task-relevant instruction
+    context
+  - Generate MUST NOT rely on prompt-consuming sub-agents reopening workflow,
+    requirement, spec, or AGENTS prompt files directly
 ```
 
 ## Context Budget & Overflow Prevention (CRITICAL)
@@ -121,8 +139,8 @@ PURPOSE:
   Load canonical STRICT/RELAXED and stop-token behavior.
 
 DO:
-  REQUIRE workflows/shared/mode-resolution.md is loaded and followed
-  REQUIRE workflows/shared/stop-token-policy.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/shared/mode-resolution.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/shared/stop-token-policy.md is loaded and followed
 ```
 
 ## Phase 0: Ensure Dependencies
@@ -131,17 +149,42 @@ DO:
 UNIT GeneratePhase0
 
 PURPOSE:
-  Resolve dependencies after protocol.md loads.
+  Resolve dependencies after `{cf-studio-path}/.core/skills/studio/protocol.md` loads.
 
 WHEN:
-  workflow enters dependency resolution after skills/studio/protocol.md
+  workflow enters dependency resolution after
+  {cf-studio-path}/.core/skills/studio/protocol.md
 
 DO:
-  REQUIRE workflows/generate/phase-0-dependencies.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-0-dependencies.md is loaded and followed
 
 NOTES:
-  phase-0-dependencies.md delegates the INLINE_FALLBACK probe to
-  workflows/shared/inline-fallback-probe.md (canonical block reused by analyze.md).
+  {cf-studio-path}/.core/workflows/generate/phase-0-dependencies.md delegates
+  the INLINE_FALLBACK probe to
+  {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md
+  (canonical block reused by analyze.md).
+```
+
+## Phase 0.a: Explore / Brainstorm Applicability
+
+```text
+UNIT GenerateExploreBrainstormGate
+
+PURPOSE:
+  Decide whether generation needs project-resource discovery or design
+  exploration before planning/collecting inputs.
+
+WHEN:
+  GeneratePhase0 completed
+  AND before Phase 0.1 / Phase 0.5 / Phase 0.7
+
+DO:
+  REQUIRE {cf-studio-path}/.core/workflows/shared/explore-brainstorm-gate.md is loaded and followed
+
+RULES:
+  - MUST run required cf-explore before cf-brainstorm when both apply
+  - MUST carry RESOURCE_CONTEXT into Phase 0.7 and Phase 1 when exploration ran
+  - MUST NOT put resource files into SHARED_CONTEXT_PACK
 ```
 
 ## Phase 0.1: Plan Escalation Gate
@@ -153,7 +196,7 @@ PURPOSE:
   Run plan escalation gate after dependencies load.
 
 DO:
-  REQUIRE workflows/shared/plan-escalation-gate.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/shared/plan-escalation-gate.md is loaded and followed
 ```
 
 ## Phase 0.2: Review-Loop Configuration
@@ -165,10 +208,10 @@ PURPOSE:
   Load COLLECTOR_MAX_ITER configuration.
 
 DO:
-  REQUIRE workflows/generate/phase-0.2-review-loop-cfg.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-0.2-review-loop-cfg.md is loaded and followed
 
 NOTES:
-  MAX_ITER prompt + parser live in workflows/generate/phase-5/index.md
+  MAX_ITER prompt + parser live in {cf-studio-path}/.core/workflows/generate/phase-5/index.md
   § Pre-Phase-Setup (also the analyze.md external-entry point).
 ```
 
@@ -185,7 +228,7 @@ WHEN:
   AND Phase 0.5 has not yet started
 
 DO:
-  REQUIRE workflows/generate/phase-0-git-commit-mode.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-0-git-commit-mode.md is loaded and followed
 
 RULES:
   - MUST skip if GIT_COMMIT_MODE is already set from an earlier run in this chat session
@@ -204,7 +247,7 @@ WHEN:
   AND before Phase 0.7 / Phase 1
 
 DO:
-  REQUIRE workflows/generate/phase-0.5-clarify.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-0.5-clarify.md is loaded and followed
 ```
 
 ## Phase 0.7: Brainstorm
@@ -221,7 +264,7 @@ WHEN:
   AND active KIND's rules.md does NOT set brainstorm = "disabled"
 
 DO:
-  REQUIRE workflows/generate/phase-0.7/index.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-0.7/index.md is loaded and followed
 ```
 
 ## Phase 1: Collect Information
@@ -236,7 +279,7 @@ WHEN:
   dependency resolution and Phase 0.5 / 0.7 are complete
 
 DO:
-  REQUIRE workflows/generate/phase-1-collect.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-1-collect.md is loaded and followed
 ```
 
 ## Phase 1.5: Author Plan
@@ -252,7 +295,7 @@ WHEN:
   AND before Phase 3 summary
 
 DO:
-  REQUIRE workflows/generate/phase-1.5-author-plan.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-1.5-author-plan.md is loaded and followed
 
 RULES:
   - The author plan is optional for the user
@@ -272,7 +315,7 @@ WHEN:
   OR must emit a Phase 2.5 checkpoint for a long-running generation
 
 DO:
-  REQUIRE workflows/generate/phase-2-checkpoint.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-2-checkpoint.md is loaded and followed
 ```
 
 ## Phase 3: Summary
@@ -289,7 +332,7 @@ WHEN:
   AND user must confirm yes/no/modify before any files are written
 
 DO:
-  REQUIRE workflows/generate/phase-3-summary.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-3-summary.md is loaded and followed
 ```
 
 ## Phase 4: Write
@@ -305,7 +348,7 @@ WHEN:
   AND author must be dispatched (mode=create) to write files atomically
 
 DO:
-  REQUIRE workflows/generate/phase-4-write.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-4-write.md is loaded and followed
 ```
 
 ## Phase 5: Review Loop
@@ -321,7 +364,7 @@ WHEN:
   OR analyze.md Remediation Handoff option 1 routes external entry into Phase 5.3
 
 DO:
-  REQUIRE workflows/generate/phase-5/index.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-5/index.md is loaded and followed
 ```
 
 ## Phase 6: Offer Next Steps
@@ -336,7 +379,7 @@ WHEN:
   Phase 5 exits
 
 DO:
-  REQUIRE workflows/generate/phase-6/index.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/phase-6/index.md is loaded and followed
 
 RULES:
   - Remediation Handoff: conditional on non-empty remaining_findings
@@ -358,7 +401,7 @@ WHEN:
   (during any generate phase)
 
 DO:
-  REQUIRE workflows/generate/error-handling.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/error-handling.md is loaded and followed
 ```
 
 ## State Summary & Validation Criteria
@@ -377,7 +420,7 @@ WHEN:
   post-flight checklist must be verified before ending the response
 
 DO:
-  REQUIRE workflows/generate/validation-criteria.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/generate/validation-criteria.md is loaded and followed
 ```
 
 ## Agent Self-Test (STRICT mode — AFTER completing work)
@@ -392,6 +435,6 @@ WHEN:
   STRICT mode finalization requires self-test
 
 DO:
-  REQUIRE workflows/generate/validation-criteria.md § Agent Self-Test
+  REQUIRE {cf-studio-path}/.core/workflows/generate/validation-criteria.md § Agent Self-Test
     (STRICT mode — AFTER completing work) is loaded and followed
 ```

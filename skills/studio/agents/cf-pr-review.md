@@ -4,63 +4,26 @@ description: Invoke when reviewing a GitHub pull request with structured checkli
 
 <!-- toc -->
 
-- [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
+- [Frozen Input Payload](#frozen-input-payload)
 - [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
 
-```text
-UNIT PrReviewAgent
+## Dispatch Generator Contract
 
-PURPOSE:
-  Perform structured, checklist-based pull request reviews in an isolated context.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-INPUT:
-  target_paths: list of changed file paths
-  rules_mode: STRICT | RELAXED
-  pr_ref: owner/repo#NN or URL
-  review_intent: defect-oriented | checklist | scope-only
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
 
-RULES:
-  - MUST load {cf-studio-path}/.core/skills/studio/SKILL.md to load Constructor Studio mode
-  - MUST load analyze workflow only — full AGENTS.md rule stack is not required
-  - MUST_NOT write project files
-  - MUST_NOT modify workflows
-  - MUST_NOT invoke other Constructor Studio agents
-  - All output is chat-only
-  - REQUIRE INLINE_FALLBACK is set before any nested sub-agent dispatch
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
 
-DO:
-  1. Load {cf-studio-path}/.core/skills/studio/SKILL.md.
-  2. IF INLINE_FALLBACK == unset:
-       STOP — load {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md
-       WAIT user.reply
-       STOP_TURN
-  3. Open and follow {cf-studio-path}/.core/workflows/analyze.md targeting PR review mode.
-  4. Fetch fresh PR data.
-  5. DISPATCH nested cf-* sub-agents: diff-scope-resolver, cf-deterministic-validator,
-     semantic reviewers.
-  6. Apply review checklist through Phase 4 (Output).
-  7. Produce structured review report.
-  8. EMIT bullet-list summary of finding count by severity plus any CRITICAL or
-     HIGH findings by title and file path.
-  9. IF actionable issues exist: EMIT Remediation Handoff menu.
-  10. STOP_TURN
 
-INVARIANTS:
-  - MUST_NOT end response with only a review summary when actionable issues exist
-  - Remediation Handoff menu is the mandatory terminal block when actionable issues exist
-  - Fix Prompt and Plan Prompt are emitted only on next turn when user chooses
-    matching handoff option
-
-ON_ERROR:
-  constructor_studio_dependency_missing ->
-    EMIT missing dependency description
-    suggest running /cf to reinitialize
-    STOP_TURN
-```
-
-## Inputs (dispatched-prompt contract)
+## Frozen Input Payload
 
 ```json
 {
@@ -73,8 +36,8 @@ ON_ERROR:
 
 NOTES:
   Authority boundary: reads PR diffs, artifact files, and checklists only.
-  Detailed analysis stays within this agent context; only the summary and
-  handoff menu return to the main conversation.
+  Nested dispatch is limited to analyze-scoped reviewer and validator agents;
+  only the summary and handoff menu return to the main conversation.
 
 ## Response Completion Gate
 
@@ -85,8 +48,10 @@ RULES:
   - MUST run analyze workflow through Phase 4 for the PR diff/changes
   - MUST return structured review report to main conversation
   - MUST end with Remediation Handoff menu when actionable issues exist
-  - MUST satisfy SKILL.md invariant (Constructor Studio mode loaded)
+  - Remediation prompt blocks are emitted only on next turn after the user
+    selects the handoff prompt option
+  - MUST satisfy the `studio_mode_contract` invariant
   - VALID stopping state: INLINE_FALLBACK was unset at a nested dispatch site and
-    inline-fallback-probe.md was loaded as a hard interaction boundary pending
-    user 1/2 reply
+    `inline_fallback_probe_contract` was followed as a hard interaction
+    boundary pending user 1/2 reply
 ```

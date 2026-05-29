@@ -30,6 +30,9 @@ INVARIANTS:
     (skip is first-class)
   - MUST let user drive topic order from expert proposals or custom input;
     MUST NOT auto-advance topics
+  - After the user accepts brainstorm, every subsequent user-facing brainstorm
+    menu MUST expose `W` / `wrap` so the session can enter wrap-handoff and
+    offer save/generate/analyze routing at any point
 
 NOTES:
   The post-round menu has more than three entries (one per proposed next-topic plus C and W);
@@ -63,9 +66,10 @@ DO:
 Want a brainstorm panel before I collect inputs?
 
 I'll assemble a 3-6-person expert panel relevant to `{KIND}: {name}`. Each
-round we pick one topic, the panel reviews it in parallel, each expert
-either contributes questions + a next-topic proposal or skips the round as
-not-their-domain. You answer the questions and pick the next topic.
+round we pick one topic, the panel reviews it, then I walk you through the
+resulting questions one by one. For each question I explain why it matters,
+offer answer options, record your reaction, and only after the full queue is
+resolved do I offer next topic / challenge / wrap choices.
 
 → Reply `yes` (suggested when the design space is open or you want
   cross-discipline pushback), `no` (skip — go straight to inputs), or
@@ -94,9 +98,10 @@ not-their-domain. You answer the questions and pick the next topic.
 Want a brainstorm panel before I collect inputs?
 
 I'll assemble a 3-6-person expert panel relevant to `{KIND}: {name}`. Each
-round we pick one topic, the panel reviews it in parallel, each expert
-either contributes questions + a next-topic proposal or skips the round as
-not-their-domain. You answer the questions and pick the next topic.
+round we pick one topic, the panel reviews it, then I walk you through the
+resulting questions one by one. For each question I explain why it matters,
+offer answer options, record your reaction, and only after the full queue is
+resolved do I offer next topic / challenge / wrap choices.
 
 → Reply `yes` (suggested when the design space is open or you want
   cross-discipline pushback) or `no` (skip — go straight to inputs).
@@ -180,5 +185,5 @@ NOTES:
   1. state.run_config.PANEL_MODE_TOPIC / PANEL_MODE_CHALLENGE (set by mode= modifier)
   2. env vars PANEL_MODE_TOPIC / PANEL_MODE_CHALLENGE
   3. workflow default "single-agent"
-  Open, load, and follow round-loop.md § Round loop for implementation.
+  Open, load, and follow `{cf-studio-path}/.core/workflows/generate/phase-0.7/round-loop.md` § Round loop for implementation.
 ```

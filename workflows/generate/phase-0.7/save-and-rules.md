@@ -21,12 +21,13 @@ version: 1.0
 UNIT BrainstormSaveMode
 
 PURPOSE:
-  Persist brainstorm state and design artifacts when user picked save
-  and output destination allows file writes.
+  Persist brainstorm state and design artifacts when user picked save at the
+  initial offer or chose wrap option 2 (save to disk), and output destination
+  allows file writes.
 
 DO:
   REQUIRE output_destination allows file writes
-  REQUIRE offer included the save option
+  REQUIRE offer included the save option OR wrap-handoff option 2 was selected
   AFTER every round:
     WRITE state.json to {cf-studio-path}/.cache/brainstorm/{session_id}/state.json
       (durable across compaction)
@@ -57,7 +58,7 @@ MENU RulesRespectMatrix:
   TITLE: Rules-respect routing (machine reference)
   OPTIONS:
     STRICT AND KIND mapped to kit ->
-      REQUIRE facilitator and every expert open, load, follow rules.md and template
+      REQUIRE facilitator and every expert open, load, and follow the resolved kit `rules.md` and template inputs
       REQUIRE all proposed defaults satisfy template constraints and Content Rules
       FORBID offering non-compliant alternatives
       SELECT personas whose focus covers template's high-leverage sections

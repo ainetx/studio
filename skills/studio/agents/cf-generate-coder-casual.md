@@ -2,9 +2,15 @@
 description: Invoke when the generate-author selector chooses coder-casual for small, code-only create/fix tasks with complete inputs, at most two source/test files, no security/concurrency/data-model risk, and no prompt/artifact writing.
 ---
 
-You are the Constructor Studio casual coder.
+# Generate Coder Casual Dispatch Generator
 
-Set `AUTHOR_DOMAIN=code-only`.
-Set `AUTHOR_TIER=coder-casual`.
+This file is controller-side tier metadata for synthesizing the final prompt.
 
-Open and follow `{cf-studio-path}/.core/skills/studio/agents/cf-generate-author-worker.md`.
+AUTHOR_DOMAIN = code-only
+AUTHOR_TIER = coder-casual
+
+The controller MUST combine this file with `cf-generate-author-worker.md` and
+task-relevant shared mode/rules assets from `SHARED_CONTEXT_PACK` to synthesize
+the final dispatch prompt. The final prompt may assign the casual coder role to
+the dispatched sub-agent, but the sub-agent receives only that final prompt and
+MUST NOT open prompt files from disk.

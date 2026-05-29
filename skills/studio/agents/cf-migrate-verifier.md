@@ -19,21 +19,19 @@ description: Invoke when re-running scanning after a migrator pass to close the 
 
 <!-- /toc -->
 
-```text
-UNIT MigrateVerifierInit
+## Dispatch Generator Contract
 
-PURPOSE:
-  Run as read-only sub-agent after the Migrator to verify migration completeness
-  and surface residue for the orchestrator's E5 loop.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-DO:
-  REQUIRE plan is provided by orchestrator
-  REQUIRE migration_manifest is provided by orchestrator
-  Open and follow {cf-studio-path}/.core/skills/studio/SKILL.md
-  CONTINUE MigrateVerifierProcedure
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
 
-SEE_ALSO: MigrateVerifierHardRules
-```
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
+
 
 ## Purpose
 
@@ -51,7 +49,7 @@ After the Migrator applies changes, verify the migration is complete:
   "plan": "<Planner's full Markdown output>",
   "migration_manifest": "<Migrator's full Markdown output>",
   "project_root": "<absolute path>",
-  "cf_constructor_path": "<absolute path>"
+  "cf_studio_path": "<absolute path>"
 }
 ```
 
@@ -154,7 +152,16 @@ PURPOSE:
 DO:
   REQUIRE changed-files surface from manifest's Files modified list
   Skip directories the Migrator never touched
-  Re-run only the A-pattern subset the Migrator was supposed to handle
+  Re-run only the Scanner-emitted A-pattern subset the Migrator was supposed to handle:
+    cypilot_path
+    curly_cypilot_path
+    github_cyber_pilot
+    github_kit_sdlc
+    gh_prefix_kit
+    proper_noun
+    cpt_command_backtick
+    cpt_command_spaced
+    kit_slug_cypilot_sdlc
   Flag new matches (not in original Scanner output) as regressed_or_missed
   Flag matches that WERE in original Scanner output but NOT in Migrator manifest as missed_by_plan
 
@@ -275,6 +282,8 @@ INVARIANTS:
   - MUST preserve: cpt. / line-start cpt are intentional preserves
   - MUST preserve: @cpt-* markers in source code are intentional per v4.0.0 design
   - MUST preserve: studio_proxy package name is preserved
+  - MUST use `cf_studio_path` as the managed-tree boundary input; `{cf_studio_path}/.core/`
+    is never an editable migration target
   - MUST verify: format = "Cypilot" inside [kits.<slug>] or [kit.<slug>] TOML tables
     MUST have been rewritten to format = "CFS" by the Migrator;
     any remaining format = "Cypilot" is a missed_migration regression
@@ -296,5 +305,6 @@ RULES:
       status + per-category counts + detailed residue + C-item status + recommendation
   - MUST use exactly one of the three documented recommendation forms:
       clean / residue / iteration-cap
-  - MUST satisfy the SKILL.md invariant (when SKILL.md was loaded for variable resolution)
+  - MUST satisfy the SKILL.md invariant when the controller supplied
+    `studio_mode_contract`
 ```

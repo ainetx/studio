@@ -15,21 +15,19 @@ description: Invoke when turning the migrate-scanner's findings into a categoriz
 
 <!-- /toc -->
 
-```text
-UNIT MigratePlannerInit
+## Dispatch Generator Contract
 
-PURPOSE:
-  Run as read-only sub-agent; take Scanner findings and produce a categorized
-  migration plan. Modify NO files.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-DO:
-  REQUIRE scan_findings is provided by orchestrator
-  Open and follow {cf-studio-path}/.core/skills/studio/SKILL.md
-  CONTINUE MigratePlannerProcedure
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
 
-RULES:
-  - MUST_NOT modify any file
-```
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
+
 
 ## Purpose
 
@@ -66,42 +64,43 @@ DO:
 MENU FindingClassification:
   OPTIONS:
     always_A (auto-fixable) ->
-      IF pattern is studio_path (TOML key or template literal):
-        Apply: studio_path → cf-path
-      IF pattern is curly_studio_path ({studio_path}):
-        Apply: {studio_path} → {cf-studio-path}
+      IF pattern is cypilot_path (legacy key / variable):
+        Apply: cypilot_path → cf-studio-path
+      IF pattern is curly_cypilot_path ({cypilot_path}):
+        Apply: {cypilot_path} → {cf-studio-path}
       IF pattern is github_cyber_pilot (URL):
-        Apply: github.com/cyberfabric/constructor-studio → github.com/constructorfabric/studio
+        Apply: github.com/cyberfabric/cyber-pilot → github.com/constructorfabric/studio
       IF pattern is github_kit_sdlc (URL):
-        Apply: github.com/constructorfabric/studio-kit-sdlc → github.com/constructorfabric/studio-kit-sdlc
+        Apply: github.com/cyberfabric/cyber-pilot-kit-sdlc → github.com/constructorfabric/studio-kit-sdlc
       IF pattern is gh_prefix_kit:
-        Apply: github:constructorfabric/studio-kit-sdlc → github:constructorfabric/studio-kit-sdlc
-      IF pattern is proper_noun (Studio / Constructor Studio):
-        Apply: Studio → Constructor Studio; Constructor Studio → Constructor Studio
+        Apply: github:cyberfabric/cyber-pilot-kit-sdlc → github:constructorfabric/studio-kit-sdlc
+      IF pattern is proper_noun (Cypilot / Cyber Pilot):
+        Apply: Cypilot → Constructor Studio; Cyber Pilot → Constructor Studio
       IF pattern is cpt_command_backtick (`cpt `):
         Apply: `cpt ` → `cfs `
       IF pattern is cpt_command_spaced ( cpt ):
         Apply:  cpt  →  cfs 
-      IF pattern is kit_slug_studio_sdlc IN TOML/YAML config:
-        Apply: studio-sdlc → sdlc
+      IF pattern is kit_slug_cypilot_sdlc IN TOML/YAML config:
+        Apply: cypilot-sdlc → sdlc
     always_B (needs-review) ->
       IF pattern is cpt_other (cpt not in command-form):
         Classify B — could be a variable name, filename, or false positive
-      IF pattern is studio_standalone:
-        Classify B — disambiguate package-name / kit-slug / proper-name
+      IF pattern is cypilot_standalone:
+        Classify B — disambiguate package-name / legacy slug / prose residue
       IF pattern is cpt_marker (@cpt-* / @cpt:*):
         Classify B — per v4.0.0 design these may be intentional
-      IF pattern is kit_slug_studio_sdlc IN code or scripts (not config):
+      IF pattern is kit_slug_cypilot_sdlc IN code or scripts (not config):
         Classify B — context-sensitive
       IF pattern is cyber_pilot_kebab outside well-known URL contexts:
         Classify B — disambiguate
     cascade_C ->
       IF workspace_file match:
-        One C-item per workspace file: rename + content rewrite
+        One C-item per workspace file: manual rename only; any content rewrites
+        must remain separate A/B items sourced from concrete Scanner findings
       IF agent_config dir found (.agents/, .claude/, etc.):
         One C-item per dir: "run `cfs generate-agents` after Migrator finishes"
       IF workspace member listed in .studio-workspace.toml (or legacy) with local path:
-        One C-item: "cascade `cfs init --migrate-from-cypilot=yes` inside member {name} at {path}"
+        One C-item with resolved values: "cascade `cfs init --migrate-from-cypilot=yes` inside member <resolved-member-name> at <resolved-member-path>"
     intentional_keep ->
       IF inside src/studio_proxy/ (package name preserved by v4.0.0 design):
         SKIP — do not include in plan
@@ -110,7 +109,7 @@ MENU FindingClassification:
       IF format = "Cypilot" inside [kits.<slug>] or [kit.<slug>] TOML table:
         Schedule as A-item: apply format = "Cypilot" → format = "CFS"
         MUST_NOT schedule format = "CFS" for further rewriting
-      IF lines explicitly marked with # pyright: ignore or # noqa referencing studio:
+      IF lines explicitly marked with # pyright: ignore or # noqa referencing cypilot:
         Classify B with low-priority note
 
 RULES:
@@ -191,9 +190,9 @@ DO:
 
       ### Category C — Cascade operations ({C_count})
 
-      1. Rename `{old}` → `{new}` in project root
-      2. Cascade migration into member `{name}` at `{path}`:
-           cd {path}
+      1. Rename `<resolved-old-workspace-file>` → `.studio-workspace.toml` in project root
+      2. Cascade migration into member `<resolved-member-name>` at `<resolved-member-path>`:
+           cd <resolved-member-path>
            cfs init --migrate-from-cypilot=yes
       3. Regenerate IDE agent configs from migrated state:
            cfs generate-agents
@@ -209,7 +208,7 @@ DO:
 
 RULES:
   - Output MUST be presentable to the user verbatim
-  - MUST_NOT include internal codegen variables or {placeholder} strings
+  - MUST_NOT include internal codegen variables or unresolved placeholder strings
     except where they are user-visible commands like `cfs init`
 ```
 
@@ -248,5 +247,6 @@ RULES:
   - MUST group the plan by category and file per the rules above
   - A-items MUST reference one of the listed substitution rules (no invented substitutions)
   - MUST be presentable to the user verbatim (no internal codegen variables outside user-visible commands)
-  - MUST satisfy the SKILL.md invariant (when SKILL.md was loaded for variable resolution)
+  - MUST satisfy the SKILL.md invariant when the controller supplied
+    `studio_mode_contract`
 ```

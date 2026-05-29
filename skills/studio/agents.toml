@@ -5,6 +5,10 @@
 #
 # Semantic fields (mode, isolation, model) are mapped to per-tool
 # frontmatter by the agents command — kits never need tool-specific knowledge.
+# Prompt source files are intentionally NOT registered here. For each
+# `[agents.<id>]` entry, the CLI resolves orchestration guidance
+# conventionally from `skills/studio/agents/<id>.md` and generates an empty
+# host endpoint that points the orchestrator at that source file.
 #
 # Field mappings by tool:
 #
@@ -52,9 +56,9 @@
 # All marker IDs use the qualified prefix
 # `cpt-studio-algo-agent-integration-generate-shims:p1:`.
 
-# Shared contracts intentionally excluded from agent registration:
-#   - cf-generate-author-worker.md (loaded by all author-tier stubs)
-#   - author-production-rules.md (loaded by author worker agents)
+# Shared prompt guidance files intentionally excluded from agent registration:
+#   - cf-generate-author-worker.md (loaded by the controller when synthesizing author-tier final prompts)
+#   - author-production-rules.md (selected from SHARED_CONTEXT_PACK for the author-worker chain)
 # These files are not dispatchable agents and have no agents.toml entry by design.
 
 # codegen runs in isolation but dispatches nested cf-*
@@ -65,7 +69,6 @@ description = """\
 Invoke when requirements are fully specified and code must be implemented in \
 an isolated context without back-and-forth clarification — takes a complete \
 task description and writes the code."""
-prompt_file = "agents/cf-codegen.md"
 mode = "readwrite"
 isolation = true
 model = "cf:tier:balanced"
@@ -79,7 +82,6 @@ description = """\
 Invoke when reviewing a GitHub pull request with structured checklist-based \
 analysis in a separate context — keeps detailed review output isolated from \
 the main conversation."""
-prompt_file = "agents/cf-pr-review.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -93,7 +95,6 @@ description = """\
 Invoke when delegating a generated Constructor Studio plan to ralphex for \
 autonomous execution — manages the discovery, export, delegation, and \
 handoff lifecycle."""
-prompt_file = "agents/cf-ralphex.md"
 mode = "readwrite"
 isolation = false
 model = "cf:tier:balanced"
@@ -110,7 +111,6 @@ description = """\
 Invoke when executing the next or a specific phase from a generated \
 Constructor Studio plan inside a dedicated agent context, without delegating \
 to ralphex."""
-prompt_file = "agents/cf-phase-runner.md"
 mode = "readwrite"
 isolation = true
 model = "cf:tier:balanced"
@@ -124,7 +124,6 @@ description = """\
 Invoke when compiling exactly one generated plan phase from its compilation \
 brief in an isolated agent context, without delegating to ralphex or executing \
 the phase."""
-prompt_file = "agents/cf-phase-compiler.md"
 mode = "readwrite"
 isolation = true
 model = "cf:tier:balanced"
@@ -151,10 +150,10 @@ description = """\
 Invoke when scanning a project for residual cypilot/cpt/Cypilot/Cyber Pilot \
 references that the mechanical `cfs init --migrate-from-cypilot=yes` did not \
 touch (source code, CI, docs, agent configs, workspaces, build files) — \
-read-only post-deterministic cleanup; emits a structured findings list for the \
-planner to categorize. Dispatched by the `migrate from cypilot` orchestrator \
+read-only post-deterministic cleanup; expects the controller to inject \
+Constructor Studio mode and emits a structured findings list for the planner \
+to categorize. Dispatched by the `migrate from cypilot` orchestrator \
 after user approval."""
-prompt_file = "agents/cf-migrate-scanner.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -172,9 +171,9 @@ description = """\
 Invoke when turning the migrate-scanner's findings into a categorized migration \
 plan — read-only; groups items by execution category A (auto-fixable string \
 substitutions), B (needs-review context-sensitive), and C (cascade operations: \
-workspace rename, member-repo cascade, agent-config regeneration). Emits a plan \
-the orchestrator presents to the user for review BEFORE dispatching the migrator."""
-prompt_file = "agents/cf-migrate-planner.md"
+workspace rename only, member-repo cascade, agent-config regeneration). Emits a \
+plan with resolved user-presentable Category C items for the orchestrator to \
+present before dispatching the migrator."""
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -189,8 +188,10 @@ Invoke when applying a pre-approved migration plan to disk — write-capable: \
 category A substitutions mechanically, category B items via interactive walk, \
 category C operations printed for manual execution. Returns a migration manifest \
 of every change applied. Operates in-place (isolation = false) so its edits are \
-visible to the verifier without requiring a commit."""
-prompt_file = "agents/cf-migrate-migrator.md"
+visible to the verifier without requiring a commit. Uses `cf_studio_path` as \
+the managed-tree boundary input, must never modify `{cf_studio_path}/.core/`, \
+and must preserve planner-approved Category C semantics without unresolved \
+placeholders or silent downgrades."""
 mode = "readwrite"
 isolation = false
 model = "cf:tier:cheap"
@@ -205,9 +206,9 @@ Invoke when re-running scanning after a migrator pass to close the migration \
 loop — read-only; confirms the migrator's manifest landed correctly on disk, \
 re-runs scanner patterns over the changed-files surface to catch regressions, \
 and surfaces residue (regressed, missed-by-plan, or noticed-but-not-in-plan \
-items) for the orchestrator to feed back into another migrator pass. Bounded \
-by the orchestrator's 3-iteration cap."""
-prompt_file = "agents/cf-migrate-verifier.md"
+items) for the orchestrator to feed back into another migrator pass. Uses \
+`cf_studio_path` as the managed-tree boundary input. Bounded by the \
+orchestrator's 3-iteration cap."""
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -221,8 +222,9 @@ context_window = "high"
 # ---------------------------------------------------------------------------
 # Thin-orchestrator sub-agent pool (shared by generate + analyze workflows)
 #
-# Defined by the thin-orchestrator dispatch contract (see SKILL.md
-# "Session Sub-Agent Approval Gate" and skills/studio/sub-agent-dispatch.md).
+# Defined by the thin-orchestrator dispatch contract (see
+# {cf-studio-path}/.core/skills/studio/SKILL.md "Session Sub-Agent Approval Gate"
+# and {cf-studio-path}/.core/skills/studio/sub-agent-dispatch.md).
 # The diff-scope resolver is analyze-only. The validator and semantic reviewers
 # are reusable across analyze and generate's Phase 5 review loop; brainstorm
 # agents drive generate's Phase 0.7 panel session; collector + planner + author
@@ -238,9 +240,10 @@ context_window = "high"
 description = """\
 Invoke when an analyze/review request targets a commit, branch, worktree, \
 patch, or uncommitted changes — resolves the Git diff scope, changed files, \
-hunks, and review targets so the orchestrator does not perform semantic \
-diff scanning itself."""
-prompt_file = "agents/cf-diff-scope-resolver.md"
+omissions, and review targets while leaving `changed_hunks` empty in this \
+structural-only mode, and only emits `risk_hotspots` when direct targets were \
+explicitly named, so the orchestrator does not perform semantic diff scanning \
+itself."""
 mode = "readonly"
 isolation = false
 # Fast scope-resolution-only agent. Stays at haiku-tier (no matrix override
@@ -260,7 +263,6 @@ validator command for the target bootstrap (`validate`, `validate --artifact`, \
 `validate-toc`, `check-language`) and returning the canonical Deterministic \
 Gate block (per-command exit code, JSON status, error_count, warning_count, \
 overall PASS/FAIL/SKIPPED with availability proof)."""
-prompt_file = "agents/cf-deterministic-validator.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -272,10 +274,12 @@ context_window = "medium"
 [agents.cf-semantic-reviewer-artifact]
 description = """\
 Invoke when running the kit-checklist semantic review on an artifact target \
-plus its cross-refs — loads the kit checklist, walks every category, and emits \
-Findings (severity, mechanical, path, line, evidence_quote, root_cause, \
-suggested_fix) against the artifact-mode semantic-review contract."""
-prompt_file = "agents/cf-semantic-reviewer-artifact.md"
+plus its cross-refs — expects the controller to inject the \
+checklist/compliance instruction context, walks every category, and emits Findings (severity, \
+mechanical, path, line, evidence_quote, root_cause, \
+suggested_fix) against the artifact-mode semantic-review contract. Missing a \
+contract-required checklist asset is fail-closed; only truly optional RELAXED \
+reviews degrade to a limited sweep, never by reopening prompt files from disk."""
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -287,9 +291,8 @@ context_window = "high"
 [agents.cf-semantic-reviewer-code]
 description = """\
 Invoke when running the code-checklist semantic review on code targets against \
-a design artifact — loads only the code-checklist methodology, walks every \
-category, and emits Findings against the code-checklist review contract."""
-prompt_file = "agents/cf-semantic-reviewer-code.md"
+a design artifact — expects the controller to inject the review methodology, \
+walks every category, and emits Findings against the code-checklist review contract."""
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -300,10 +303,9 @@ context_window = "high"
 
 [agents.cf-code-bug-finder]
 description = """\
-Invoke when running the code bug-finding methodology on code targets — loads \
-only bug-finding.md and emits Findings for correctness, logic, reliability, \
+Invoke when running the code bug-finding methodology on code targets — expects \
+the controller to inject that methodology and emits Findings for correctness, logic, reliability, \
 security, concurrency, performance, and integration defects."""
-prompt_file = "agents/cf-code-bug-finder.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -315,11 +317,11 @@ context_window = "high"
 [agents.cf-semantic-reviewer-prompt]
 description = """\
 Invoke when running the 10-layer prompt-engineering review on prompt / \
-instruction targets (workflows, skills, agent prompts, AGENTS.md) — loads the \
-prompt-engineering methodology, honors SKILL/compliance invariants, and emits \
+instruction targets (workflows, skills, agent prompts, AGENTS.md) — expects \
+the controller to inject the prompt-engineering methodology and compliance \
+assets in the final dispatch prompt, and emits \
 Findings plus review_result/checkpoint discriminator outputs in the Prompt \
 Review schema."""
-prompt_file = "agents/cf-semantic-reviewer-prompt.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -331,10 +333,9 @@ context_window = "high"
 [agents.cf-prompt-bug-finder]
 description = """\
 Invoke when running the prompt-bug-finding methodology on prompt / instruction \
-targets — loads only prompt-bug-finding.md and emits Findings for behavioral \
+targets — expects the controller to inject that methodology and emits Findings for behavioral \
 defects, routing bugs, unsafe defaults, hidden failure modes, and handoff \
 breakage."""
-prompt_file = "agents/cf-prompt-bug-finder.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -346,9 +347,9 @@ context_window = "high"
 [agents.cf-pdsl-author]
 description = """\
 Invoke when cf-pdsl new mode must create a new prompt, workflow, skill, or \
-agent instruction file as a compact PDSL contract with explicit state, menus, \
+agent instruction file as a compact PDSL contract using the shared-context-pack \
+PDSL spec with explicit state, menus, \
 UX prompts, stop points, authority boundaries, and completion gates."""
-prompt_file = "agents/cf-pdsl-author.md"
 mode = "readwrite"
 isolation = false
 model = "cf:tier:balanced"
@@ -362,7 +363,6 @@ description = """\
 Invoke when cf-pdsl transform mode must convert existing prose prompt, \
 workflow, skill, requirement, or agent instruction files into PDSL while \
 preserving behavior, constraints, state transitions, menus, and handoffs."""
-prompt_file = "agents/cf-pdsl-transformer.md"
 mode = "readwrite"
 isolation = false
 model = "cf:tier:balanced"
@@ -376,7 +376,6 @@ description = """\
 Invoke when cf-pdsl review mode must inspect prompt, workflow, skill, \
 requirement, or agent instruction files for PDSL correctness, compactness, \
 state/menu/UX safety, hidden prose rules, missing STOP_TURN, and handoff bugs."""
-prompt_file = "agents/cf-pdsl-reviewer.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -388,9 +387,9 @@ context_window = "high"
 [agents.cf-semantic-reviewer-consistency]
 description = """\
 Invoke when cross-checking terminology, references, normative claims, and \
-scope across ≥ 2 target documents — loads consistency-checklist and emits \
+scope across ≥ 2 target documents — expects the controller to inject the \
+consistency checklist and emits \
 Findings against the consistency contract."""
-prompt_file = "agents/cf-semantic-reviewer-consistency.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -406,7 +405,6 @@ initial topic plus rules.md / template / example / project context, proposes \
 a 3-6-person expert panel (persona, focus, rationale) and a seed topic for \
 round 1. Pure function: orchestrator collects user edits before the round \
 loop starts."""
-prompt_file = "agents/cf-brainstorm-facilitator.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -427,7 +425,6 @@ emits challenge-mode `0..3` questions, allows a critique-only challenge, and \
 sets `next_topic_proposal = null`; counter-proposals are emitted as the \
 questions' `proposed_default`. Dispatched \
 in parallel for the full panel per round."""
-prompt_file = "agents/cf-brainstorm-expert.md"
 mode = "readonly"
 isolation = true
 model = "cf:tier:balanced"
@@ -441,15 +438,28 @@ description = """\
 Invoke when running the single-agent panel-mode brainstorm round — \
 dispatched once per round instead of per-expert fan-out. Owns serialized \
 persona iteration (§4), per-iteration mirror writes (§6), anti-collapse \
-guards G3-G5 (§8), envelope-emit contract with 12 parse-time invariants \
+guards G3-G5 (§8), envelope-emit contract with parse-time invariants \
 (§9-§10), protocol branching (independent-then-critique, single-pass), \
 and deterministic envelope rendering. Returns the `envelope` object the \
 orchestrator flattens into `contributions[]`."""
-prompt_file = "agents/cf-brainstorm-panel.md"
 mode = "readonly"
 isolation = true
 model = "cf:tier:balanced"
 role = "planning"
+target = "any"
+reasoning_effort = "medium"
+context_window = "high"
+
+[agents.cf-explorer]
+description = """\
+Invoke when a controller needs read-only discovery of task-relevant project \
+resources before dispatching brainstorm, generate, analyze, or planning agents. \
+Returns a resource_context map with relevant files, summaries, suggested slices, \
+persona-specific needs, and missing-context questions."""
+mode = "readonly"
+isolation = false
+model = "cf:tier:balanced"
+role = "analyze"
 target = "any"
 reasoning_effort = "medium"
 context_window = "high"
@@ -462,7 +472,6 @@ the example, and returns the rendered Inputs proposal block for the \
 orchestrator to show. When pre_resolved_inputs is supplied (from brainstorm), \
 pre-fills those sections marked [from brainstorm] and proposes only the \
 remaining ones."""
-prompt_file = "agents/cf-generate-collector.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -478,7 +487,6 @@ the analyze run into reviewer-sub-agent tasks partitioned by methodology and \
 path-partition, identify dependencies, and mark which tasks can run in \
 parallel. Read-only; disk-mode plan files are written by the orchestrator \
 from the returned plan."""
-prompt_file = "agents/cf-analyze-planner.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -494,7 +502,6 @@ author execution plan before Phase 3 summary: decompose work into author \
 tasks, recommend author worker agents, identify dependencies, and mark which \
 tasks can run in parallel. Read-only; disk-mode plan files are written by the \
 orchestrator from the returned plan."""
-prompt_file = "agents/cf-generate-planner.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -511,7 +518,6 @@ generic artifact/config work to junior/middle/senior/lead, code-only work to \
 coder-casual/coder-smart, and prompt/workflow/agent instructions to \
 prompt-engineer-casual/prompt-engineer-smart. The selector is read-only and \
 does not write files."""
-prompt_file = "agents/cf-generate-author.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -524,9 +530,8 @@ context_window = "medium"
 description = """\
 Invoke when the generate-author selector chooses junior for simple, bounded \
 create/fix tasks: one file, complete inputs, low-risk prose or mechanical \
-edits, and no architectural/code/security ambiguity. Uses the shared author \
-contract and returns a manifest."""
-prompt_file = "agents/cf-generate-author-junior.md"
+edits, and no architectural/code/security ambiguity. Consumes the shared author \
+execution prompt assets and returns a manifest."""
 mode = "readwrite"
 isolation = false
 model = "cf:tier:cheap"
@@ -539,9 +544,8 @@ context_window = "medium"
 description = """\
 Invoke when the generate-author selector chooses middle for standard artifact \
 or small code create/fix tasks with clear inputs, moderate cross-references, \
-or small mechanical review-loop batches. Uses the shared author contract and \
+or small mechanical review-loop batches. Consumes the shared author execution prompt assets and \
 returns a manifest."""
-prompt_file = "agents/cf-generate-author-middle.md"
 mode = "readwrite"
 isolation = false
 model = "cf:tier:balanced"
@@ -554,9 +558,8 @@ context_window = "high"
 description = """\
 Invoke when the generate-author selector chooses senior for complex artifacts, \
 code changes, multi-file writes, strict-rule outputs, or non-mechanical fixes \
-that require careful judgment. Uses the shared author contract and returns a \
+that require careful judgment. Consumes the shared author execution prompt assets and returns a \
 manifest."""
-prompt_file = "agents/cf-generate-author-senior.md"
 mode = "readwrite"
 isolation = false
 model = "cf:tier:balanced"
@@ -570,9 +573,8 @@ description = """\
 Invoke when the generate-author selector chooses lead for high-risk or broad \
 generation/fix tasks: cross-system architecture, security/concurrency/data \
 integrity concerns, workflow/agent prompt changes, large finding batches, or \
-uncertain scope where cheaper tiers are likely to fail. Uses the shared author \
-contract and returns a manifest."""
-prompt_file = "agents/cf-generate-author-lead.md"
+uncertain scope where cheaper tiers are likely to fail. Consumes the shared author \
+execution prompt assets and returns a manifest."""
 mode = "readwrite"
 isolation = false
 model = "cf:tier:expensive"
@@ -585,9 +587,8 @@ context_window = "high"
 description = """\
 Invoke when the generate-author selector chooses coder-casual for small, \
 code-only create/fix tasks with complete inputs, at most two source/test files, \
-no security/concurrency/data-model risk, and no prompt/artifact writing. Uses \
-the shared author contract and returns a manifest."""
-prompt_file = "agents/cf-generate-coder-casual.md"
+no security/concurrency/data-model risk, and no prompt/artifact writing. Consumes \
+the shared author execution prompt assets and returns a manifest."""
 mode = "readwrite"
 isolation = false
 model = "cf:tier:cheap"
@@ -601,9 +602,8 @@ description = """\
 Invoke when the generate-author selector chooses coder-smart for code-only \
 tasks that need deeper implementation judgment: behavior changes, tests, \
 refactors, API boundaries, or moderate security/concurrency/data implications, \
-without prompt/workflow authoring. Uses the shared author contract and returns \
+without prompt/workflow authoring. Consumes the shared author execution prompt assets and returns \
 a manifest."""
-prompt_file = "agents/cf-generate-coder-smart.md"
 mode = "readwrite"
 isolation = false
 model = "cf:tier:balanced"
@@ -616,9 +616,8 @@ context_window = "high"
 description = """\
 Invoke when the generate-author selector chooses prompt-engineer-casual for \
 small prompt/workflow/agent wording or routing edits with local scope and no \
-state-machine, handoff, or multi-file semantic redesign. Uses the shared \
-author contract and returns a manifest."""
-prompt_file = "agents/cf-generate-prompt-engineer-casual.md"
+state-machine, handoff, or multi-file semantic redesign. Consumes the shared \
+author execution prompt assets and returns a manifest."""
 mode = "readwrite"
 isolation = false
 model = "cf:tier:cheap"
@@ -631,9 +630,8 @@ context_window = "medium"
 description = """\
 Invoke when the generate-author selector chooses prompt-engineer-smart for \
 prompt/workflow/agent/skill changes that affect state, routing, handoffs, \
-sub-agent contracts, validation criteria, or multi-file prompt semantics. Uses \
-the shared author contract and returns a manifest."""
-prompt_file = "agents/cf-generate-prompt-engineer-smart.md"
+sub-agent contracts, validation criteria, or multi-file prompt semantics. Consumes \
+the shared author execution prompt assets and returns a manifest."""
 mode = "readwrite"
 isolation = false
 model = "cf:tier:balanced"
@@ -650,7 +648,6 @@ the input_ref, derive session_id, scan for prior session on disk under \
 input-access tier (local → MCP → skill → CLI → user-fallback), load \
 preferences.json, and return the structured handle (target_type / \
 file_count / primary_language / preferences_loaded / input_access_*)."""
-prompt_file = "agents/storytelling-preflight.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:cheap"
@@ -668,7 +665,6 @@ export-format) — generic two-phase agent: phase=render returns rendered_menu \
 next_action. Plan-gate is the only gate authorized to emit chat (4-option \
 Go/Edit/Pivot/Cancel approval menu); other gates return parsing artefacts \
 the orchestrator emits."""
-prompt_file = "agents/storytelling-gate.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -684,7 +680,6 @@ read the whole input once and emit a content_pack JSON parameterized by \
 strategy (snippets/anchors/hybrid). Returns anchors, plan_anchor_map, \
 depth_mode_flags, overview, and total_extracted_bytes; portions in the \
 inline E2 loop read from this pack instead of re-reading source."""
-prompt_file = "agents/storytelling-context-pack.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -700,7 +695,6 @@ the final summary (Key Takeaways with source refs as clickable markdown \
 links, Open Questions, Glossary, Bookmarked Takeaways, Suggested Next \
 Steps) from accumulated session state. Does NOT auto-fill open_questions \
 or glossary — only user-driven entries are carried forward."""
-prompt_file = "agents/storytelling-wrap.md"
 mode = "readonly"
 isolation = false
 model = "cf:tier:balanced"
@@ -717,7 +711,6 @@ emit the package on disk under {cf-studio-path}/.cache/explain/packages/\
 graph, and mode-specific extras (review→comments.md, onboarding→\
 next-steps-checklist.md, decision→decision-record.md). All artifact bodies \
 use relative paths; refuses export for mode=socratic per AP-#34."""
-prompt_file = "agents/storytelling-export.md"
 mode = "readwrite"
 isolation = false
 model = "cf:tier:cheap"

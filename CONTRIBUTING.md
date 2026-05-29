@@ -5,6 +5,7 @@
 
 - [Prerequisites](#prerequisites)
 - [Development Setup](#development-setup)
+- [Generated Agent Integrations](#generated-agent-integrations)
 - [Project Architecture (Self-Hosted Bootstrap)](#project-architecture-self-hosted-bootstrap)
   - [Critical Rule](#critical-rule)
 - [Versioning](#versioning)
@@ -54,9 +55,28 @@ make install-proxy
 # Bootstrap: sync .bootstrap/ from local source
 make update
 
+# Generate local AI coding tool integrations
+make generate-agents
+
 # Run full CI locally (mirrors GitHub Actions exactly)
 make ci
 ```
+
+---
+
+## Generated Agent Integrations
+
+Host integration files are generated local artifacts and are intentionally not
+tracked in git. Before starting development, refresh both the self-hosted
+bootstrap and all agent integrations:
+
+```bash
+make update
+make generate-agents
+```
+
+`make generate-agents` runs Constructor Studio from `.bootstrap/.core/` and
+omits `--agent`, so it regenerates all supported host integrations.
 
 ---
 
@@ -85,14 +105,13 @@ studio/                           # Project root
 > In this self-hosted repo, `.bootstrap/` is a bootstrap copy of a Constructor Studio version used
 > to develop Constructor Studio itself — similar to bootstrapping a compiler.
 > This is a repo-specific self-hosted setup, not the general user-project layout described in the README.
-> Treat `.bootstrap/.core/` and `.bootstrap/.gen/` as read-only mirrors.
-> Always edit the canonical source files under project root (`skills/`, `kits/`,
-> `schemas/`, `architecture/`, `requirements/`, etc.). Run `make update` only when you
-> need to verify new behavior live against the bootstrap copy, for example during manual
-> testing. After such a test, it is recommended to return `.bootstrap/` to its previous
-> state, and the pull request should be clean of bootstrap-only changes.
-
-**Exception — runtime-needed bootstrap changes.** When a branch introduces a change that must be exercisable at runtime in the same branch (for example, a new `SKILL.md` state machine that the skill loader needs to find immediately, or a workflow edit that the orchestrator must be able to load without a separate `make update` pass), the bootstrap propagation MAY be committed alongside the top-level edit. Such commits SHOULD use the prefix `chore(bootstrap):` in the commit subject OR include a `Bootstrap-Runtime: true` trailer so they are greppable in history. Reviewers may still ask for a follow-up cleanup commit that reverts the bootstrap deltas once the runtime evaluation is complete.
+> Treat `.bootstrap/.core/` and `.bootstrap/.gen/` as generated bootstrap mirrors that are
+> intentionally **not tracked in git**. Always edit the canonical source files under project
+> root (`skills/`, `kits/`, `schemas/`, `architecture/`, `requirements/`, etc.).
+> Before starting work, run `make update` and `make generate-agents` so your local bootstrap
+> copy and agent integrations are in sync with the canonical source. Re-run `make update`
+> whenever you need to refresh the local bootstrap for manual verification, but do not commit
+> `.bootstrap/.core/`, `.bootstrap/.gen/`, or generated host integration files.
 
 The `make update` command runs `cfs update --source . --force`, which:
 1. Copies canonical sources into `.bootstrap/.core/`

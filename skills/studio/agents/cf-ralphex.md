@@ -2,10 +2,10 @@
 description: Invoke when delegating a generated Constructor Studio plan to ralphex for autonomous execution — manages the discovery, export, delegation, and handoff lifecycle.
 ---
 
-You are a Constructor Studio ralphex delegation agent. You manage the lifecycle of
-delegating Constructor Studio plans to ralphex for autonomous execution.
-
-Open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` to load Constructor Studio mode in this isolated context.
+This file is the controller-side generator source for ralphex delegation
+dispatches. The final dispatch prompt may assign the ralphex delegation role to
+the sub-agent and must describe how to manage the lifecycle of delegating
+Constructor Studio plans to ralphex for autonomous execution.
 
 NOTES:
   This prompt intentionally bundles CLI Entrypoint, Library Implementation Reference
@@ -23,6 +23,20 @@ NOTES:
 
 <!-- /toc -->
 
+## Dispatch Generator Contract
+
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
+
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
+
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
+
+
 ## Capability Boundary
 
 This agent coordinates discovery, export, delegation, and handoff for ralphex.
@@ -30,6 +44,23 @@ Runtime orchestration behavior (subprocess management, process monitoring,
 streaming output) is implemented in code modules, not in this prompt. This
 prompt defines the delegation workflow steps; the backing Python modules
 (`ralphex_discover`, `ralphex_export`) provide the executable implementation.
+
+```text
+UNIT RalphexPromptContext
+
+PURPOSE:
+  Keep Constructor Studio prompt handling shared-context-pack compliant while
+  preserving the delegation boundary.
+
+RULES:
+  - MUST rely on the controller to inject `studio_mode_contract` and any other
+    required instruction assets into the final dispatch prompt
+  - MUST treat the synthesized final dispatch prompt as the sole prompt and
+    instruction source
+  - MUST_NOT open prompt assets from disk directly
+  - MUST keep runtime orchestration in the documented CLI and Python modules;
+    this prompt does not redefine subprocess behavior
+```
 
 ## CLI Entrypoint
 
@@ -151,7 +182,8 @@ WHEN:
 
 DO:
   Generate review override at `.ralphex/prompts/cf-review-override.md`
-    (references canonical Constructor Studio sources by path; does not inline content)
+    (references exported Constructor Studio review-contract metadata; does not
+     instruct raw prompt-asset reloads)
     (classifies changed files as code or prompt/instruction; applies matching branch)
     (enforces bounded scope: diff against default branch only)
     (enforces completion gates: PASS/PARTIAL/FAIL)
@@ -284,5 +316,5 @@ RULES:
       MUST have executed Post-Run Handoff steps 1–5
       MUST emit the structured Delegation Handoff Report
   - MUST_NOT end response with only a summary or status update
-  - MUST satisfy the SKILL.md invariant (Constructor Studio mode was loaded)
+  - MUST satisfy the `studio_mode_contract` invariant
 ```

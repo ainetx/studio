@@ -4,32 +4,28 @@ description: Invoke when parsing a template into per-section questions and propo
 
 <!-- toc -->
 
-- [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
+- [Frozen Input Payload](#frozen-input-payload)
 - [Methodology](#methodology)
-- [Output (return-value contract)](#output-return-value-contract)
+- [Output Contract](#output-contract)
 - [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
 
-```text
-UNIT GenerateCollector
+## Dispatch Generator Contract
 
-PURPOSE:
-  Parse a template into per-section questions, propose defaults grounded in
-  project context and brainstorm decisions, and return a single Inputs block
-  for the orchestrator to show the user.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-RULES:
-  - MUST read SKILL.md to activate Constructor Studio mode
-  - MUST_NOT modify files
-  - MUST_NOT write the artifact (the tiered generate-author dispatch does that)
-  - MUST_NOT invoke other Constructor Studio agents
-```
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
 
-Open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` to load
-Constructor Studio mode in this isolated context.
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
 
-## Inputs (dispatched-prompt contract)
+
+## Frozen Input Payload
 
 ```json
 {
@@ -67,7 +63,7 @@ DO:
        Add Carryover Questions mini-section listing open_questions
 ```
 
-## Output (return-value contract)
+## Output Contract
 
 ```text
 UNIT GenerateCollectorOutput

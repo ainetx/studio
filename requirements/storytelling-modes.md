@@ -21,7 +21,7 @@ purpose: Mode-specific deltas (audience, slot semantics, per-portion rhythm) for
 
 <!-- /toc -->
 
-Loaded by `requirements/storytelling.md` (router). Defines what changes per `{mode}` ∈ {`presentation`, `review`, `onboarding`, `decision`, `socratic`, `change-impact`}. The E0-E5 scaffolding (plan, page-size invariant, no-scroll, navigator, checkpoint) is shared across modes — see `storytelling-phases.md`.
+Loaded by `{cf-studio-path}/.core/requirements/storytelling.md` (router). Defines what changes per `{mode}` ∈ {`presentation`, `review`, `onboarding`, `decision`, `socratic`, `change-impact`}. The E0-E5 scaffolding (plan, page-size invariant, no-scroll, navigator, checkpoint) is shared across modes — see `{cf-studio-path}/.core/requirements/storytelling-phases.md`.
 
 ## Modes table
 
@@ -73,19 +73,19 @@ For all non-socratic modes: Body is always present; lens annotates what was just
 
 Review is **storytelling + Q&A interleaved as separate portions**, not "presentation with panel reactions appended". For each plan item the methodology emits TWO portions in sequence:
 
-1. **Presentation portion** — Body presents the chunk (source-grounded, audience-adapted, ≤ resolved page-size, with diagram per Phase E4). Identical shape to a presentation-mode portion. Progress marker: `📍 {idx}/{N} • phase: presentation • topic: "{plan-item}"`. Nav Next slot points to **"Challenge: panel reactions for {plan-item}"** (intra-item, not next plan item).
+1. **Presentation portion** — Body presents the chunk (source-grounded, audience-adapted, ≤ resolved page-size, with diagram per Phase E4). Identical shape to a presentation-mode portion. Progress marker: `📍 {idx}/{N} • phase: presentation • topic: "{plan-item}"`. The Next topics menu includes **"Challenge: panel reactions for {plan-item}"** as the suggested continue candidate (intra-item, not next plan item).
 
-2. **Challenge portion** — emitted only after user advances. Body: a 1-2 sentence recap of what was just presented + numbered panel reactions `Q1` / `Q2` / … from each panellist (1-2 critical questions / concerns per panellist, anchored to lines/sections where possible). Diagram per Phase E4 if relevant (panel-topology, gap diagram). Progress marker: `📍 {idx}/{N} • phase: challenge • topic: "{plan-item}"`. Nav Next slot points to **"Presentation: {next-plan-item}"** (or Wrap if last). **Comment slot** is most useful here — picking it asks `Which panel question to draft as a review comment? [Q1 / Q2 / Q3 / your own wording]`.
+2. **Challenge portion** — emitted only after user advances. Body: a 1-2 sentence recap of what was just presented + numbered panel reactions `Q1` / `Q2` / … from each panellist (1-2 critical questions / concerns per panellist, anchored to lines/sections where possible). Diagram per Phase E4 if relevant (panel-topology, gap diagram). Progress marker: `📍 {idx}/{N} • phase: challenge • topic: "{plan-item}"`. The Next topics menu includes **"Presentation: {next-plan-item}"** as the suggested continue candidate (or Wrap if last). **Comment slot** is most useful here — picking it asks `Which panel question to draft as a review comment? [Q1 / Q2 / Q3 / your own wording]`.
 
-**classified_mode label.** Every comment drafted in review mode is automatically classified by intent into one of `generate` / `fix` / `brainstorm`, using a tiered heuristic (Tier 1: prefix tokens like `fix:`, `add:`, `idea:`; Tier 2: signals like imperative on a code line ⇒ `fix`, question form on an artifact ⇒ `brainstorm`; Tier 3: defaults — code-mode ⇒ `fix`, artifact-mode ⇒ `brainstorm`). The classified mode appears as a label on the comment (e.g. `Q-3 [fix]`) and is stored as `intent_initial` plus `intent_initial_tier ∈ {1,2,3}` on the buffer entry (see `requirements/storytelling-phases.md` § Open-question buffer entry shape). The label is informational; the user may override it via `change to {mode}` or via the inline shorthand `1 fix` / `2 brainstorm` at the generate-routing sub-prompt.
+**classified_mode label.** Every comment drafted in review mode is automatically classified by intent into one of `generate` / `fix` / `brainstorm`, using a tiered heuristic (Tier 1: prefix tokens like `fix:`, `add:`, `idea:`; Tier 2: signals like imperative on a code line ⇒ `fix`, question form on an artifact ⇒ `brainstorm`; Tier 3: defaults — code-mode ⇒ `fix`, artifact-mode ⇒ `brainstorm`). The classified mode appears as a label on the comment (e.g. `Q-3 [fix]`) and is stored as `intent_initial` plus `intent_initial_tier ∈ {1,2,3}` on the buffer entry (see `{cf-studio-path}/.core/requirements/storytelling-phases.md` § Open-question buffer entry shape). The label is informational; the user may override it via `change to {mode}` or via the inline shorthand `1 fix` / `2 brainstorm` at the generate-routing sub-prompt.
 
-**generate-routing sub-prompt visibility.** When the session is local-editable (`handle.local_editable == true`) AND generate-skill dispatch is available (`handle.generate_route_available == true`), each drafted comment surfaces a secondary generate-routing sub-prompt AFTER the per-item disposition (Post / Save / Discard / Skip-rest) resolves. The sub-prompt offers four options: Route now / Queue / No / Never-ask-again-this-session (default: No). See `skills/studio/agents/storytelling-gate.md` § Gate: generate-routing for the full menu and parse rules. When either flag is false, the sub-prompt is suppressed entirely (no flicker, no "unavailable" message) and the comment is recorded per the chosen disposition only.
+**generate-routing sub-prompt visibility.** When the session is local-editable (`handle.local_editable == true`) AND generate-skill dispatch is available (`handle.generate_route_available == true`), each drafted comment surfaces a secondary generate-routing sub-prompt AFTER the per-item disposition (Post / Save / Discard / Skip-rest) resolves. The sub-prompt offers four options: Route now / Queue / No / Never-ask-again-this-session (default: No). See `{cf-studio-path}/.core/skills/studio/agents/storytelling-gate.md` § Gate: generate-routing for the full menu and parse rules. When either flag is false, the sub-prompt is suppressed entirely (no flicker, no "unavailable" message) and the comment is recorded per the chosen disposition only.
 
 **See also:**
-- `skills/studio/agents/storytelling-preflight.md` § Step 5b — Local-editable detection (defines `local_editable` / `generate_route_available`)
-- `skills/studio/agents/storytelling-gate.md` § Gate: generate-routing (the sub-prompt mechanics)
-- `requirements/storytelling-phases.md` § Open-question buffer entry shape (`classified_mode`, `intent_initial_tier`, etc.)
-- `requirements/storytelling-preferences.md` § Dispatch-Failure Audit Log (NDJSON record format)
+- `{cf-studio-path}/.core/skills/studio/agents/storytelling-preflight.md` § Step 5b — Local-editable detection (defines `local_editable` / `generate_route_available`)
+- `{cf-studio-path}/.core/skills/studio/agents/storytelling-gate.md` § Gate: generate-routing (the sub-prompt mechanics)
+- `{cf-studio-path}/.core/requirements/storytelling-phases.md` § Open-question buffer entry shape (`classified_mode`, `intent_initial_tier`, etc.)
+- `{cf-studio-path}/.core/requirements/storytelling-preferences.md` § Dispatch-Failure Audit Log (NDJSON record format)
 
 The same plan-item index is shared between the pair; `{N}` (total plan items) is unchanged. Total portion count up to `2 × N`. The split is NOT proactive sub-portion decomposition (which uses letter suffixes `3a`, `3b` for oversized items) — it's a fixed two-phase rhythm specific to review. The mechanisms compose: an oversized plan item could yield `3a-presentation` → `3b-presentation` → `3-challenge` (one challenge for the whole item, summarising panel reactions across sub-portions).
 
@@ -102,7 +102,7 @@ Adapt content style based on `{audience}`:
 | new joiners | context, vocabulary, "why this not that" | implementation minutiae | always unfold + glossary | medium with recaps |
 | customers | observable behavior, contracts, limits | internals | avoid | low |
 
-Heuristics applied contextually per portion, not hard rules. Diagram detail level follows the same audience map (see Phase E4 in `storytelling-phases.md`).
+Heuristics applied contextually per portion, not hard rules. Diagram detail level follows the same audience map (see Phase E4 in `{cf-studio-path}/.core/requirements/storytelling-phases.md`).
 
 ## Code-mode vs Artifact-mode
 
@@ -120,7 +120,7 @@ This module specifies the table-row level deltas per mode. Strict vs underspecif
 
 **Strictly specified** (Validation Checklist enforces):
 - Per-portion rhythm — number of portions per plan item, presence of Body before lens, mid-section vs separate-portion placement
-- Slot-name deltas — Ask → Comment (review); Lateral → Context (onboarding); Deeper → Pros/Cons (decision); Deeper → Why + Lateral → Affected (change-impact); 6-slot count and Next-first ordering invariant
+- Slot-name deltas — Ask → Comment (review); Lateral → Context (onboarding); Deeper → Pros/Cons (decision); Deeper → Why + Lateral → Affected (change-impact); 7-slot count, Back availability, and Next-first ordering invariant
 - Source-grounding, page-size invariant, no-scroll rule, clickable Markdown refs, audience adaptation, visualize-by-default — all unchanged
 
 **Underspecified** (best-effort with required inline fallback ack):

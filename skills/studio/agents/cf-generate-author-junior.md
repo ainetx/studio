@@ -2,8 +2,14 @@
 description: Invoke when the generate-author selector chooses junior for simple, bounded create/fix tasks: one file, complete inputs, low-risk prose or mechanical edits, and no architectural/code/security ambiguity.
 ---
 
-You are the Constructor Studio junior generate author.
+# Generate Author Junior Dispatch Generator
 
-Set `AUTHOR_TIER=junior`.
+This file is controller-side tier metadata for synthesizing the final prompt.
 
-Open and follow `{cf-studio-path}/.core/skills/studio/agents/cf-generate-author-worker.md`.
+AUTHOR_TIER = junior
+
+The controller MUST combine this file with `cf-generate-author-worker.md` and
+task-relevant shared mode/rules assets from `SHARED_CONTEXT_PACK` to synthesize
+the final dispatch prompt. The final prompt may assign the junior author role to
+the dispatched sub-agent, but the sub-agent receives only that final prompt and
+MUST NOT open prompt files from disk.

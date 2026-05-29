@@ -22,7 +22,7 @@ purpose: Phase-by-phase protocol for the storytelling methodology
   - [Portion shape](#portion-shape)
   - [Proactive sub-portion decomposition](#proactive-sub-portion-decomposition)
   - [First-portion special shape (portion 1)](#first-portion-special-shape-portion-1)
-  - [Navigation block (6 fixed slots, Next-first; conditional 7th)](#navigation-block-6-fixed-slots-next-first-conditional-7th)
+  - [Navigation block (7 fixed slots, Next-first; conditional 8th)](#navigation-block-7-fixed-slots-next-first-conditional-8th)
   - [User input handling](#user-input-handling)
   - [Periodic gates](#periodic-gates)
   - [Glossary buffer](#glossary-buffer)
@@ -33,7 +33,7 @@ purpose: Phase-by-phase protocol for the storytelling methodology
 
 <!-- /toc -->
 
-Loaded by `requirements/storytelling.md` (router). Defines the E0-E5 protocol shared by all storytelling modes. For mode-specific deltas (audience, slot renames, two-portion review rhythm) see `storytelling-modes.md`. For preferences (page size, artifact language, checkpoint) see `storytelling-preferences.md`. For export-mode behavior see `storytelling-export.md`.
+Loaded by `{cf-studio-path}/.core/requirements/storytelling.md` (router). Defines the E0-E5 protocol shared by all storytelling modes. For mode-specific deltas (audience, slot renames, two-portion review rhythm) see `{cf-studio-path}/.core/requirements/storytelling-modes.md`. For preferences (page size, artifact language, checkpoint) see `{cf-studio-path}/.core/requirements/storytelling-preferences.md`. For export-mode behavior see `{cf-studio-path}/.core/requirements/storytelling-export.md`.
 
 ## Phase E0: Pre-flight
 
@@ -94,9 +94,9 @@ Extract from the prompt:
 
 ### Step 2: Resolve mode (always-ask)
 
-Methodology emits the 6-mode prompt (template in `storytelling-modes.md`); waits for explicit user confirmation (Enter accepts the suggestion, or pick by number/name). Mode resolution is interactive every session — intent verbs / KIND defaults / `default_mode` from preferences.json only inform the suggested default, never bypass the prompt.
+Methodology emits the 6-mode prompt (template in `{cf-studio-path}/.core/requirements/storytelling-modes.md`); waits for explicit user confirmation (Enter accepts the suggestion, or pick by number/name). Mode resolution is interactive every session — intent verbs / KIND defaults / `default_mode` from preferences.json only inform the suggested default, never bypass the prompt.
 
-After mode resolution but BEFORE role/audience derivation, methodology emits the **artifact disposition** prompt (template + resolution rules in `storytelling-preferences.md` Artifact Disposition). The list of accumulating artifact types in the prompt depends on the resolved mode (review adds review-comments; all modes have open-questions and bookmarks). The methodology MUST wait for explicit user confirmation; the project `artifact_disposition` preference informs the suggested default but does NOT bypass the prompt.
+After mode resolution but BEFORE role/audience derivation, methodology emits the **artifact disposition** prompt (template + resolution rules in `{cf-studio-path}/.core/requirements/storytelling-preferences.md` Artifact Disposition). The list of accumulating artifact types in the prompt depends on the resolved mode (review adds review-comments; all modes have open-questions and bookmarks). The methodology MUST wait for explicit user confirmation; the project `artifact_disposition` preference informs the suggested default but does NOT bypass the prompt.
 
 ### Step 3: Auto-derive role from artifact
 
@@ -166,7 +166,7 @@ Each portion has, in order:
 - **Source references** — clickable Markdown links per Phase E3
 - **`🎨 visualization: {text-only | text+diagram} — {reason}`** decision marker (mandatory for all non-socratic portions; counts toward page-size budget)
 - **Per-portion progress marker**: `📍 {X}/{N} • {K} open questions • topic: "{plan-item}"` (review mode adds `phase: presentation | challenge`)
-- **Navigation block** (6 fixed slots, Next-first; conditional 7th)
+- **Navigation block** (7 fixed slots, Next-first; conditional 8th)
 
 Hard-cap recovery (fallback only — primary tool is proactive decomposition): **auto-trim with ack** when removing connective / framing sentences brings under cap while preserving substance; **split** only when the body itself genuinely exceeds the cap. Split shares the plan-item index with letter suffixes (`📍 3a/{N}`, `📍 3b/{N}`); `{N}` does NOT grow.
 
@@ -192,28 +192,76 @@ Anchors the session — different shape:
 
 By end of portion 1, the listener knows what they're learning, why, and the route ahead.
 
-### Navigation block (6 fixed slots, Next-first; conditional 7th)
+### Navigation block (7 fixed slots, Next-first; conditional 8th)
 
-The 6 fixed slots are Next / Deeper / Lateral / Recap / Ask / Wrap. When the cfs-routing queue has ≥ 1 active item, methodology MUST append slot `7. Send comments — preview (K queued)` to the nav block. Slot 7 emits the structured preview only (per `storytelling.md` AP-#40); dispatch remains gated by `send comments now` / `Y`. The slot is omitted only when the queue is empty.
+The 7 fixed slots are Next / Deeper / Lateral / Recap / Ask / Wrap / Back. When the cfs-routing queue has ≥ 1 active item, methodology MUST append slot `8. Send comments — preview (K queued)` to the nav block. Slot 8 emits the structured preview only (per `storytelling.md` AP-#40); dispatch remains gated by `send comments now` / `Y`. The slot is omitted only when the queue is empty.
 
 ```text
 Next:
-  1. Next    — {next plan item: "{plan-item}"}
-  2. Deeper  — {concrete question about current topic}
-  3. Lateral — {related topic / linked artifact: "{ref}"}
+  1. Next    — choose next / skip-ahead / revisit topic
+  2. Deeper  — choose from drill-down topics for the current topic
+  3. Lateral — choose from related topics / linked artifacts
   4. Recap   — summary of what's been covered so far
   5. Ask     — type your own question
   6. Wrap    — wrap up, save open questions
-→ suggested: {1|2|3|4|5|6}
+  7. Back    — return to the previous portion/menu
+→ suggested: {1|2|3|4|5|6|7}
 ```
 
 Slot rules:
-- **Next** (slot 1, primary default) — actual next plan item; collapses into Wrap (slot 6) at last item; in review mode, points intra-item from presentation → challenge, then inter-item from challenge → next presentation
-- **Deeper** — concrete question about the current topic, never generic
-- **Lateral** — registered artifact: parent/child/related ID; unregistered: related concept/section; no candidate → `(no lateral candidates)` + End-of-thread mark
+- **Next** (slot 1, primary default) — opens a numbered topic-pick menu with upcoming plan items, skip-ahead options, and completed/current topics that can be revisited, plus `Custom` and `Back`; direct `next N` may execute candidate N without opening the menu. If no forward topic exists, include Wrap and revisit candidates rather than silently collapsing slot 1 into Wrap.
+- **Deeper** — opens a numbered topic-pick menu with 2-5 concrete drill-down candidates for the current topic plus `Custom`; direct `deeper N` may execute candidate N without opening the menu
+- **Lateral** — opens a numbered topic-pick menu with 2-5 related-topic candidates (registered artifact parent/child/related ID when available; otherwise related concept/section) plus `Custom`; direct `lateral N` may execute candidate N without opening the menu. If no candidate exists, show `Custom` and `Back` rather than a dead end.
 - **Recap** — bullet-form summary of everything covered so far, ordered by plan item, source-refs included; itself a portion (≤ soft target — decompose if too big, sub 1 = framing, sub 2..K = per-plan-item bullets); fresh nav block emits after
 - **Ask** — methodology prompts `What's your question?` and reads free-text; routes through user-input rows (answer from input or push to open-questions)
 - **Wrap** — always present
+- **Back** — returns to the previous portion or previous menu; if there is no previous state, re-render the current main navigation and mark `Back unavailable — already at the start`
+
+When user selects bare `Next` / slot `1`, emit only:
+```text
+Next topics:
+  1. Continue — {next plan item label} — {one-line preview}
+  2. Skip ahead — {later plan item label} — {one-line preview}
+  3. Revisit — {completed/current topic label} — {one-line preview}
+  ...
+  N. Custom — tell me which planned topic to jump to or revisit
+  N+1. Back — return to the main navigation
+→ suggested: {S}
+```
+WAIT user.reply and STOP_TURN. After candidate selection, deliver the chosen
+planned topic as a normal source-grounded portion with a fresh navigation block.
+After `Custom`, ask for one free-text planned topic. After `Back`, re-render the
+main navigation without changing the current portion.
+
+When user selects bare `Deeper` / slot `2`, emit only:
+```text
+Deeper topics:
+  1. {candidate label} — {one-line preview}
+  2. {candidate label} — {one-line preview}
+  ...
+  N. Custom — tell me what to drill into
+  N+1. Back — return to the main navigation
+→ suggested: {S}
+```
+WAIT user.reply and STOP_TURN. After candidate selection, deliver the chosen
+drill-down as a normal source-grounded portion with a fresh navigation block.
+After `Custom`, ask for one free-text topic. After `Back`, re-render the main
+navigation without changing the current portion.
+
+When user selects bare `Lateral` / slot `3`, emit only:
+```text
+Lateral topics:
+  1. {candidate label} — {one-line preview}
+  2. {candidate label} — {one-line preview}
+  ...
+  N. Custom — tell me where to go sideways
+  N+1. Back — return to the main navigation
+→ suggested: {S}
+```
+WAIT user.reply and STOP_TURN. After candidate selection, deliver the chosen
+related topic as a normal source-grounded portion with a fresh navigation block.
+After `Custom`, ask for one free-text topic. After `Back`, re-render the main
+navigation without changing the current portion.
 
 Suggested-slot heuristics:
 - After intro/context-setting → `Next`
@@ -230,7 +278,11 @@ Recognition is intent-based; user may type these in any language (methodology MU
 
 | Input | Action |
 |---|---|
-| `1`/`2`/`3`/`4`/`5`/`6` or `next`/`deeper`/`lateral`/`recap`/`ask`/`wrap` (slot keyword alone) | Execute that slot literally; `next` is unambiguously slot 1 |
+| `1`/`next` (slot keyword alone) | Render the Next topics menu, WAIT, STOP_TURN |
+| `2`/`deeper` (slot keyword alone) | Render the Deeper topics menu, WAIT, STOP_TURN |
+| `3`/`lateral` (slot keyword alone) | Render the Lateral topics menu, WAIT, STOP_TURN |
+| `next N` / `deeper N` / `lateral N` | Execute candidate N directly if it exists; otherwise render the matching topic menu |
+| `4`/`recap`, `5`/`ask`, `6`/`wrap`, `7`/`back` | Execute that slot literally |
 | `go` or Enter (alone) | Execute **suggested** slot |
 | `recap`/`summary so far`/`summarize` | Execute Recap slot directly |
 | `ask`/`question` (alone) | Execute Ask slot — prompt `What's your question?` and read free-text reply |
@@ -281,7 +333,7 @@ Cross-reference: the 2-attempts-per-key cap (see Phase E3 buffer entry shape bel
 - **Open-questions reminder** every 3-4 portions if buffer ≥ 2: `📝 K open questions accumulated. Save now? (yes / no / wrap)`
 - **Comprehension check** every 2-3 portions: `Before continuing — anything unclear from the last N portions? (yes / no)` — yes branches into Deeper on user-specified topic; no continues
 
-(Auto-checkpoint during the session is **forbidden** — see `storytelling-preferences.md` Checkpoint and Resume.)
+(Auto-checkpoint during the session is **forbidden** — see `{cf-studio-path}/.core/requirements/storytelling-preferences.md` Checkpoint and Resume.)
 
 The two gates can stack on the same portion; consolidate into a single footer block.
 
@@ -382,7 +434,7 @@ Adapt detail to audience (per `storytelling-modes.md` Audience Adaptation):
 
 Diagrams MUST be self-contained — a reader looking only at the diagram should grasp the portion's structure.
 
-**Portion-1 visualization default**: any non-socratic mode SHOULD include an overview diagram in Portion 1 by default (artifact's parts / PR scope / codebase top-level). Skipping requires an articulable reason in the marker. When Portion 1 is the first diagram-bearing portion (typical case), the **lazy-ask format prompt** MUST fire BEFORE Portion 1's body:
+**Portion-1 visualization default**: any non-socratic mode SHOULD include an overview diagram in Portion 1 by default (artifact's parts / PR scope / codebase top-level). Skipping requires an articulable reason in the marker. When Portion 1 is the first diagram-bearing portion (typical case), the **lazy-ask format prompt** MUST fire BEFORE Portion 1's body unless a route preset has already set `STORYTELLING_DIAGRAM_FORMAT_PRESET=true`:
 ```text
 Render this diagram as:
   1. ASCII inline in chat — instant, no files
@@ -393,6 +445,8 @@ Choice applies to all diagrams this session. Override: `change diagram format to
 ```
 
 Rendering: ASCII → fenced text in chat; Mermaid → open/append the file with `## Portion {N}: {plan-item}` header + ` ```mermaid` block (mkdir -p the directory first); Both → ASCII inline + append to file.
+
+**Preset exception**: when `STORYTELLING_DIAGRAM_FORMAT_PRESET=true`, do not ask the lazy-ask format prompt. Use `STORYTELLING_DIAGRAM_FORMAT` for every diagram until the user overrides with `change diagram format to {ascii|mermaid|both}`. The `cf help` preset sets `STORYTELLING_DIAGRAM_FORMAT=ascii`, so help-mode diagrams render as ASCII inline in chat by default.
 
 **Code-mode exception**: in code-mode, the **first portion always emits an ASCII module map** without lazy-asking — opening orientation requires a visual map. Subsequent diagrams use the lazy-ask flow normally.
 

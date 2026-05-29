@@ -32,7 +32,7 @@ DO:
       or tool-validated
   IF actionable issues exist:
     FORBID emitting Fix Prompt or Plan Prompt here
-    REQUIRE remediation-handoff.md to be appended
+    REQUIRE `{cf-studio-path}/.core/workflows/analyze/phase-4-output/remediation-handoff.md` to be appended
 
 RULES:
   - MUST use the same six section titles in both STRICT and RELAXED modes
@@ -70,7 +70,7 @@ Reproduce the canonical `Validation Results` block returned by `cf-deterministic
 - Categories Summary: Total {N}; PASS {N}; FAIL {N}; PARTIAL {N}; N/A {N}; Unsupported-N/A violations {N} (AP-003 violations — see `{cf-studio-path}/.core/requirements/agent-compliance.md`)
 
 ### 4. Agent Self-Test
-- Open, load, and follow `workflows/analyze/agent-self-test.md` § Agent Self-Test (STRICT mode — AFTER completing work) and copy its canonical questions into this table; if RELAXED mode uses a justified subset, state that explicitly.
+- Open, load, and follow `{cf-studio-path}/.core/workflows/analyze/agent-self-test.md` § Agent Self-Test (STRICT mode — AFTER completing work) and copy its canonical questions into this table; if RELAXED mode uses a justified subset, state that explicitly.
 | Question | Answer | Evidence |
 |----------|--------|----------|
 | {question} | YES/NO | {evidence} |
@@ -97,4 +97,4 @@ Set `### 2. Deterministic Gate` to `Status: SKIPPED`, `Invocation: not run`, and
 
 Do **not** describe semantic-only findings as deterministic, validator-backed, or tool-validated.
 
-If actionable issues exist in semantic-only mode, append the same final `Remediation Handoff` menu defined in `workflows/analyze/phase-4-output/remediation-handoff.md` (3 options: in-session fix continuation, Fix Prompt on demand, Plan Prompt on demand). The same EXPLAIN_MODE exception applies.
+If actionable issues exist in semantic-only mode, append the same final `Remediation Handoff` menu defined in `{cf-studio-path}/.core/workflows/analyze/phase-4-output/remediation-handoff.md` (3 options: in-session fix continuation, Fix Prompt on demand, Plan Prompt on demand). The same EXPLAIN_MODE exception applies.

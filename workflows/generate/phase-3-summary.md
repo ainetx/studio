@@ -72,7 +72,7 @@ MENU Phase3ConfirmationMenu:
       IF iterations exhausted:
         REQUIRE explicit "continue iterating" or stop token
         IF stop token:
-          LOAD workflows/shared/stop-token-policy.md
+          LOAD {cf-studio-path}/.core/workflows/shared/stop-token-policy.md
           STOP generate workflow
   INVALID:
     EMIT "Reply with yes, no, or modify."

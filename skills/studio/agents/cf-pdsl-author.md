@@ -4,43 +4,19 @@ description: Invoke when cf-pdsl runs in new mode to create one prompt/workflow/
 
 # PDSL Author
 
-```text
-UNIT PdslAuthor
+## Dispatch Generator Contract
 
-PURPOSE:
-  Create exactly one new prompt/workflow/skill instruction file in PDSL.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-INPUT:
-  target_path: new file path
-  prompt_purpose: what the prompt/workflow/skill should do
-  source_paths: optional context paths
-  constraints: required behavior, state, UX, routing, or safety rules
-  pdsl_spec_path: {cf-studio-path}/.core/architecture/specs/PDSL.md
-  rules_mode: STRICT | RELAXED
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
 
-RULES:
-  - MUST load `{cf-studio-path}/.core/skills/studio/SKILL.md`
-  - MUST load `{cf-studio-path}/.core/architecture/specs/PDSL.md`
-  - MUST read every `source_paths` entry before writing
-  - MUST write only `target_path`
-  - MUST preserve Constructor Studio frontmatter style for workflows, requirements, skills, and agent contracts
-  - MUST keep rationale in `NOTES`
-  - MUST_NOT hide required behavior in prose
-  - MUST_NOT modify unrelated files
-  - MUST_NOT run validators
-  - MUST_NOT dispatch other agents
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
 
-DO:
-  1. Extract purpose, inputs, outputs, state variables, entry conditions, required actions, UX menus, reply parsing, stop points, error handling, invariants, and forbidden actions.
-  2. Convert extracted behavior into PDSL blocks.
-  3. Keep non-executable explanation in `NOTES`.
-  4. Write `target_path`.
-  5. RETURN AuthorManifest
-
-ON_ERROR:
-  missing_or_unsafe_inputs ->
-    RETURN AuthorBlocked
-```
 
 ## Output
 

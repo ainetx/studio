@@ -4,66 +4,26 @@ description: Invoke when executing the next or a specific phase from a generated
 
 <!-- toc -->
 
-- [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
+- [Frozen Input Payload](#frozen-input-payload)
 - [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
 
-```text
-UNIT PhaseRunner
+## Dispatch Generator Contract
 
-PURPOSE:
-  Execute the next or a specific phase from a generated Constructor Studio plan
-  in an isolated agent context without delegating to ralphex.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-INPUT:
-  plan_dir: path to .plans/<slug>/
-  target_phase: phase number or null for next-ready
-  git_commit_mode: commit | stage | none
-  contributing_guide: { path, directives } | null
-  git_constraint: mode-matched constraint string
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
 
-RULES:
-  - MUST_NOT load SKILL.md — execution brief and plan.toml are the sole contract
-  - MUST_NOT delegate to ralphex — route to cf-ralphex if external autonomous execution is requested
-  - MUST treat plan.toml on disk as sole source of truth
-  - MUST read plan.toml first and determine target phase from manifest state
-    unless user explicitly names a phase
-  - MUST verify dependencies, declared output_files, declared outputs,
-    downstream inputs, and lifecycle-state exceptions as defined in plan.md
-    (confirm each dependency file exists and is non-empty, each output path is
-    writable, downstream inputs reference existing or to-be-created outputs)
-  - MUST repair stale lifecycle state when manifest rules require it before continuing
-  - MUST update selected phase to in_progress before execution when runtime contract requires it
-  - MUST read only the selected phase file after manifest resolution and dependency checks
-  - MUST follow the phase file exactly — it is self-contained and authoritative
-  - MUST verify phase acceptance criteria and required outputs before marking complete
-  - MUST update plan.toml with resulting phase status and aggregate execution state
-  - MUST honor git_commit_mode exactly — no git tool invocations beyond what
-    git_constraint permits
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
 
-DO:
-  1. Read plan.toml; resolve target phase from manifest state or explicit user input.
-  2. Verify dependencies and output paths.
-  3. Repair stale lifecycle state if required.
-  4. Open and follow {cf-studio-path}/.core/workflows/plan/plan-reference.md
-     focusing on Appendix A (Execute Phases) and Appendix B (Check Status) when needed.
-  5. SET selected phase to in_progress.
-  6. Read selected phase file; execute each step exactly.
-  7. Verify acceptance criteria and required outputs.
-  8. SET phase status to done or failed in plan.toml; update aggregate state.
-  9. RETURN phase completion summary with next-phase handoff prompt OR final
-     completion report on success; OR specific failed criteria, manifest updates,
-     and exact blocker on failure.
 
-ON_ERROR:
-  phase_failed ->
-    record specific failed criteria in plan.toml
-    EMIT exact blocker with file path and line number where possible
-    RETURN failure summary with manifest updates and recovery condition
-```
-
-## Inputs (dispatched-prompt contract)
+## Frozen Input Payload
 
 ```json
 {
@@ -76,8 +36,10 @@ ON_ERROR:
 ```
 
 NOTES:
-  cfs_mode remains off — the orchestrator owns the Session Sub-Agent Approval
-  Gate, INLINE_FALLBACK probe, and CF_PHASE_GATE release-reset window before
+  cfs_mode remains off — the controller supplies only the shared mode contract
+  plus the authoritative phase-execution contract in the synthesized final
+  dispatch prompt, while `plan.toml` remains a runtime resource. The orchestrator owns the Session Sub-Agent Approval Gate,
+  INLINE_FALLBACK probe, and CF_PHASE_GATE release-reset window before
   dispatching this agent. Phase-Skip Gate is not applicable; write access is
   bounded by host isolation per SKILL.md § Sub-agent propagation.
 

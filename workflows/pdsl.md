@@ -2,7 +2,7 @@
 cf: true
 type: workflow
 name: cf-pdsl
-description: "Use when the user wants prompt/workflow/skill/agent instruction files authored, transformed, compressed, normalized, or reviewed as compact state-machine-like PDSL contracts. Triggers include creating a new prompt file, converting prose instructions to DSL, reviewing prompts for state/menu/UX/STOP_TURN safety, or making Constructor Studio prompt files more compact and explicit."
+description: "Invoke for requests to author, transform, compress, normalize, or review prompt, workflow, skill, or agent instruction files as compact state-machine-like PDSL contracts."
 version: 0.1
 purpose: Dedicated workflow for authoring, transforming, and auditing compact PDSL prompt contracts
 ---
@@ -23,9 +23,25 @@ PURPOSE:
 
 RULES:
   - ALWAYS open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` WHEN `{cfs_mode}` == off
-  - ALWAYS open and follow `skills/studio/protocol.md` FIRST
+  - ALWAYS open and follow `{cf-studio-path}/.core/skills/studio/protocol.md` FIRST
   - ALWAYS open and follow `{cf-studio-path}/.core/architecture/specs/PDSL.md`
-  - ALWAYS open and follow `workflows/shared/stop-token-policy.md`
+  - ALWAYS open and follow `{cf-studio-path}/.core/workflows/shared/stop-token-policy.md`
+```
+
+```text
+UNIT PdslSharedContextPack
+
+PURPOSE:
+  Keep PDSL prompt loading controller-owned and pack-aware.
+
+RULES:
+  - Mode files and PDSL helper contracts are controller-owned prompt assets
+    loaded from {cf-studio-path}/.core/...
+  - Before any cf-pdsl-* dispatch, the controller MUST reuse or extend
+    SHARED_CONTEXT_PACK, load the agent prompt source, and synthesize the
+    final dispatch prompt with only the task-relevant instruction context
+  - PDSL sub-agents MUST NOT self-bootstrap by reopening SKILL, workflow, spec,
+    or AGENTS prompt files directly
 ```
 
 ## Intent Routing
@@ -45,9 +61,18 @@ WHEN:
   PDSL_MODE == unset
 
 DO:
-  IF user intent matches a mode alias:
-    SET PDSL_MODE = matched mode
-    LOAD matching mode file
+  IF user intent matches a new alias:
+    SET PDSL_MODE = new
+    LOAD {cf-studio-path}/.core/workflows/pdsl/new.md
+    STOP_TURN
+  ELSE IF user intent matches a transform alias:
+    SET PDSL_MODE = transform
+    LOAD {cf-studio-path}/.core/workflows/pdsl/transform.md
+    STOP_TURN
+  ELSE IF user intent matches a review alias:
+    SET PDSL_MODE = review
+    LOAD {cf-studio-path}/.core/workflows/pdsl/review.md
+    STOP_TURN
   ELSE:
     EMIT_MENU PdslModeMenu
     WAIT user.reply
@@ -57,13 +82,13 @@ MENU PdslModeMenu:
   TITLE: Choose PDSL mode
   OPTIONS:
     1 new -> SET PDSL_MODE = new
-             LOAD workflows/pdsl/new.md
+             LOAD {cf-studio-path}/.core/workflows/pdsl/new.md
              STOP_TURN
     2 transform -> SET PDSL_MODE = transform
-                   LOAD workflows/pdsl/transform.md
+                   LOAD {cf-studio-path}/.core/workflows/pdsl/transform.md
                    STOP_TURN
     3 review -> SET PDSL_MODE = review
-                LOAD workflows/pdsl/review.md
+                LOAD {cf-studio-path}/.core/workflows/pdsl/review.md
                 STOP_TURN
   INVALID:
     EMIT "Reply with 1, 2, or 3."
@@ -78,6 +103,31 @@ NOTES:
 
   Only one mode file is loaded per workflow run unless the user explicitly
   starts a new PDSL request.
+```
+
+## Explore / Brainstorm Applicability
+
+```text
+UNIT PdslExploreBrainstormGate
+
+PURPOSE:
+  Decide whether PDSL authoring needs related prompt-resource discovery or
+  design exploration before dispatch.
+
+WHEN:
+  PDSL_MODE is selected
+  AND before mode-specific dispatch
+
+DO:
+  REQUIRE {cf-studio-path}/.core/workflows/shared/explore-brainstorm-gate.md is loaded and followed
+
+RULES:
+  - SHOULD offer cf-explore for transform/review when source_paths omit related
+    workflows, requirements, agent prompts, or specs needed for consistency
+  - SHOULD offer cf-brainstorm for new prompt architecture, state/menu policy,
+    dispatch semantics, or cross-agent contract changes
+  - MUST NOT require brainstorm for mechanical compacting or direct review when
+    target_paths and source_paths are explicit
 ```
 
 ## Shared Inputs
@@ -143,13 +193,17 @@ DO (after approval resolved):
 
 RULES:
   - MUST apply Sub-Agent Approval Gate (SKILL.md) before any DISPATCH
-  - MUST apply dispatch protocol from sub-agent-dispatch.md before any DISPATCH
+  - MUST apply dispatch protocol from `{cf-studio-path}/.core/skills/studio/sub-agent-dispatch.md` before any DISPATCH
+  - MUST synthesize the dispatched agent's final prompt from
+    SHARED_CONTEXT_PACK plus the agent prompt source before any cf-pdsl-*
+    dispatch or inline contract
   - MUST_NOT dispatch write-capable modes (new, transform) until write summary is user-approved
   - MUST_NOT default INLINE_FALLBACK from host capability or missing approval
 
 NOTES:
-  Full approval gate semantics defined in SKILL.md § Session Sub-Agent Approval Gate
-  and sub-agent-dispatch.md.
+  Full approval gate semantics defined in
+  {cf-studio-path}/.core/skills/studio/SKILL.md § Session Sub-Agent Approval Gate
+  and {cf-studio-path}/.core/skills/studio/sub-agent-dispatch.md.
 ```
 
 ## Completion

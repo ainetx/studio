@@ -14,6 +14,7 @@ purpose: Universal workflow for generating execution plans with phased delivery
 - [Overview](#overview)
 - [Context Budget & Overflow Prevention (CRITICAL)](#context-budget--overflow-prevention-critical)
 - [Phase 0: Resolve Variables & Discover Tools](#phase-0-resolve-variables--discover-tools)
+- [Phase 0.a: Explore / Brainstorm Applicability](#phase-0a-explore--brainstorm-applicability)
 - [Phase 1: Assess Scope](#phase-1-assess-scope)
 - [Phase 2: Decompose](#phase-2-decompose)
 - [Phase 3: Compile Phase Files](#phase-3-compile-phase-files)
@@ -35,13 +36,13 @@ DO:
     REQUIRE {cf-studio-path}/.core/skills/studio/SKILL.md is loaded and followed FIRST
   REQUIRE {cf-studio-path}/.core/skills/studio/protocol.md is loaded and followed
     before any workflow-local phase work
-  REQUIRE workflows/shared/stop-token-policy.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/shared/stop-token-policy.md is loaded and followed
     before any prompt that relies on stop-token behavior
 
 RULES:
-  - MUST load SKILL.md first when cfs_mode is off
-  - MUST load protocol.md before any phase work
-  - MUST load stop-token-policy.md before any stop-token-dependent prompt
+  - MUST load {cf-studio-path}/.core/skills/studio/SKILL.md first when cfs_mode is off
+  - MUST load `{cf-studio-path}/.core/skills/studio/protocol.md` before any phase work
+  - MUST load `{cf-studio-path}/.core/workflows/shared/stop-token-policy.md` before any stop-token-dependent prompt
   - MUST load {cf-studio-path}/.core/requirements/plan-template.md WHEN compiling phase files
   - MUST load {cf-studio-path}/.core/requirements/plan-decomposition.md WHEN decomposing tasks into phases
   - MUST load {cf-studio-path}/.core/requirements/prompt-engineering.md WHEN compiling phase files
@@ -60,6 +61,22 @@ NOTES:
     Brief before compile — phase-3-compile.md
   For context compaction recovery during multi-phase workflows, follow
   {cf-studio-path}/.core/skills/studio/protocol.md § Compaction Recovery.
+```
+
+```text
+UNIT PlanSharedContextPack
+
+PURPOSE:
+  Keep plan-phase prompt loading controller-owned and pack-aware.
+
+RULES:
+  - Plan workflow prompt assets are controller-owned runtime loads and MUST use
+    {cf-studio-path}-prefixed runtime paths when mirrors exist
+  - The controller MUST reuse or extend SHARED_CONTEXT_PACK before any
+    downstream phase compiler, phase runner, or other prompt-consuming dispatch
+    that depends on plan prompt assets
+  - Plan MUST NOT rely on prompt-consuming sub-agents reopening workflow,
+    requirement, spec, or AGENTS prompt files directly
 ```
 
 ## Overview
@@ -115,7 +132,32 @@ PURPOSE:
   Resolve runtime variables and build the dynamic tool map from the CLISPEC.
 
 DO:
-  REQUIRE workflows/plan/phase-0-discover.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/plan/phase-0-discover.md is loaded and followed
+```
+
+## Phase 0.a: Explore / Brainstorm Applicability
+
+```text
+UNIT PlanExploreBrainstormGate
+
+PURPOSE:
+  Decide whether planning needs resource discovery or decision exploration
+  before scope assessment and decomposition.
+
+WHEN:
+  PlanPhase0 completed
+  AND before PlanPhase1
+
+DO:
+  REQUIRE {cf-studio-path}/.core/workflows/shared/explore-brainstorm-gate.md is loaded and followed
+
+RULES:
+  - MUST run required cf-explore for brownfield, architecture, multi-file, or
+    unclear target plans
+  - MUST run required cf-brainstorm when decomposition depends on unresolved
+    strategy or acceptance semantics
+  - MUST include RESOURCE_CONTEXT and BRAINSTORM_CONTEXT in Phase 1 assessment
+    when either exists
 ```
 
 ## Phase 1: Assess Scope
@@ -128,7 +170,7 @@ PURPOSE:
   size, scan for all user interaction points, and identify the target artifact and slug.
 
 DO:
-  REQUIRE workflows/plan/phase-1-assess.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/plan/phase-1-assess.md is loaded and followed
 ```
 
 ## Phase 2: Decompose
@@ -141,7 +183,7 @@ PURPOSE:
   and predict execution-context budget per phase.
 
 DO:
-  REQUIRE workflows/plan/phase-2-decompose.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/plan/phase-2-decompose.md is loaded and followed
 ```
 
 ## Phase 3: Compile Phase Files
@@ -154,7 +196,7 @@ PURPOSE:
   produce phase files or phase-generation prompts, and validate compiled phase files.
 
 DO:
-  REQUIRE workflows/plan/phase-3-compile.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/plan/phase-3-compile.md is loaded and followed
 
 RULES:
   - Phase 3.3 dispatch payload MUST include git_commit_mode, contributing_guide,
@@ -175,7 +217,7 @@ WHEN:
   AND plan.execution_status != "prompts_emitted"
 
 DO:
-  REQUIRE workflows/plan/phase-4-finalize.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/plan/phase-4-finalize.md is loaded and followed
 
 NOTES:
   Contains Phase 4.1 self-validation, gated Phase 4.2 next-steps menu
@@ -194,7 +236,7 @@ WHEN:
   Phase 2.1 requires the user to select a plan lifecycle strategy
 
 DO:
-  REQUIRE workflows/plan/plan-lifecycle.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/plan/plan-lifecycle.md is loaded and followed
 ```
 
 ## Plan Reference
@@ -210,7 +252,7 @@ WHEN:
   (post-plan-creation reference)
 
 DO:
-  REQUIRE workflows/plan/plan-reference.md is loaded and followed
+  REQUIRE {cf-studio-path}/.core/workflows/plan/plan-reference.md is loaded and followed
 ```
 
 ## Completion Invariants

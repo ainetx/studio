@@ -50,11 +50,11 @@ MENU MandatoryOfferMenu:
     disk | save | 2 ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = disk
       CONTINUE PlannerDispatch
-      THEN LOAD workflows/generate/phase-1.5/disk-mode.md
+      THEN LOAD {cf-studio-path}/.core/workflows/generate/phase-1.5/disk-mode.md
     stop_token ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = cancelled_by_stop_token
       SET CF_PHASE_GATE = armed
-      LOAD workflows/shared/stop-token-policy.md
+      LOAD {cf-studio-path}/.core/workflows/shared/stop-token-policy.md
       STOP current generate sub-flow
       FORBID entering Phase 3 or Phase 4
     no | skip | 3 ->
@@ -104,7 +104,7 @@ MENU OptionalOfferMenu:
     disk | save | 2 ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = disk
       CONTINUE PlannerDispatch
-      THEN LOAD workflows/generate/phase-1.5/disk-mode.md
+      THEN LOAD {cf-studio-path}/.core/workflows/generate/phase-1.5/disk-mode.md
     no | skip | 3 ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = declined
       SET AUTHOR_EXECUTION_PLAN = null
@@ -112,7 +112,7 @@ MENU OptionalOfferMenu:
     stop_token ->
       SET AUTHOR_PLAN_OFFER_RESOLVED = cancelled_by_stop_token
       SET CF_PHASE_GATE = armed
-      LOAD workflows/shared/stop-token-policy.md
+      LOAD {cf-studio-path}/.core/workflows/shared/stop-token-policy.md
       STOP current generate sub-flow
       FORBID entering Phase 3 or Phase 4
   INVALID:
@@ -135,7 +135,7 @@ PURPOSE:
   Dispatch cf-generate-planner and validate returned plan.
 
 DO:
-  REQUIRE workflows/shared/inline-fallback-probe.md loaded before dispatch
+  REQUIRE {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md loaded before dispatch
   NOTE: Pre-dispatch fail-stop and Mode B degradation rules in
     {cf-studio-path}/.core/skills/studio/sub-agent-dispatch.md
 
@@ -143,6 +143,7 @@ DO:
     {cf-studio-path}/.core/skills/studio/agents/cf-generate-planner.md
   WITH orchestrator-supplied values:
     plan_mode = "memory" or "disk" from user's reply
+    work_request = original generate request / approved statement of what must be done
     target_type, mode, kind, name, rules_mode, system
     template_path, example_path, kit_rules_path, checklist_path
     design_artifact_path (code mode only, otherwise null)
@@ -152,12 +153,13 @@ DO:
     brainstorm_decisions = Phase 0.7 decisions or {}
     open_questions = Phase 0.7 open questions or []
     available_authors = registered write-capable author worker agents from
-      workflows/generate/phase-4-write.md § Author Selection and Dispatch
+      {cf-studio-path}/.core/workflows/generate/phase-4-write.md § Author Selection and Dispatch
 
   PARSE marker "<!-- author_plan -->" and following JSON block
 
   VALIDATE:
     - every task's recommended_author is one of the registered author worker agents
+    - work_request is present, non-empty, and preserves what the user asked to do
     - every target path is covered by at least one task
     - tasks in the same parallel_group have disjoint target_paths
     - no parallel group contains more than one task with updates_artifacts_toml=true

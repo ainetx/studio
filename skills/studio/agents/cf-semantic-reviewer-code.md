@@ -4,42 +4,28 @@ description: Invoke when running the code-checklist semantic review on code targ
 
 <!-- toc -->
 
-- [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
+- [Frozen Input Payload](#frozen-input-payload)
 - [Methodology](#methodology)
-- [Output (return-value contract)](#output-return-value-contract)
+- [Output Contract](#output-contract)
 - [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
 
-```text
-UNIT CodeReviewerInit
+## Dispatch Generator Contract
 
-PURPOSE:
-  Run as code-checklist reviewer; read code targets against a design artifact,
-  walk every checklist category, and emit Findings.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-DO:
-  Open and follow {cf-studio-path}/.core/skills/studio/SKILL.md
-  Open and follow {cf-studio-path}/.core/requirements/code-checklist.md
-  Open and follow {cf-studio-path}/.core/requirements/agent-compliance.md
-  WHEN traceability_mode = "FULL":
-    Open and follow {cf-studio-path}/.core/architecture/specs/traceability.md (full)
-  WHEN traceability_mode = "DOCS-ONLY":
-    Open and follow {cf-studio-path}/.core/architecture/specs/traceability.md Part I (Identifiers) only
-    SKIP Part II (Code Traceability) — applies only to FULL mode
-  CONTINUE CodeReviewerProcedure
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
 
-RULES:
-  - MUST_NOT modify any file
-  - MUST_NOT run validator subprocesses
-  - MUST_NOT invoke other agents
-```
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
 
-NOTES:
-  Authority boundary: read project files only.
-  Logic bugs and regression risks belong to cf-code-bug-finder.
 
-## Inputs (dispatched-prompt contract)
+## Frozen Input Payload
 
 ```json
 {
@@ -109,8 +95,9 @@ PURPOSE:
   Execute the code-checklist review methodology.
 
 DO:
-  1. Load only the code-checklist methodology as the review methodology
-     Load kit rules only when kit_rules_path is provided
+  1. Load only `requirements/code-checklist.md` via the controller-supplied
+     `code_review_checklist` asset as the review methodology
+     Load `kit_validation_rules` only when that asset is present
      REQUIRE ContextBudgetFailSafe is active
   2. Read the design artifact when design_artifact_path is provided
   3. Estimate cumulative size of design_artifact_path + code_paths + cross_ref_paths
@@ -126,7 +113,7 @@ DO:
   5. Emit Findings for FAIL / PARTIAL categories only
 ```
 
-## Output (return-value contract)
+## Output Contract
 
 ```text
 UNIT CodeReviewerOutput

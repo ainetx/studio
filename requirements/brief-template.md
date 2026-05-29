@@ -49,6 +49,14 @@ outputs = {outputs}
 inputs = {inputs}
 ```
 When the plan contains raw-input chunk files under `input/`, list the assigned chunk paths in `input_files` here exactly as they will be read at runtime. Use them only from the authoritative package referenced by `input_manifest`, and only when its `input_signature` matches the current plan input.
+Files listed under `inputs` are execution-time dependencies for the phase. If an `inputs` entry points into `out/`, treat it as a runtime artifact produced by an earlier phase, not as a compile-time prerequisite for brief or phase-file generation.
+
+## Compilation Clarification
+
+- `input_files` and `inputs` describe phase execution dependencies, not mandatory compile-time reads.
+- During brief generation and phase compilation, `out/*` entries under `inputs` MUST be preserved as future runtime reads in the compiled phase's frontmatter, `Input`, and `Task` sections.
+- If a referenced `out/*` file already exists, it MAY be read for grounding.
+- If a referenced `out/*` file does not yet exist, the compiler MUST NOT fail solely because it is absent; its absence becomes relevant only when the compiled phase is later executed.
 
 ## Load Instructions
 {numbered list of load items}
@@ -103,6 +111,7 @@ Range rules: use `lines {from}-{to}` for partial reads, omit ranges for whole-fi
 Inline stable structural content such as rules, templates, checklists, examples, and standards.
 
 Runtime-read dynamic or large content such as project files, source code, prior outputs, config, and external docs.
+When a prior output under `out/` is not yet present, describe it as a runtime dependency instead of a required compile-time read.
 
 ## Example
 
@@ -112,8 +121,8 @@ Runtime-read dynamic or large content such as project files, source code, prior 
    - Keep MUST/MUST NOT requirements; skip Prerequisites, Load Dependencies, Tasks, Next Steps
 2. **Template**: Read `{kit}/artifacts/ADR/template.md` (lines 10-48, ~38 lines)
    - Inline → Input section
-3. **Project context**: Read `workflows/plan.md` (lines 1-80, ~80 lines)
-   - Runtime read → add `Read workflows/plan.md` to Task
+3. **Project context**: Read `{cf-studio-path}/.core/workflows/plan.md` (lines 1-80, ~80 lines)
+   - Runtime read → add `Read {cf-studio-path}/.core/workflows/plan.md` to Task
 ```
 
 ## Fill Rules

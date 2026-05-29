@@ -39,6 +39,7 @@ WORKFLOW_SUBAGENTS: tuple[str, ...] = (
     "cf-semantic-reviewer-consistency",
     "cf-brainstorm-facilitator",
     "cf-brainstorm-expert",
+    "cf-explorer",
     "cf-generate-collector",
     "cf-analyze-planner",
     "cf-generate-planner",
@@ -171,6 +172,31 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
             }],
             "decisions": {},
             "topic_history": [],
+        },
+        "resource_context": {
+            "exploration_status": "sufficient",
+            "summary": "fixture resource context",
+            "resources": [],
+            "persona_needs": [],
+            "missing_context_questions": [],
+        },
+    },
+    "cf-explorer": {
+        "task": "fixture explore task",
+        "intent": "brainstorm",
+        "panel": [{
+            "id": "E1",
+            "persona": "Fixture Reviewer",
+            "focus": ["fixture-focus-a"],
+            "rationale": "fixture rationale",
+        }],
+        "known_paths": ["fixture/DESIGN.md"],
+        "search_roots": ["fixture"],
+        "constraints": {
+            "kind": "artifact-kind",
+            "system": "fixture-system",
+            "max_files": 20,
+            "max_excerpt_lines_per_file": 40,
         },
     },
     "cf-generate-collector": {
@@ -456,6 +482,26 @@ def _fake_invoke(agent_id: str, payload: dict) -> dict:
                 "text": "fixture next topic",
                 "why": "fixture follow-up rationale",
             }
+    elif agent_id == "cf-explorer":
+        response["result"]["exploration_status"] = "sufficient"
+        response["result"]["task_summary"] = payload["task"]
+        response["result"]["resource_context"] = {
+            "summary": "fixture resource context",
+            "resources": [{
+                "path": "fixture/DESIGN.md",
+                "resource_type": "architecture",
+                "why_relevant": "fixture relevance",
+                "suggested_slices": [],
+                "confidence": "high",
+            }],
+            "persona_needs": [{
+                "persona_id": "E1",
+                "needs": ["fixture need"],
+                "resource_paths": ["fixture/DESIGN.md"],
+                "missing_context": [],
+            }],
+            "missing_context_questions": [],
+        }
     elif agent_id == "cf-analyze-planner":
         response["result"]["reviewer_plan_marker"] = "<!-- reviewer_plan -->"
         response["result"]["reviewer_plan"] = {
@@ -564,6 +610,14 @@ def test_dispatch_round_trip(agent_id: str) -> None:
             assert questions[0].get("decision_key")
             next_topic = response["result"].get("next_topic_proposal")
             assert isinstance(next_topic, dict) and next_topic.get("why")
+        elif agent_id == "cf-explorer":
+            assert response["result"].get("exploration_status") in {
+                "sufficient", "partial", "insufficient"
+            }
+            resource_context = response["result"].get("resource_context")
+            assert isinstance(resource_context, dict)
+            assert isinstance(resource_context.get("resources"), list)
+            assert "missing_context_questions" in resource_context
         elif agent_id == "cf-analyze-planner":
             assert response["result"].get("reviewer_plan_marker") == "<!-- reviewer_plan -->"
             assert response["result"].get("reviewer_plan", {}).get("tasks")
@@ -1064,7 +1118,7 @@ def test_diff_scope_resolver_agent_registered_and_prompt_contract() -> None:
 
     agent = agents["cf-diff-scope-resolver"]
     prompt = (
-        repo_root / "skills" / "studio" / agent["prompt_file"]
+        repo_root / "skills" / "studio" / "agents" / "cf-diff-scope-resolver.md"
     ).read_text(encoding="utf-8")
 
     assert agent["mode"] == "readonly"
@@ -1647,46 +1701,195 @@ def test_brainstorm_challenge_questions_target_decision_keys() -> None:
     assert "MUST be unique within this response" in expert
     assert "MUST_NOT use bare `topic.section` as the whole key" in expert
     assert "decision_key` MUST name a key present in `challenged_decisions`" in expert
-    assert "key = question.decision_key" in round_loop
+    assert "update state.decisions[q.decision_key]" in round_loop
+    assert "challenge overwrites; skip/keep excluded" in round_loop
     assert "MUST reject duplicate topic-round decision_key values" in round_loop
     assert '"decision_key": "<section-or-topic>:<expert-id>:<question-key>"' in state_schema
     assert '"decision_key": "<key>"' in state_schema
 
 
-def test_brainstorm_round_prompt_supports_low_friction_answering() -> None:
-    """Users should not have to answer every expert question manually."""
+def test_brainstorm_round_prompt_supports_one_by_one_answering() -> None:
+    """Users should answer brainstorm questions one at a time, then choose next action."""
     repo_root = Path(__file__).resolve().parents[1]
     round_loop = (
         repo_root / "workflows" / "generate" / "phase-0.7" / "round-loop.md"
     ).read_text(encoding="utf-8")
     round_loop_lines = round_loop.splitlines()
 
-    assert '"accept all"' in round_loop
-    assert "`then: custom: <text>`" in round_loop
-    assert '    EMIT "then: custom: <text> — custom topic"' in round_loop_lines
-    assert "      custom: <text> — custom topic" not in round_loop_lines
-    assert '"skip rest"' in round_loop
-    assert '"then:" may be sent as follow-up' in round_loop
+    assert "UNIT Phase07QuestionQueue" in round_loop
+    assert "UNIT Phase07AskCurrentQuestion" in round_loop
+    assert "MUST show exactly one pending question per turn" in round_loop
+    assert "MUST NOT dump the full question_queue to the user" in round_loop
+    assert "UNIT Phase07PostRoundMenu" in round_loop
+    assert "MUST NOT show this menu before every pending question is resolved" in round_loop
+    assert '  EMIT "custom: <text> — custom next topic"' in round_loop_lines
+    assert "3 skip ->" in round_loop
+    assert 'reason = "user_skipped"' in round_loop
+    assert 'mark q.status = "open_unanswered"' in round_loop
+    assert "skip MUST NOT update state.decisions" in round_loop
 
 
-_BRAINSTORM_THEN_REPLY_RULES = (
-    (re.compile(r"^then:\s*custom:\s*<text>$", re.IGNORECASE), "custom_topic"),
-    (re.compile(r"^then:\s*(?:1|2|C|W)$", re.IGNORECASE), "topic_choice"),
+_BRAINSTORM_POST_ROUND_REPLY_RULES = (
+    (re.compile(r"^custom:\s*<text>$", re.IGNORECASE), "custom_topic"),
+    (re.compile(r"^(?:1|2|C|W)$", re.IGNORECASE), "topic_choice"),
 )
 
 
-def _parse_brainstorm_then_reply(raw: str) -> str:
+def _parse_brainstorm_post_round_reply(raw: str) -> str:
     user_input = raw.strip()
-    for pattern, outcome in _BRAINSTORM_THEN_REPLY_RULES:
+    for pattern, outcome in _BRAINSTORM_POST_ROUND_REPLY_RULES:
         if pattern.match(user_input):
             return outcome
     return "reject_unrecognized"
 
 
-def test_brainstorm_then_custom_reply_grammar() -> None:
-    """`then: custom: <text>` should parse, but bare `custom: <text>` should not."""
-    assert _parse_brainstorm_then_reply("then: custom: <text>") == "custom_topic"
-    assert _parse_brainstorm_then_reply("custom: <text>") == "reject_unrecognized"
+def test_brainstorm_post_round_custom_reply_grammar() -> None:
+    """Post-round choices parse directly after the one-by-one question queue."""
+    assert _parse_brainstorm_post_round_reply("custom: <text>") == "custom_topic"
+    assert _parse_brainstorm_post_round_reply("then: custom: <text>") == "reject_unrecognized"
+
+
+def test_brainstorm_wrap_menu_distinguishes_session_and_disk_save() -> None:
+    """Wrap handoff must separate session-only preservation from disk persistence."""
+    repo_root = Path(__file__).resolve().parents[1]
+    wrap = (
+        repo_root / "workflows" / "generate" / "phase-0.7" / "wrap-handoff.md"
+    ).read_text(encoding="utf-8")
+
+    assert "1. Save brainstorm results only (in session)" in wrap
+    assert "2. Save brainstorm results only (to disk)" in wrap
+    assert "Option 1 MUST be session-only and MUST NOT write files" in wrap
+    assert "Option 2 MUST be hidden or rejected" in wrap
+    assert "WRITE state.json" in wrap
+    assert "WRITE design.md" in wrap
+
+
+def test_studio_agent_prompts_are_controller_side_generators() -> None:
+    """Sub-agent prompt sources must not regress to self-loading runtime contracts."""
+    repo_root = Path(__file__).resolve().parents[1]
+    agent_dir = repo_root / "skills" / "studio" / "agents"
+    forbidden = (
+        "self-bootstrap",
+        "The controller MUST load this file",
+        "dispatched-prompt",
+        "return-value contract",
+        "ALWAYS open and follow",
+    )
+
+    for path in sorted(agent_dir.glob("*.md")):
+        if path.name == "author-production-rules.md":
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert (
+            "Dispatch Generator Contract" in text
+            or "Generator Contract" in text
+            or "Dispatch Generator" in text
+        ), path
+        for phrase in forbidden:
+            assert phrase not in text, f"{path}: {phrase}"
+
+
+def test_brainstorm_missing_topic_offers_saved_sessions_first() -> None:
+    """Missing brainstorm topic should offer saved sessions before fresh topics."""
+    repo_root = Path(__file__).resolve().parents[1]
+    clarify = (
+        repo_root / "workflows" / "generate" / "phase-0.5-clarify.md"
+    ).read_text(encoding="utf-8")
+
+    assert "BRAINSTORM mode is selected AND brainstorm topic is missing" in clarify
+    assert "DISCOVER saved brainstorm sessions" in clarify
+    assert "{cf-studio-path}/.cache/brainstorm/" in clarify
+    assert "I found saved brainstorm sessions you can continue" in clarify
+    assert "Reply with a saved session number to continue it" in clarify
+    assert "No saved brainstorm sessions were found" in clarify
+
+
+def test_cf_on_uses_ambiguous_routing_menu() -> None:
+    """Activation-only cf requests should use the same menu as unclear intent."""
+    repo_root = Path(__file__).resolve().parents[1]
+    skill = (repo_root / "skills" / "studio" / "SKILL.md").read_text(encoding="utf-8")
+    routing = (repo_root / "skills" / "studio" / "routing.md").read_text(encoding="utf-8")
+
+    assert "CfOnActivationMenu" not in skill
+    assert "activation-only / no-task intent" in routing
+    assert "cf on" in routing
+    assert "MENU RoutingClarificationMenu" in routing
+    assert "1 -> help" in routing
+    assert "2 -> brainstorm" in routing
+    assert "CONTINUE WorkflowRoutingTable entry 0" in routing
+
+
+def test_cf_help_routes_to_prefilled_explain_preset() -> None:
+    """cf help should run explain on Studio itself without asking setup gates."""
+    repo_root = Path(__file__).resolve().parents[1]
+    routing = (repo_root / "skills" / "studio" / "routing.md").read_text(
+        encoding="utf-8"
+    )
+    help_workflow = (repo_root / "workflows" / "help.md").read_text(
+        encoding="utf-8"
+    )
+    preamble = (
+        repo_root / "workflows" / "analyze" / "preamble.md"
+    ).read_text(encoding="utf-8")
+
+    assert "cf help | /cf help | cf-studio help | /cf-studio help | cfs help" in routing
+    assert "open and follow {cf-studio-path}/.core/workflows/help.md" in routing
+    assert "name: cf-help" in help_workflow
+    assert "SET CF_HELP_PRESET = true" in help_workflow
+    assert 'SET EXPLAIN_TARGET = "{cf-studio-path}"' in help_workflow
+    assert 'SET STORYTELLING_MODE = "presentation"' in help_workflow
+    assert 'SET STORYTELLING_ARTIFACT_DISPOSITION = "chat-only"' in help_workflow
+    assert 'SET STORYTELLING_AUDIENCE = "Constructor Studio newcomers"' in help_workflow
+    assert 'SET STORYTELLING_DIAGRAM_FORMAT = "ascii"' in help_workflow
+    assert "SET STORYTELLING_DIAGRAM_FORMAT_PRESET = true" in help_workflow
+    assert "Run a normal cf-explain storytelling session" in help_workflow
+    assert "LOAD skill `cf` IN ANALYZE + EXPLAIN mode, CF_HELP_PRESET=true" in help_workflow
+    assert "MUST_NOT render custom one-shot help here" in help_workflow
+    assert "MUST_NOT ask the diagram-format lazy prompt in help mode" in help_workflow
+    assert "IF CF_HELP_PRESET == true" in preamble
+    assert "PRESERVE route-supplied preset variables" in preamble
+    assert "STORYTELLING_DIAGRAM_FORMAT, STORYTELLING_DIAGRAM_FORMAT_PRESET" in preamble
+    assert "do not ask mode, disposition, audience" in preamble
+    assert "diagram-format questions" in preamble
+    assert "normal Storytelling Protocol E0-E5" in preamble
+    assert "FORBID custom one-shot help rendering" in preamble
+    assert "ASCII inline diagrams" in preamble
+    assert "Do NOT replace it with a custom one-shot `Cf Overview`" in preamble
+    assert "STORYTELLING_HELP_OUTPUT_CONTRACT" not in preamble
+
+
+def test_empty_standalone_explore_clarifies_before_dispatch() -> None:
+    """Bare cf-explore should ask for a topic before launching cf-explorer."""
+    repo_root = Path(__file__).resolve().parents[1]
+    explore = (repo_root / "workflows" / "explore.md").read_text(encoding="utf-8")
+
+    assert "UNIT ExploreClarifyGate" in explore
+    assert "request is activation-only / no-task explore intent" in explore
+    assert "skill explorer" in explore
+    assert "I need a topic before I search the project" in explore
+    assert "What should I explore?" in explore
+    assert "MENU ExploreClarifyMenu" in explore
+    assert "MUST_NOT dispatch cf-explorer before this gate resolves" in explore
+    assert "Parent workflows MAY skip this gate only when they supply a non-empty" in explore
+
+
+def test_explore_offers_explicit_save_bundle_after_summary() -> None:
+    """Explore should offer an explicit save bundle without silently writing."""
+    repo_root = Path(__file__).resolve().parents[1]
+    explore = (repo_root / "workflows" / "explore.md").read_text(encoding="utf-8")
+
+    assert "EMIT resource map and context summary" in explore
+    assert "RUN ExploreSaveOffer" in explore
+    assert "UNIT ExploreSaveOffer" in explore
+    assert "{cf-studio-path}/.cache/explore/{slug}-{ISO}/" in explore
+    assert "folder: <path>" in explore
+    assert "result.json" in explore
+    assert "resource-map.md" in explore
+    assert "summary.md" in explore
+    assert "exact explorer result JSON" in explore
+    assert "task summary, exploration status, resource count, and missing-context questions" in explore
+    assert "MUST NOT silently write exploration results from running explore alone" in explore
+    assert "MUST keep explorer output in `resource_context`, not `SHARED_CONTEXT_PACK`" in explore
 
 
 def test_brainstorm_challenge_critique_only_is_not_rendered_as_skipped() -> None:
@@ -2032,6 +2235,99 @@ def test_analyze_routing_includes_storytelling_and_bug_hunt_intents() -> None:
 
     assert "explain | walk through | teach | onboard" in routing
     assert "bug hunt | find bugs | prompt bugs" in routing
+
+
+def test_storytelling_navigation_slots_are_topic_picker_menus() -> None:
+    """Next/Deeper/Lateral should offer choices before jumping away."""
+    repo_root = Path(__file__).resolve().parents[1]
+    shared = (
+        repo_root / "requirements" / "storytelling-shared.md"
+    ).read_text(encoding="utf-8")
+    phases = (
+        repo_root / "requirements" / "storytelling-phases.md"
+    ).read_text(encoding="utf-8")
+    methodology = (
+        repo_root / "requirements" / "storytelling.md"
+    ).read_text(encoding="utf-8")
+    validation = (
+        repo_root / "workflows" / "analyze" / "validation-criteria.md"
+    ).read_text(encoding="utf-8")
+
+    assert "choose next / skip-ahead / revisit topic" in phases
+    assert "choose from drill-down topics for the current topic" in phases
+    assert "choose from related topics / linked artifacts" in phases
+    assert "Next topics:" in phases
+    assert "Deeper topics:" in phases
+    assert "Lateral topics:" in phases
+    assert "Skip ahead" in phases
+    assert "Revisit" in phases
+    assert "Custom — tell me which planned topic to jump to or revisit" in phases
+    assert "Custom — tell me what to drill into" in phases
+    assert "Custom — tell me where to go sideways" in phases
+    assert "Back — return to the main navigation" in phases
+    assert "7. Back" in phases
+    assert "8. Send comments — preview" in phases
+    assert "WAIT user.reply and STOP_TURN" in phases
+    assert "bare `Next` / `Deeper` / `Lateral` opens a numbered topic-pick menu" in shared
+    assert "Making the main `Next` nav slot execute one preselected next topic directly" in methodology
+    assert "Making the main `Deeper` or `Lateral` nav slot execute one preselected topic directly" in methodology
+    assert "Omitting `Back` from the main storytelling navigation" in methodology
+    assert "Next nav slots offered topic-pick menus" in validation
+    assert "Deeper/Lateral nav slots offered topic-pick menus" in validation
+    assert "Next / Deeper / Lateral / Recap / Ask / Wrap / Back" in validation
+
+
+def test_ambiguous_routing_fallback_lists_full_route_family() -> None:
+    """The root /cf fallback menu must not hide available routes or modes."""
+    repo_root = Path(__file__).resolve().parents[1]
+    routing = (repo_root / "skills" / "studio" / "routing.md").read_text(
+        encoding="utf-8"
+    )
+
+    expected_routes = [
+        "1 -> help -- Show a polished beginner-friendly cf overview",
+        "2 -> brainstorm -- Explore options, decisions, requirements, or tradeoffs",
+        "3 -> explain -- Get a source-grounded walkthrough",
+        "4 -> explore -- Find relevant project context",
+        "5 -> generate -- Create, edit, implement",
+        "6 -> analyze -- Review, audit, validate",
+        "7 -> plan -- Break a large task into executable phases",
+        "8 -> pdsl -- Author, compact, transform",
+        "9 -> map -- Build dependency, traceability",
+        "10 -> workspace -- Configure or inspect multi-repo workspace",
+        "11 -> auto-config -- Discover project setup",
+        "12 -> delegate -- Delegate an approved generated plan",
+        "13 -> compile phase -- Compile a plan phase brief",
+        "14 -> execute phase -- Execute the next or specified generated plan phase",
+        "15 -> migrate-from-cypilot -- Migrate legacy Cypilot setup",
+    ]
+    for route in expected_routes:
+        assert route in routing
+
+    assert "list PRs" in routing
+    assert "review PR 123" in routing
+    assert "PR status 123" in routing
+    assert "migrate-openspec" in routing
+    assert "Reply with 1-15" in routing
+    assert "Reply with 1, 2, 3, 4, 5, or 6." not in routing
+
+
+def test_root_cf_skill_metadata_advertises_broad_routes() -> None:
+    """Generated root skill metadata depends on the source skill description."""
+    repo_root = Path(__file__).resolve().parents[1]
+    skill = (repo_root / "skills" / "studio" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    for route in [
+        "PDSL prompt work",
+        "mapping",
+        "auto-config",
+        "migration",
+        "delegation",
+        "phase compile/execute",
+    ]:
+        assert route in skill
 
 
 def test_diff_scope_binary_omission_probe_is_allowed() -> None:

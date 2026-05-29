@@ -1,61 +1,31 @@
 ---
-description: Invoke when an analyze/review request targets a commit, branch, worktree, patch, or uncommitted changes — resolves the Git diff scope, changed files, hunks, and review targets so the orchestrator does not perform semantic diff scanning itself.
+description: Invoke when an analyze/review request targets a commit, branch, worktree, patch, or uncommitted changes — resolves the Git diff scope, changed files, omissions, and review targets, while emitting `changed_hunks = []` in structural-only mode so the orchestrator does not perform semantic diff scanning itself.
 ---
 
 <!-- toc -->
 
-- [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
+- [Frozen Input Payload](#frozen-input-payload)
 - [Methodology (fast, structural-only)](#methodology-fast-structural-only)
-- [Output (return-value contract)](#output-return-value-contract)
+- [Output Contract](#output-contract)
 - [Response Completion Gate](#response-completion-gate)
 
 <!-- /toc -->
 
-```text
-UNIT DiffScopeResolver
+## Dispatch Generator Contract
 
-PURPOSE:
-  Resolve commit, branch, worktree, patch, and dirty-change scope into a
-  bounded review package for downstream validator and semantic-review agents.
+This file is a controller-side prompt generator source, not a runtime prompt for the dispatched sub-agent.
 
-STATE:
-  PERFORMANCE_CONTRACT: structural-only
-    scope: this_agent_run
-    target: ≤ 30 seconds wall-clock
+The controller MUST use this file to synthesize the final dispatch prompt for
+the agent. The final prompt MUST include the task statement, frozen input
+payload, task-relevant instruction assets resolved from `SHARED_CONTEXT_PACK`,
+allowed resource context, output contract, completion gate, and the explicit
+rule that the dispatched sub-agent executes only that final prompt.
 
-RULES:
-  - MUST read SKILL.md to activate Constructor Studio mode
-  - MUST_NOT read full file contents
-  - MUST_NOT perform semantic analysis or score risk by inspecting code
-  - MUST_NOT run git show or full git diff without --name-status/--stat
-  - MUST_NOT modify files or run validators
+The dispatched sub-agent MUST NOT open prompt assets from disk and MUST NOT
+rediscover workflows, requirements, specs, AGENTS, SKILL, or kit prompt files.
 
-INVARIANTS:
-  - MUST stay structural throughout; semantic work belongs to downstream agents
-```
 
-Open and follow `{cf-studio-path}/.core/skills/studio/SKILL.md` to load
-Constructor Studio mode in this isolated context.
-
-```text
-UNIT AllowedGitCommands
-
-PURPOSE:
-  Enumerate the bounded set of git commands this agent may run.
-
-RULES:
-  - MUST use only:
-      git -C <worktree> status --short
-      git -C <worktree> diff --name-status <base>..<head>        (committed)
-      git -C <worktree> diff --name-status HEAD                  (uncommitted)
-      git -C <worktree> rev-parse HEAD
-      git -C <worktree> rev-parse <ref>^
-      git -C <worktree> diff --stat <base>..<head>               (size summary)
-      git -C <worktree> diff --numstat <base>..<head>            (binary omission check)
-      git -C <worktree> diff --numstat HEAD                      (uncommitted binary omission check)
-```
-
-## Inputs (dispatched-prompt contract)
+## Frozen Input Payload
 
 ```json
 {
@@ -79,6 +49,7 @@ PURPOSE:
 DO:
   1. Resolve worktree_path: record HEAD, branch, dirty count from
      git status --short (line count, no per-file inspection)
+     and git branch --show-current
   2. WHEN commit_sha is present:
        Compute base = base_ref OR <commit_sha>^
        List committed changes via git diff --name-status <base>..<commit_sha>
@@ -93,16 +64,24 @@ DO:
   6. Risk hotspots: FORBID semantic risk analysis
        SET risk_hotspots = []
        EXCEPTION: WHEN direct_targets are named:
-         Copy them in as:
+         Copy them in as structural review-priority hints only:
            {path, risk: "user-named direct target", evidence: "direct_targets"}
-  7. Compute review_targets:
+  7. Compute binary_paths first:
+       paths reported by git diff --numstat with -\t- markers
+       Allowed probes:
+         git -C <worktree> diff --numstat <base>..<head>
+         git -C <worktree> diff --numstat HEAD
+  8. Compute review_targets:
        direct_targets UNION {changed_files.path | status in {M,A,R,U,?}}
        deduped, sorted
        EXCLUDE status == D (deleted)
-  8. Compute omissions:
-       files filtered out from review_targets with a one-word reason:
+       EXCLUDE path in binary_paths
+  9. Compute omissions:
+       files filtered out from the review_targets candidate set with a one-word reason:
          "deleted" — status D
          "binary"  — git diff --numstat shows -\t- markers
+       A path omitted as "binary" MUST_NOT remain in review_targets even when it
+       was also named in direct_targets
 
 FORBID: hunk extraction and risk synthesis
 ```
@@ -112,7 +91,7 @@ NOTES:
   that own the methodology files. This agent only answers "which files are in
   scope" and the structural manifest.
 
-## Output (return-value contract)
+## Output Contract
 
 Emit a compact `Diff Scope Package` summary (10 lines or fewer: HEAD, branch,
 base, counts) followed by the `diff_scope` JSON:
@@ -125,15 +104,17 @@ base, counts) followed by the `diff_scope` JSON:
   "changed_files": [{"path": "<path>", "old_path": null, "status": "M|A|D|R|U|?", "source": "committed|staged|unstaged|untracked"}],
   "changed_hunks": [],
   "review_targets": ["<path>", "..."],
-  "risk_hotspots": [],
+  "risk_hotspots": [{"path": "<path>", "risk": "user-named direct target", "evidence": "direct_targets"}],
   "omissions": [{"path": "<path>", "reason": "deleted|binary"}]
 }
 ```
 
 ```text
 NOTES:
-  changed_hunks and risk_hotspots are always emitted as empty arrays in
-  this fast scope-resolution mode; downstream agents derive their own.
+  changed_hunks is always emitted as an empty array in this fast
+  scope-resolution mode.
+  risk_hotspots is empty unless direct_targets were supplied; when present,
+  entries are structural user-priority hints rather than semantic risk scores.
 ```
 
 ## Response Completion Gate
