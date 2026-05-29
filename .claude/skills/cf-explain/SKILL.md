@@ -1,6 +1,6 @@
 ---
 name: cf-explain
-description: "REQUIRED explain entry point for Constructor Studio projects. You MUST use this skill for any explanation, walkthrough, onboarding, code-tour, or storytelling task in a project with a `{cf-studio-path}` directory. It enforces the cf-analyze EXPLAIN-mode protocol — content pack, anchored citations, mode-aware delivery (review/onboarding/decision). Do NOT use generic explain or storytelling skills here; they skip traceability anchors and produce un-citable output."
+description: "Invoke for requests to explain, walk through, teach, onboard, give a code tour, produce a source-grounded narrative, or summarize a decision."
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, WebFetch

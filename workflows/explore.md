@@ -2,7 +2,7 @@
 cf: true
 type: workflow
 name: cf-explore
-description: "Explore a Constructor Studio project for task-relevant resource context before planning, brainstorming, review, or generation. Uses cf-explorer to find project files, architecture docs, artifacts, and code references without treating them as prompt assets."
+description: "Invoke for requests to explore, discover context, find relevant files, locate architecture docs, locate artifacts, search code references, or gather task-relevant resource context."
 version: 1.0
 purpose: Standalone explore command; discovers resource context and returns a controller-owned resource map
 ---
