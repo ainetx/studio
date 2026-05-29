@@ -17,6 +17,7 @@ purpose: Universal workflow for creating or updating any artifact or code
 - [Agent Anti-Patterns (STRICT mode)](#agent-anti-patterns-strict-mode)
 - [Rules Mode Behavior](#rules-mode-behavior)
 - [Phase 0: Ensure Dependencies](#phase-0-ensure-dependencies)
+- [Phase 0.a: Explore / Brainstorm Applicability](#phase-0a-explore--brainstorm-applicability)
 - [Phase 0.1: Plan Escalation Gate](#phase-01-plan-escalation-gate)
 - [Phase 0.2: Review-Loop Configuration](#phase-02-review-loop-configuration)
 - [Phase 0.x: GIT_COMMIT_MODE Probe](#phase-0x-git_commit_mode-probe)
@@ -162,6 +163,28 @@ NOTES:
   the INLINE_FALLBACK probe to
   {cf-studio-path}/.core/workflows/shared/inline-fallback-probe.md
   (canonical block reused by analyze.md).
+```
+
+## Phase 0.a: Explore / Brainstorm Applicability
+
+```text
+UNIT GenerateExploreBrainstormGate
+
+PURPOSE:
+  Decide whether generation needs project-resource discovery or design
+  exploration before planning/collecting inputs.
+
+WHEN:
+  GeneratePhase0 completed
+  AND before Phase 0.1 / Phase 0.5 / Phase 0.7
+
+DO:
+  REQUIRE {cf-studio-path}/.core/workflows/shared/explore-brainstorm-gate.md is loaded and followed
+
+RULES:
+  - MUST run required cf-explore before cf-brainstorm when both apply
+  - MUST carry RESOURCE_CONTEXT into Phase 0.7 and Phase 1 when exploration ran
+  - MUST NOT put resource files into SHARED_CONTEXT_PACK
 ```
 
 ## Phase 0.1: Plan Escalation Gate

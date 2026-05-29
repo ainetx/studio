@@ -31,6 +31,48 @@ version: 1.1
   "kit_rules_path": null,
   "template_path": "{path or null}",
   "example_path": "{path or null}",
+  "context_requirements": [
+    {
+      "persona_id": "E1",
+      "needs": ["architecture decisions", "current module boundaries"],
+      "why_needed": "..."
+    }
+  ],
+  "resource_context": {
+    "exploration_status": "sufficient|partial|insufficient",
+    "summary": "...",
+    "resources": [
+      {
+        "path": "<path>",
+        "resource_type": "architecture|artifact|code|test|docs|config|other",
+        "why_relevant": "...",
+        "suggested_slices": [
+          {
+            "label": "...",
+            "line_range": { "start": 1, "end": 40 },
+            "summary": "...",
+            "excerpt": "<short excerpt or null>"
+          }
+        ],
+        "confidence": "high|medium|low"
+      }
+    ],
+    "persona_needs": [
+      {
+        "persona_id": "E1",
+        "needs": ["..."],
+        "resource_paths": ["<path>"],
+        "missing_context": ["..."]
+      }
+    ],
+    "missing_context_questions": [
+      {
+        "for_persona_id": "E1",
+        "question": "...",
+        "why_needed": "..."
+      }
+    ]
+  },
   "panel": [
     { "id": "E1", "persona": "...", "focus": ["..."], "rationale": "..." }
   ],
@@ -56,6 +98,19 @@ version: 1.1
           "next_topic_proposal": { "text": "...", "why": "..." } },
         { "expert_id": "E2", "relevant": false, "reason": "..." }
       ],
+      "question_queue": [
+        {
+          "queue_index": 1,
+          "expert_id": "E1",
+          "question_id": "E1Q1",
+          "decision_key": "<section-or-topic>:<expert-id>:<question-key>",
+          "text": "...",
+          "proposed_default": "...",
+          "rationale": "...",
+          "status": "pending|answered|accepted_default|kept_prior|open_unanswered"
+        }
+      ],
+      "current_question_index": 1,
       "answers": [{ "question_id": "E1Q1",
                     "decision_key": "<section-or-topic>:<expert-id>:<question-key>",
                     "value": "..." }],
@@ -95,7 +150,15 @@ version: 1.1
     { "text": "...", "proposed_by": ["E1"] }
   ],
   "decisions": { "<template-section-or-key>": "<resolved-value>" },
-  "open_questions": [ "<unanswered or skipped>" ],
+  "open_questions": [
+    {
+      "question_id": "E1Q1",
+      "decision_key": "<section-or-topic>:<expert-id>:<question-key>",
+      "text": "...",
+      "reason": "user_skipped|missing_context|deferred_decision",
+      "source": "brainstorm"
+    }
+  ],
   "round_count": 0,
   "BRAINSTORM_MAX_ROUNDS": 10
 }
@@ -119,6 +182,16 @@ RULES:
     - MUST be false for RELAXED/no-kit sessions or chat-only exploratory runs
     - MUST include kit_rules_path alongside rules_loaded in every brainstorm
       facilitator or expert dispatch
+  context_requirements:
+    - set after the panel is confirmed and before the first round dispatch
+    - captures what each persona needs to know to contribute high-quality
+      questions/proposals
+  resource_context:
+    - set by cf-explorer after panel confirmation
+    - stores non-prompt project resources only; MUST NOT be copied into
+      SHARED_CONTEXT_PACK
+    - MUST be included in every cf-brainstorm-panel and cf-brainstorm-expert
+      dispatch
   topic_current:
     - MUST store full topic object {id, text, section}; MUST NOT store only id
     - topic_history stores id-only history
@@ -133,6 +206,18 @@ RULES:
     - challenge-rounds: lists ONLY keys overwritten by accept/<custom>;
       keep/skip excluded; empty list when user skipped/kept every question
       (suppresses option C on next post-round menu)
+  rounds[].question_queue:
+    - flattened queue of rendered questions for the round
+    - orchestrator asks exactly one pending question per user turn
+    - queue order follows panel order, then question order inside each
+      contribution
+    - post-round topic/challenge/wrap menu is emitted only after every queue
+      item is answered, accepted, kept, or marked open_unanswered
+  open_questions:
+    - stores intentionally unanswered brainstorm questions
+    - these are valid downstream inputs for PRD, DESIGN, ADR, and FEATURE docs
+    - MUST preserve question text and decision_key so generated artifacts can
+      carry them as open questions instead of inventing answers
   rounds[].challenged_decisions:
     - set ONLY on kind="challenge" rounds
     - snapshot of {key: value} at challenge start, scoped to

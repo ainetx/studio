@@ -14,6 +14,7 @@ purpose: Universal workflow for generating execution plans with phased delivery
 - [Overview](#overview)
 - [Context Budget & Overflow Prevention (CRITICAL)](#context-budget--overflow-prevention-critical)
 - [Phase 0: Resolve Variables & Discover Tools](#phase-0-resolve-variables--discover-tools)
+- [Phase 0.a: Explore / Brainstorm Applicability](#phase-0a-explore--brainstorm-applicability)
 - [Phase 1: Assess Scope](#phase-1-assess-scope)
 - [Phase 2: Decompose](#phase-2-decompose)
 - [Phase 3: Compile Phase Files](#phase-3-compile-phase-files)
@@ -132,6 +133,31 @@ PURPOSE:
 
 DO:
   REQUIRE {cf-studio-path}/.core/workflows/plan/phase-0-discover.md is loaded and followed
+```
+
+## Phase 0.a: Explore / Brainstorm Applicability
+
+```text
+UNIT PlanExploreBrainstormGate
+
+PURPOSE:
+  Decide whether planning needs resource discovery or decision exploration
+  before scope assessment and decomposition.
+
+WHEN:
+  PlanPhase0 completed
+  AND before PlanPhase1
+
+DO:
+  REQUIRE {cf-studio-path}/.core/workflows/shared/explore-brainstorm-gate.md is loaded and followed
+
+RULES:
+  - MUST run required cf-explore for brownfield, architecture, multi-file, or
+    unclear target plans
+  - MUST run required cf-brainstorm when decomposition depends on unresolved
+    strategy or acceptance semantics
+  - MUST include RESOURCE_CONTEXT and BRAINSTORM_CONTEXT in Phase 1 assessment
+    when either exists
 ```
 
 ## Phase 1: Assess Scope

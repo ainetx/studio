@@ -105,6 +105,31 @@ NOTES:
   starts a new PDSL request.
 ```
 
+## Explore / Brainstorm Applicability
+
+```text
+UNIT PdslExploreBrainstormGate
+
+PURPOSE:
+  Decide whether PDSL authoring needs related prompt-resource discovery or
+  design exploration before dispatch.
+
+WHEN:
+  PDSL_MODE is selected
+  AND before mode-specific dispatch
+
+DO:
+  REQUIRE {cf-studio-path}/.core/workflows/shared/explore-brainstorm-gate.md is loaded and followed
+
+RULES:
+  - SHOULD offer cf-explore for transform/review when source_paths omit related
+    workflows, requirements, agent prompts, or specs needed for consistency
+  - SHOULD offer cf-brainstorm for new prompt architecture, state/menu policy,
+    dispatch semantics, or cross-agent contract changes
+  - MUST NOT require brainstorm for mechanical compacting or direct review when
+    target_paths and source_paths are explicit
+```
+
 ## Shared Inputs
 
 All modes use this shared context.

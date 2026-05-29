@@ -1,0 +1,33 @@
+{
+  "date": "2026-05-29",
+  "panel": [
+    "Runtime Architect",
+    "Versioning & Reproducibility Lead",
+    "Developer Experience Designer",
+    "Offline & Cache Systems Engineer",
+    "Compatibility & Adoption Strategist"
+  ],
+  "topic": "Global mode for cfs where skills and sub-agents are available globally across repositories, while each repository keeps only configuration, lock/update policy, and cache metadata.",
+  "decisions": {
+    "command_targeting": "cfs update and cfs generate-agents inspect init mode by default; --local and --global override the target.",
+    "explicit_targeting": "cfs update --local|--global and cfs generate-agents --local|--global are supported.",
+    "global_cache": "Immutable multi-version global cache.",
+    "global_mode": "Skills and sub-agents are global; repo stores config, immutable lock/update policy, and cache metadata only.",
+    "host_footprint": "Existing {cf-studio-path}/config is the repo discovery/config surface; no extra cfs.toml is required by default.",
+    "init_mode": "cfs init creates only {cf-studio-path}/config by default.",
+    "local_init": "cfs init --local creates .core and .gen for a fully repo-local installation.",
+    "local_mode": "Everything is per-repo, with no dependency on global runtime.",
+    "mixed_mode": "Global/config-only and local/per-repo modes are permanent first-class modes.",
+    "offline_policy": "Offline startup is allowed only after full hydration and integrity verification of the locked bundle and manifest.",
+    "repo_compatibility_pin": "Execution uses immutable lock only.",
+    "update_policy": "Semver/range policy is used only by cfs update to choose the next lock."
+  },
+  "open_questions": [
+    "Exact core.toml schema for runtime lock and update policy.",
+    "Global cache directory layout and bundle identity key.",
+    "Where each supported host stores global skills/sub-agents.",
+    "Migration path from existing .bootstrap/.core/.gen repositories.",
+    "cfs info output for active mode, effective runtime source, lock status, and hydration status."
+  ],
+  "recommended_next_step": "Draft a resolution matrix for init, update, generate-agents, runtime lookup, --local, and --global."
+}

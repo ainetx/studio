@@ -19,7 +19,7 @@ RULES:
     before continuing to generate or analyze
   - MUST_NOT collapse the three distinct thresholds (500 / 2000 / 2500)
   - MUST ask for clarification and request exactly one of
-    plan | generate | analyze | workspace | migrate
+    plan | generate | analyze | explore | workspace | migrate
     when no entry matches
 ```
 
@@ -80,30 +80,36 @@ DO:
        -> open and follow {cf-studio-path}/.core/workflows/plan.md
 
   6. WHEN request matches any of:
+       explore | discover context | find relevant context |
+       find project context | locate architecture | locate resources |
+       context search | resource search
+       -> open and follow {cf-studio-path}/.core/workflows/explore.md
+
+  7. WHEN request matches any of:
        create | edit | fix | update | implement | refactor | setup | build
        AND CompoundFindFix does NOT apply
        -> open and follow {cf-studio-path}/.core/workflows/generate.md
 
-  7. WHEN request matches any of:
+  8. WHEN request matches any of:
        analyze | validate | review | check | inspect | audit | compare |
        explain | walk through | teach | onboard |
        bug hunt | find bugs | prompt bugs
        OR CompoundFindFix applies
        -> open and follow {cf-studio-path}/.core/workflows/analyze.md
 
-  8. WHEN request matches any of:
+  9. WHEN request matches any of:
        workspace | multi-repo | add source | cross-reference
        -> open and follow {cf-studio-path}/.core/workflows/workspace.md
 
-  9. WHEN request matches any of:
+  10. WHEN request matches any of:
        map | dependency map | cfs map | visualize dependencies | render graph
        -> open and follow {cf-studio-path}/.core/workflows/map.md
 
-  10. WHEN request matches any of:
+  11. WHEN request matches any of:
         auto-config | configure project | scan brownfield | generate rules
         -> open and follow {cf-studio-path}/.core/workflows/auto-config.md
 
-  11. WHEN request matches "migrate from cypilot" | "migrate-from-cypilot"
+  12. WHEN request matches "migrate from cypilot" | "migrate-from-cypilot"
         -> open and follow {cf-studio-path}/.core/skills/studio/migrate-from-cypilot.md
 ```
 
@@ -111,16 +117,16 @@ DO:
 UNIT CompoundFindFix
 
 PURPOSE:
-  Resolve ambiguous requests that match both fix/update/refactor (entry 6)
-  and find-bugs/bug-hunt/audit/review (entry 7) keywords simultaneously.
+  Resolve ambiguous requests that match both fix/update/refactor (entry 7)
+  and find-bugs/bug-hunt/audit/review (entry 8) keywords simultaneously.
 
 WHEN:
-  request matches keywords from entry 6 (fix | update | refactor)
-  AND request matches keywords from entry 7 (find bugs | bug hunt | audit | review)
+  request matches keywords from entry 7 (fix | update | refactor)
+  AND request matches keywords from entry 8 (find bugs | bug hunt | audit | review)
 
 DO:
   SET routing_winner = analyze
-  CONTINUE WorkflowRoutingTable entry 7
+  CONTINUE WorkflowRoutingTable entry 8
 
 NOTES:
   Routing both to generate skips the find phase entirely. The analyze run
@@ -180,12 +186,13 @@ DO:
 MENU RoutingClarificationMenu:
   OPTIONS:
     1 -> plan        -- CONTINUE WorkflowRoutingTable entry 5
-    2 -> generate    -- CONTINUE WorkflowRoutingTable entry 6
-    3 -> analyze     -- CONTINUE WorkflowRoutingTable entry 7
-    4 -> workspace   -- CONTINUE WorkflowRoutingTable entry 8
-    5 -> migrate     -- CONTINUE WorkflowRoutingTable entry 11
+    2 -> explore     -- CONTINUE WorkflowRoutingTable entry 6
+    3 -> generate    -- CONTINUE WorkflowRoutingTable entry 7
+    4 -> analyze     -- CONTINUE WorkflowRoutingTable entry 8
+    5 -> workspace   -- CONTINUE WorkflowRoutingTable entry 9
+    6 -> migrate     -- CONTINUE WorkflowRoutingTable entry 12
   INVALID:
-    EMIT "Reply with 1, 2, 3, 4, or 5."
+    EMIT "Reply with 1, 2, 3, 4, 5, or 6."
     WAIT user.reply
     STOP_TURN
 ```

@@ -156,7 +156,7 @@ Your request combines storytelling and prompt-review intent. Which should I run?
 Reply `1` or `2`.
 ```
 
-**CRITICAL routing invariant**: when EXPLAIN_MODE=true the NEXT user-visible assistant message MUST be the E0/E1 explain-session opener; any direct explanation/summary/walkthrough emitted before the four E1 gates resolve is INVALID and MUST be discarded — see {cf-studio-path}/.core/requirements/storytelling.md AP-#0 for the full invariant.
+**CRITICAL routing invariant**: when EXPLAIN_MODE=true the NEXT user-visible assistant message MUST be the E0/E1 explain-session opener; any direct explanation/summary/walkthrough emitted before the four E1 gates resolve is INVALID and MUST be discarded. The full invariant is in {cf-studio-path}/.core/requirements/storytelling.md AP-#0.
 
 When the prompt-engineering sub-agent runs, it treats compact-prompts optimization as a **HIGH-priority requirement**.
 

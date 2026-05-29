@@ -39,6 +39,7 @@ WORKFLOW_SUBAGENTS: tuple[str, ...] = (
     "cf-semantic-reviewer-consistency",
     "cf-brainstorm-facilitator",
     "cf-brainstorm-expert",
+    "cf-explorer",
     "cf-generate-collector",
     "cf-analyze-planner",
     "cf-generate-planner",
@@ -171,6 +172,31 @@ DISPATCH_PAYLOADS: dict[str, dict] = {
             }],
             "decisions": {},
             "topic_history": [],
+        },
+        "resource_context": {
+            "exploration_status": "sufficient",
+            "summary": "fixture resource context",
+            "resources": [],
+            "persona_needs": [],
+            "missing_context_questions": [],
+        },
+    },
+    "cf-explorer": {
+        "task": "fixture explore task",
+        "intent": "brainstorm",
+        "panel": [{
+            "id": "E1",
+            "persona": "Fixture Reviewer",
+            "focus": ["fixture-focus-a"],
+            "rationale": "fixture rationale",
+        }],
+        "known_paths": ["fixture/DESIGN.md"],
+        "search_roots": ["fixture"],
+        "constraints": {
+            "kind": "artifact-kind",
+            "system": "fixture-system",
+            "max_files": 20,
+            "max_excerpt_lines_per_file": 40,
         },
     },
     "cf-generate-collector": {
@@ -456,6 +482,26 @@ def _fake_invoke(agent_id: str, payload: dict) -> dict:
                 "text": "fixture next topic",
                 "why": "fixture follow-up rationale",
             }
+    elif agent_id == "cf-explorer":
+        response["result"]["exploration_status"] = "sufficient"
+        response["result"]["task_summary"] = payload["task"]
+        response["result"]["resource_context"] = {
+            "summary": "fixture resource context",
+            "resources": [{
+                "path": "fixture/DESIGN.md",
+                "resource_type": "architecture",
+                "why_relevant": "fixture relevance",
+                "suggested_slices": [],
+                "confidence": "high",
+            }],
+            "persona_needs": [{
+                "persona_id": "E1",
+                "needs": ["fixture need"],
+                "resource_paths": ["fixture/DESIGN.md"],
+                "missing_context": [],
+            }],
+            "missing_context_questions": [],
+        }
     elif agent_id == "cf-analyze-planner":
         response["result"]["reviewer_plan_marker"] = "<!-- reviewer_plan -->"
         response["result"]["reviewer_plan"] = {
@@ -564,6 +610,14 @@ def test_dispatch_round_trip(agent_id: str) -> None:
             assert questions[0].get("decision_key")
             next_topic = response["result"].get("next_topic_proposal")
             assert isinstance(next_topic, dict) and next_topic.get("why")
+        elif agent_id == "cf-explorer":
+            assert response["result"].get("exploration_status") in {
+                "sufficient", "partial", "insufficient"
+            }
+            resource_context = response["result"].get("resource_context")
+            assert isinstance(resource_context, dict)
+            assert isinstance(resource_context.get("resources"), list)
+            assert "missing_context_questions" in resource_context
         elif agent_id == "cf-analyze-planner":
             assert response["result"].get("reviewer_plan_marker") == "<!-- reviewer_plan -->"
             assert response["result"].get("reviewer_plan", {}).get("tasks")
@@ -1647,46 +1701,67 @@ def test_brainstorm_challenge_questions_target_decision_keys() -> None:
     assert "MUST be unique within this response" in expert
     assert "MUST_NOT use bare `topic.section` as the whole key" in expert
     assert "decision_key` MUST name a key present in `challenged_decisions`" in expert
-    assert "key = question.decision_key" in round_loop
+    assert "update state.decisions[q.decision_key]" in round_loop
+    assert "challenge overwrites; skip/keep excluded" in round_loop
     assert "MUST reject duplicate topic-round decision_key values" in round_loop
     assert '"decision_key": "<section-or-topic>:<expert-id>:<question-key>"' in state_schema
     assert '"decision_key": "<key>"' in state_schema
 
 
-def test_brainstorm_round_prompt_supports_low_friction_answering() -> None:
-    """Users should not have to answer every expert question manually."""
+def test_brainstorm_round_prompt_supports_one_by_one_answering() -> None:
+    """Users should answer brainstorm questions one at a time, then choose next action."""
     repo_root = Path(__file__).resolve().parents[1]
     round_loop = (
         repo_root / "workflows" / "generate" / "phase-0.7" / "round-loop.md"
     ).read_text(encoding="utf-8")
     round_loop_lines = round_loop.splitlines()
 
-    assert '"accept all"' in round_loop
-    assert "`then: custom: <text>`" in round_loop
-    assert '    EMIT "then: custom: <text> — custom topic"' in round_loop_lines
-    assert "      custom: <text> — custom topic" not in round_loop_lines
-    assert '"skip rest"' in round_loop
-    assert '"then:" may be sent as follow-up' in round_loop
+    assert "UNIT Phase07QuestionQueue" in round_loop
+    assert "UNIT Phase07AskCurrentQuestion" in round_loop
+    assert "MUST show exactly one pending question per turn" in round_loop
+    assert "MUST NOT dump the full question_queue to the user" in round_loop
+    assert "UNIT Phase07PostRoundMenu" in round_loop
+    assert "MUST NOT show this menu before every pending question is resolved" in round_loop
+    assert '  EMIT "custom: <text> — custom next topic"' in round_loop_lines
+    assert "3 skip ->" in round_loop
+    assert 'reason = "user_skipped"' in round_loop
+    assert 'mark q.status = "open_unanswered"' in round_loop
+    assert "skip MUST NOT update state.decisions" in round_loop
 
 
-_BRAINSTORM_THEN_REPLY_RULES = (
-    (re.compile(r"^then:\s*custom:\s*<text>$", re.IGNORECASE), "custom_topic"),
-    (re.compile(r"^then:\s*(?:1|2|C|W)$", re.IGNORECASE), "topic_choice"),
+_BRAINSTORM_POST_ROUND_REPLY_RULES = (
+    (re.compile(r"^custom:\s*<text>$", re.IGNORECASE), "custom_topic"),
+    (re.compile(r"^(?:1|2|C|W)$", re.IGNORECASE), "topic_choice"),
 )
 
 
-def _parse_brainstorm_then_reply(raw: str) -> str:
+def _parse_brainstorm_post_round_reply(raw: str) -> str:
     user_input = raw.strip()
-    for pattern, outcome in _BRAINSTORM_THEN_REPLY_RULES:
+    for pattern, outcome in _BRAINSTORM_POST_ROUND_REPLY_RULES:
         if pattern.match(user_input):
             return outcome
     return "reject_unrecognized"
 
 
-def test_brainstorm_then_custom_reply_grammar() -> None:
-    """`then: custom: <text>` should parse, but bare `custom: <text>` should not."""
-    assert _parse_brainstorm_then_reply("then: custom: <text>") == "custom_topic"
-    assert _parse_brainstorm_then_reply("custom: <text>") == "reject_unrecognized"
+def test_brainstorm_post_round_custom_reply_grammar() -> None:
+    """Post-round choices parse directly after the one-by-one question queue."""
+    assert _parse_brainstorm_post_round_reply("custom: <text>") == "custom_topic"
+    assert _parse_brainstorm_post_round_reply("then: custom: <text>") == "reject_unrecognized"
+
+
+def test_brainstorm_wrap_menu_distinguishes_session_and_disk_save() -> None:
+    """Wrap handoff must separate session-only preservation from disk persistence."""
+    repo_root = Path(__file__).resolve().parents[1]
+    wrap = (
+        repo_root / "workflows" / "generate" / "phase-0.7" / "wrap-handoff.md"
+    ).read_text(encoding="utf-8")
+
+    assert "1. Save brainstorm results only (in session)" in wrap
+    assert "2. Save brainstorm results only (to disk)" in wrap
+    assert "Option 1 MUST be session-only and MUST NOT write files" in wrap
+    assert "Option 2 MUST be hidden or rejected" in wrap
+    assert "WRITE state.json" in wrap
+    assert "WRITE design.md" in wrap
 
 
 def test_brainstorm_challenge_critique_only_is_not_rendered_as_skipped() -> None:

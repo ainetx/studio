@@ -15,6 +15,8 @@ PURPOSE:
 
 DO:
   LOAD skill `cf` IN GENERATE + BRAINSTORM mode
+  The target generate Phase 0.7 workflow MUST run cf-explore after panel
+  selection and pass RESOURCE_CONTEXT into brainstorm agents.
 
 ON_ERROR:
   load_failed -> EMIT "Cannot load target workflow — check that {cf-studio-path} is correctly set." STOP_TURN

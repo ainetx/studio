@@ -39,29 +39,38 @@ Open questions (carry into inputs):
 - {open_question}
 
 Next-step menu follows immediately:
-1. Save brainstorm results only
-2. Send results to generate input collection
-3. Send results to review/analyze
-4. Reopen a topic for another brainstorm round
+1. Save brainstorm results only (in session)
+2. Save brainstorm results only (to disk)
+3. Send results to generate input collection
+4. Send results to review/analyze
+5. Reopen a topic for another brainstorm round
 In `save` mode, the saved brainstorm cache remains on disk and follows manual retention.
+The discard handoff path MUST state whether saved cache artifacts remain.
 ---
     EMIT_MENU WrapHandoffMenu
     WAIT user.reply
     STOP_TURN
 
 MENU WrapHandoffMenu:
-  TITLE: Brainstorm complete — choose next step (reply 1, 2, 3, or 4)
+  TITLE: Brainstorm complete — choose next step (reply 1, 2, 3, 4, or 5)
   OPTIONS:
     1 ->
-      NOTE: preserve brainstorm outputs; do not enter generate or analyze
-      NOTE: if session used save, keep saved cache artifacts on disk
-      EMIT "Brainstorm results saved. No workflow handoff started."
+      NOTE: preserve brainstorm outputs only in current chat/session state
+      NOTE: do not write cache files
+      NOTE: do not enter generate or analyze
+      EMIT "Brainstorm results saved in session only. No workflow handoff started."
       STOP_TURN
     2 ->
+      REQUIRE output_destination allows file writes
+      WRITE state.json to {cf-studio-path}/.cache/brainstorm/{session_id}/state.json
+      WRITE design.md to {cf-studio-path}/.cache/brainstorm/{session_id}/design.md
+      EMIT "Brainstorm results saved to disk under {cf-studio-path}/.cache/brainstorm/{session_id}/. No workflow handoff started."
+      STOP_TURN
+    3 ->
       SET PRE_RESOLVED_INPUTS = state.decisions
       SET CARRYOVER_QUESTIONS = state.open_questions
       CONTINUE workflows/generate/phase-1-collect.md
-    3 ->
+    4 ->
       SET REVIEW_BRAINSTORM_RESULTS = {
         decisions: state.decisions,
         open_questions: state.open_questions,
@@ -72,7 +81,7 @@ MENU WrapHandoffMenu:
       WITH:
         brainstorm_review = true
         brainstorm_results = REVIEW_BRAINSTORM_RESULTS
-    4 ->
+    5 ->
       EMIT "Which topic gap should be reopened?"
       WAIT user.reply
       STOP_TURN
@@ -84,7 +93,7 @@ MENU WrapHandoffMenu:
     WAIT user.reply
     STOP_TURN
   INVALID:
-    EMIT "Reply with 1, 2, 3, or 4."
+    EMIT "Reply with 1, 2, 3, 4, or 5."
     WAIT user.reply
     STOP_TURN
 
@@ -95,7 +104,12 @@ RULES:
   - MUST_NOT interpret stop-token as implicit approval for generate
   - MUST preserve brainstorm decisions/open questions when routing to generate
     or analyze
+  - Open questions from skipped brainstorm questions MUST remain unresolved;
+    generate/analyze handoff MUST NOT convert them into implicit decisions
   - MUST keep saved cache artifacts on disk when session used save
+  - Option 1 MUST be session-only and MUST NOT write files
+  - Option 2 MUST be hidden or rejected with a one-line explanation when
+    output_destination is chat-only or no-write
 ```
 
 ### Contributions shape and orchestration modes
@@ -157,6 +171,8 @@ NOTES:
   Generate route:
     The collector marks pre-filled sections [from brainstorm] and surfaces
     a Carryover Questions mini-section.
+    Skipped brainstorm questions appear there as unresolved inputs for PRD,
+    DESIGN, ADR, FEATURE, or implementation planning.
     Open, load, and follow {cf-studio-path}/.core/workflows/generate/phase-1-collect.md.
 
   Analyze route:

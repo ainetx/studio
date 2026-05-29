@@ -78,7 +78,7 @@ DO:
   Follow that workflow
 
 NOTES:
-  Proxy workflows: cf-brainstorm, cf-auto-config, cf-explain, cf-plan.
+  Proxy workflows: cf-brainstorm, cf-auto-config, cf-explain, cf-explore, cf-plan.
 ```
 
 ---
@@ -110,6 +110,23 @@ RULES:
   - MUST load `{cf-studio-path}/.core/skills/studio/sub-agent-dispatch.md` before any cf-* sub-agent dispatch
   - MUST load `{cf-studio-path}/.core/skills/studio/routing.md` before routing decisions
   - MUST NOT skip any of the three files
+```
+
+```text
+UNIT ExploreBrainstormApplicabilityPolicy
+
+PURPOSE:
+  Ensure cf workflows consistently decide whether to run project exploration
+  or brainstorming before execution.
+
+RULES:
+  - Workflows that can benefit from project-resource discovery or design
+    exploration MUST load and apply
+    `{cf-studio-path}/.core/workflows/shared/explore-brainstorm-gate.md`
+  - cf-explore output is RESOURCE_CONTEXT and MUST NOT be merged into
+    SHARED_CONTEXT_PACK
+  - cf-brainstorm MUST receive RESOURCE_CONTEXT when exploration ran
+  - Required explore/brainstorm gates MUST run before write-capable phases
 ```
 
 ---

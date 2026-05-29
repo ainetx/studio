@@ -1,174 +1,193 @@
 ---
-description: Invoke when contributing one expert's persona-scoped turn to a brainstorm round — parameterized by persona and mode (`topic` | `challenge`) passed in the dispatch prompt. Given {persona, topic, state, mode, challenged_decisions?}, returns either `{ relevant: false, reason }` (sit out) or `{ relevant: true, questions: [1..3], critique, next_topic_proposal }`. In `challenge` mode the expert pushes back on the supplied `challenged_decisions` from its persona's POV and emits counter-proposals as the questions' `proposed_default`. Dispatched in parallel for the full panel per round. Fan-out path owned by PANEL_MODE_*=fan-out; for single-agent mode use cf-brainstorm-panel.md.
+description: Invoke for one persona-scoped brainstorm contribution in fan-out mode. Controller uses this file to generate the final prompt for one expert in `topic` or `challenge` mode.
 ---
 
-<!-- toc -->
+# Brainstorm Expert Dispatch Generator
 
-- [Inputs (dispatched-prompt contract)](#inputs-dispatched-prompt-contract)
-- [Methodology](#methodology)
-- [Output (return-value contract)](#output-return-value-contract)
-- [Response Completion Gate](#response-completion-gate)
+This file is for the controller, not for direct sub-agent self-bootstrap.
 
-<!-- /toc -->
+## Generator Contract
 
-## Dispatch Guidance
+The controller MUST generate a final dispatch prompt with these sections in order:
+1. execution boundary
+2. task statement
+3. frozen input payload
+4. mode rules
+5. output contract
+6. completion gate
+7. final emit instruction
 
-This file is orchestration-time guidance for the controller, not a runtime
-self-bootstrap contract for the dispatched sub-agent.
+The controller MUST:
+- state that the sub-agent executes only the supplied final prompt
+- forbid opening AGENTS.md, SKILL.md, workflows, requirements, specs, or kit prompt files from disk
+- inject only task-relevant instruction context already resolved from `SHARED_CONTEXT_PACK`
+- provide the frozen input payload below as one JSON block
+- restate whether `mode` is `topic` or `challenge`
+- preserve output fields and mode-specific constraints verbatim or near-verbatim
+- end with:
+  `Return JSON only. No markdown, no preamble, no trailing commentary.`
 
-The controller MUST load this file, resolve the task-relevant instruction
-assets from `SHARED_CONTEXT_PACK`, and synthesize a fully materialized final
-dispatch prompt for this agent. The dispatched sub-agent MUST execute only that
-final prompt and MUST NOT open prompt assets from disk directly.
-
-
-## Inputs (dispatched-prompt contract)
+## Frozen Input Payload
 
 ```json
 {
-  "persona": { "id": "E2", "persona": "Security Reviewer",
-                "focus": ["auth", "data-handling"], "rationale": "..." },
-  "topic":   { "id": "T1", "text": "...", "section": "<template-section or null>" },
-  "mode":    "topic" | "challenge",
-  "challenged_decisions": { "<decision-key>": "<current-value>" },
+  "persona": {
+    "id": "E2",
+    "persona": "Security Reviewer",
+    "focus": ["auth", "data-handling"],
+    "rationale": "..."
+  },
+  "topic": {
+    "id": "T1",
+    "text": "...",
+    "section": "<template-section or null>"
+  },
+  "mode": "topic|challenge",
+  "challenged_decisions": {
+    "<decision-key>": "<current-value>"
+  },
   "state": {
     "kind": "<KIND or null>",
-    "rules_loaded": true|false,
+    "rules_loaded": true,
     "kit_rules_path": "<path or null>",
     "template_path": "<path or null>",
-    "panel": [ { "id": "...", "persona": "...", "focus": [...], "rationale": "..." } ],
-    "decisions": { "<key>": "<value>" },
-    "topic_history": ["T0", ...]
+    "panel": [
+      {
+        "id": "...",
+        "persona": "...",
+        "focus": ["..."],
+        "rationale": "..."
+      }
+    ],
+    "decisions": {
+      "<key>": "<value>"
+    },
+    "topic_history": ["T0"]
+  },
+  "resource_context": {
+    "exploration_status": "sufficient|partial|insufficient",
+    "summary": "...",
+    "resources": [
+      {
+        "path": "<path>",
+        "resource_type": "architecture|artifact|code|test|docs|config|other",
+        "why_relevant": "...",
+        "suggested_slices": [
+          {
+            "label": "...",
+            "line_range": { "start": 1, "end": 40 },
+            "summary": "...",
+            "excerpt": "<short excerpt or null>"
+          }
+        ],
+        "confidence": "high|medium|low"
+      }
+    ],
+    "persona_needs": [
+      {
+        "persona_id": "E2",
+        "needs": ["..."],
+        "resource_paths": ["<path>"],
+        "missing_context": ["..."]
+      }
+    ],
+    "missing_context_questions": [
+      {
+        "for_persona_id": "E2",
+        "question": "...",
+        "why_needed": "..."
+      }
+    ]
   }
 }
 ```
 
+## Mode Rules
+
 ```text
-UNIT InputConstraints
+UNIT ExpertModeRules
 
 RULES:
   - `mode` is required
-  - `challenged_decisions` is required and non-empty when mode == "challenge"
-  - `challenged_decisions` MUST be absent or null when mode == "topic"
+  - `challenged_decisions` MUST be non-empty when mode == "challenge"
+  - `challenged_decisions` MUST be null or absent when mode == "topic"
   - WHEN mode == "challenge":
-      treat `challenged_decisions` snapshot as authoritative for this dispatch
-      MUST_NOT read later values from `state.decisions` for those keys
-      (they may have already been mutated by a concurrent expert)
+      treat challenged_decisions as authoritative for this dispatch
+      MUST_NOT reread later values from state.decisions for those keys
+
+TOPIC MODE:
+  - IF persona is not relevant and another persona clearly owns the topic:
+      return { "relevant": false, "reason": "<one sentence>" }
+  - ELSE return 1-3 questions
+  - Each question MUST include:
+      id
+      decision_key
+      text
+      proposed_default
+      rationale
+  - decision_key pattern:
+      IF topic.section != null:
+        <topic.section>:<persona.id>:<question-slug>
+      ELSE:
+        <topic.id>:<persona.id>:<question-slug>
+  - decision_key MUST_NOT be empty
+  - MUST_NOT use bare `topic.section` as the whole key
+  - MAY include short critique
+  - MUST include next_topic_proposal
+
+CHALLENGE MODE:
+  - IF persona is not relevant and no cross-cutting concern applies:
+      return { "relevant": false, "reason": "<one sentence>" }
+  - ELSE critique MUST be non-empty
+  - questions length MAY be 0..3
+  - Each question MUST include:
+      id
+      decision_key
+      text
+      proposed_default
+      rationale
+  - Every decision_key MUST already exist in challenged_decisions
+  - At most one question per challenged decision key
+  - next_topic_proposal MUST be null
+  - If a challenged decision is already optimal from this persona's POV:
+      MUST_NOT invent a counter
+
+KIT/TEMPLATE RULES:
+  - REQUIRE kit_rules_path is non-null before applying kit rules from it
+  - REQUIRE template_path is non-null before applying template constraints from it
+  - WHEN state.rules_loaded == true:
+      MUST_NOT propose defaults that violate kit or template constraints
+  - WHEN mode == "challenge" AND a current decision violates kit rules:
+      SHOULD name it in critique as a high-priority target
+
+RESOURCE CONTEXT RULES:
+  - Use resource_context.summary, resources, and persona_needs when producing
+    project-specific architecture/code/artifact questions
+  - MAY rely on resource excerpts and summaries already present in
+    resource_context
+  - MUST_NOT invent project facts that are absent from resource_context
+  - MUST_NOT open prompt assets from disk
+  - MAY inspect only non-prompt resource paths explicitly listed in
+    resource_context.resources when the final dispatch prompt grants resource
+    reads
+  - IF resource_context.exploration_status == "insufficient" OR this persona's
+    persona_needs[].missing_context is non-empty:
+      ask a concrete context-gathering question instead of a substantive
+      proposal
+      set proposed_default to a specific request beginning with
+      "Please provide: "
+      explain in rationale why that missing context is necessary
 ```
 
-## Methodology
-
-```text
-UNIT ExpertMethodology
-
-PURPOSE:
-  Adopt persona and produce contribution for the assigned mode.
-
-DO:
-  SET adopted_persona = persona
-  IF mode == "topic": CONTINUE TopicMode
-  IF mode == "challenge": CONTINUE ChallengeMode
-```
-
-```text
-UNIT TopicMode
-
-PURPOSE:
-  Contribute 1-3 sharp questions for exploratory topic round.
-
-WHEN:
-  mode == "topic"
-
-DO:
-  1. IF topic is not in this persona's domain
-     AND another panel persona clearly owns it:
-       RETURN { "relevant": false, "reason": "<one-sentence>" }
-       STOP_TURN
-  2. IF topic is relevant, produce 1-3 questions where each question has:
-       - `id`: non-empty, unique within this response, e.g. <persona.id>Q1
-       - `decision_key`: unique across all rendered questions in this topic-round
-           IF topic.section is non-null: use `<topic.section>:<persona.id>:<question-slug>`
-           ELSE: use `<topic.id>:<persona.id>:<question-slug>`
-           MUST_NOT use bare `topic.section` as the whole key
-       - `text`: the question
-       - `proposed_default`: a concrete proposal acceptable if user says "go"
-       - `rationale`: why this matters from this persona's POV
-  3. Optionally produce one short `critique` paragraph pushing back on
-     assumptions in `state.decisions` from this persona's POV
-  4. Propose the highest-value follow-up topic from this persona's POV
-     given the current state
-
-RULES:
-  - MUST_NOT contribute filler when not relevant
-```
-
-```text
-UNIT ChallengeMode
-
-PURPOSE:
-  Push back on supplied challenged_decisions from persona's POV.
-
-WHEN:
-  mode == "challenge"
-
-DO:
-  1. IF none of the challenged decisions are in this persona's domain
-     AND no cross-cutting concern (security, cost, reliability, UX, compliance)
-     bears on them:
-       RETURN { "relevant": false, "reason": "<one-sentence>" }
-       STOP_TURN
-  2. IF relevant, produce a non-empty `critique` paragraph naming:
-       the specific decision(s) being challenged
-       the failure mode (risk, hidden cost, lost optionality, contradiction
-       with kit rules, etc.)
-  3. Produce 0-3 questions where each has:
-       - `id`: non-empty, unique within this response, e.g. <persona.id>Q1
-       - `decision_key`: a key present in `challenged_decisions`; unique within this response
-       - `text`: phrase the challenge as a question
-       - `proposed_default`: the concrete new counter-value to overwrite that entry
-       - `rationale`: why the counter is better from this persona's POV;
-                      cite the failure mode named in `critique`
-     WHEN a challenged decision is already optimal from this persona's POV:
-       MUST_NOT manufacture a counter — drop that question
-     Zero questions is valid ONLY when: critique is useful but no concrete override is appropriate;
-       in that case return relevant: true, empty questions, non-empty critique, next_topic_proposal: null
-  4. SET next_topic_proposal = null
-
-RULES:
-  - `critique` MUST be non-empty in challenge mode; empty or whitespace-only is a contract violation
-  - every `questions[].decision_key` MUST name a key present in `challenged_decisions`
-  - `questions[].decision_key` values MUST be unique within this response
-  - `next_topic_proposal` MUST be null in challenge mode
-  - emit at most one question and one counter-proposal for any challenged decision key
-  - MUST_NOT invent irrelevant pushback
-```
-
-```text
-UNIT KitRulesCheck
-
-PURPOSE:
-  Apply kit and template constraints to all proposed defaults.
-
-WHEN:
-  state.rules_loaded == true
-
-DO:
-  REQUIRE kit_rules_path is non-null before reading kit_rules_path
-  REQUIRE template_path is non-null before reading template_path
-  proceed with available context when either path is absent
-
-RULES:
-  - MUST_NOT propose a default that violates the kit's rules
-  - WHEN mode == "challenge" AND a current decision itself violates the kit's rules:
-      that decision is a high-priority target — MUST name it in `critique`
-```
-
-## Output (return-value contract)
+## Output Contract
 
 Either:
 
 ```json
-{ "relevant": false, "reason": "<one-sentence>" }
+{
+  "relevant": false,
+  "reason": "<one-sentence>"
+}
 ```
 
 or:
@@ -177,39 +196,52 @@ or:
 {
   "relevant": true,
   "questions": [
-    { "id": "<persona.id>Q1", "decision_key": "<decision-key>", "text": "...",
-      "proposed_default": "...", "rationale": "..." }
+    {
+      "id": "<persona.id>Q1",
+      "decision_key": "<decision-key>",
+      "text": "...",
+      "proposed_default": "...",
+      "rationale": "..."
+    }
   ],
   "critique": "<one-paragraph or empty>",
-  "next_topic_proposal": { "text": "...", "why": "..." }
+  "next_topic_proposal": {
+    "text": "...",
+    "why": "..."
+  }
 }
 ```
 
-NOTES:
-  The JSON block is the entire response — no preamble, no trailing commentary.
-
-## Response Completion Gate
+## Completion Gate
 
 ```text
-UNIT BrainstormExpertCompletionGate
+UNIT ExpertCompletionGate
 
 RULES:
-  - MUST emit the JSON shape above as the entire output (no chat, no preamble)
-  - MUST give every question a non-empty `id`
+  - MUST emit exactly one of the two JSON shapes above and nothing else
+  - Every question id MUST be non-empty
   - `questions[].id` values MUST be unique within the response
-  - every question MUST have a non-empty `decision_key`
+  - Every decision_key MUST be non-empty
+  - challenge `questions[].decision_key` values MUST be unique within this response
   - WHEN relevant == true AND mode == "topic":
-      MUST have 1-3 questions (not 0, not >3)
+      questions length MUST be 1..3
   - WHEN relevant == true AND mode == "challenge":
-      MUST have 0-3 questions; 0 is valid only for critique-only challenge with non-empty critique
-  - WHEN rules_loaded == true:
-      every `proposed_default` MUST be justified against template / rules in `rationale`
-      or trivially satisfies them
-  - WHEN mode == "challenge":
-      `critique` MUST be non-empty
-      every `questions[].decision_key` MUST target a key present in `challenged_decisions`
-      `questions[].decision_key` values MUST be unique within the response
-      every `proposed_default` MUST be the sole counter-value for that key
-      `next_topic_proposal` MUST be null
+      questions length MUST be 0..3
+      critique MUST be non-empty
+      critique-only challenge is valid only when no concrete counter-proposal
+      should overwrite any challenged decision
+      critique-only challenge MUST return relevant: true, empty questions,
+      non-empty critique, and next_topic_proposal = null
+      next_topic_proposal MUST be null
+      each `decision_key` MUST name a key present in `challenged_decisions`
+      every decision_key MUST be present in challenged_decisions
+      decision_key values MUST be unique within the response
+  - WHEN state.rules_loaded == true:
+      proposed_default values MUST respect active kit/template constraints
+  - WHEN only one of kit_rules_path/template_path is available:
+      proceed with available context
+  - WHEN resource_context is insufficient for a project-specific proposal:
+      proposed_default MUST be a concrete "Please provide: ..." request for
+      the missing context
   - MUST satisfy the SKILL.md invariant
 ```

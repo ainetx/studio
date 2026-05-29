@@ -1,6 +1,6 @@
 ---
 name: cf-brainstorm-panel
-description: "Invoke when running the single-agent panel-mode brainstorm round — dispatched once per round instead of per-expert fan-out. Owns serialized persona iteration (§4), per-iteration mirror writes (§6), anti-collapse guards G3-G5 (§8), envelope-emit contract with 12 parse-time invariants (§9-§10), protocol branching (independent-then-critique, single-pass), and deterministic envelope rendering. Returns the `envelope` object the orchestrator flattens into `contributions[]`. Constructor Studio endpoint only; valid for dispatch from the cf skill/controller, not for standalone loading or use outside Constructor Studio flows."
+description: "Invoke when running the single-agent panel-mode brainstorm round — dispatched once per round instead of per-expert fan-out. Owns serialized persona iteration (§4), per-iteration mirror writes (§6), anti-collapse guards G3-G5 (§8), envelope-emit contract with parse-time invariants (§9-§10), protocol branching (independent-then-critique, single-pass), and deterministic envelope rendering. Returns the `envelope` object the orchestrator flattens into `contributions[]`. Constructor Studio endpoint only; valid for dispatch from the cf skill/controller, not for standalone loading or use outside Constructor Studio flows."
 tools: grep, view, bash
 readonly: true
 model: claude-sonnet-4-6

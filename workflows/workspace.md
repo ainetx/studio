@@ -13,6 +13,7 @@ purpose: Guide workspace federation setup for cross-repo traceability
 
 - [Overview](#overview)
 - [Phase 0: Router](#phase-0-router)
+- [Phase 0.a: Explore / Brainstorm Applicability](#phase-0a-explore--brainstorm-applicability)
 - [Runtime Loading Rule](#runtime-loading-rule)
 
 <!-- /toc -->
@@ -113,6 +114,29 @@ RULES:
   - MUST run phases in order for workspace setup
   - MUST route to analyze workflow with workspace target for status-only requests
     (do NOT load all setup phases)
+```
+
+## Phase 0.a: Explore / Brainstorm Applicability
+
+```text
+UNIT WorkspaceExploreBrainstormGate
+
+PURPOSE:
+  Ensure workspace setup has repository/resource discovery before configuring
+  federation, and offer brainstorm for policy-heavy choices.
+
+WHEN:
+  full workspace setup or config generation starts
+  AND before workspace Phase 1
+
+DO:
+  REQUIRE {cf-studio-path}/.core/workflows/shared/explore-brainstorm-gate.md is loaded and followed
+
+RULES:
+  - MUST run required cf-explore for setup/config generation
+  - MUST skip this gate for quick read-only cfs workspace-info/status commands
+  - SHOULD offer cf-brainstorm when precedence, ownership, rollout, or conflict
+    resolution policy is ambiguous
 ```
 
 ## Runtime Loading Rule

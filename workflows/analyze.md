@@ -17,6 +17,7 @@ purpose: Universal workflow for analysing any Constructor Studio artifact or cod
 - [Overview](#overview)
 - [Context Budget & Overflow Prevention (CRITICAL)](#context-budget--overflow-prevention-critical)
 - [Phase 0: Ensure Dependencies](#phase-0-ensure-dependencies)
+- [Phase 0.a: Explore Applicability](#phase-0a-explore-applicability)
 - [Phase 0.5: Clarify Analysis Scope](#phase-05-clarify-analysis-scope)
 - [Phase 1: File Existence Check](#phase-1-file-existence-check)
 - [Phase 2: Deterministic Gate](#phase-2-deterministic-gate)
@@ -141,6 +142,31 @@ DO:
 NOTES: Phase 0 + Phase 0.5 dependency resolution and the Mode Detection matrix
 are fully defined in
 {cf-studio-path}/.core/workflows/analyze/phase-0-dependencies.md.
+
+## Phase 0.a: Explore Applicability
+
+```text
+UNIT AnalyzeExploreGate
+
+PURPOSE:
+  Decide whether analysis/explanation needs project-resource discovery before
+  target validation and reviewer dispatch.
+
+WHEN:
+  AnalyzePhase0 completed
+  AND before Phase 0.5 / Phase 1
+
+DO:
+  REQUIRE {cf-studio-path}/.core/workflows/shared/explore-brainstorm-gate.md is loaded and followed
+
+RULES:
+  - MUST run required cf-explore when targets are missing or cross-file/project
+    context is the review subject
+  - MUST NOT run cf-brainstorm before findings; brainstorm is only a later
+    remediation-strategy next step
+  - MUST pass RESOURCE_CONTEXT to semantic reviewers only as resource context,
+    not prompt context
+```
 
 ## Phase 0.5: Clarify Analysis Scope
 

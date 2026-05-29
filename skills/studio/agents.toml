@@ -438,7 +438,7 @@ description = """\
 Invoke when running the single-agent panel-mode brainstorm round — \
 dispatched once per round instead of per-expert fan-out. Owns serialized \
 persona iteration (§4), per-iteration mirror writes (§6), anti-collapse \
-guards G3-G5 (§8), envelope-emit contract with 12 parse-time invariants \
+guards G3-G5 (§8), envelope-emit contract with parse-time invariants \
 (§9-§10), protocol branching (independent-then-critique, single-pass), \
 and deterministic envelope rendering. Returns the `envelope` object the \
 orchestrator flattens into `contributions[]`."""
@@ -446,6 +446,20 @@ mode = "readonly"
 isolation = true
 model = "cf:tier:balanced"
 role = "planning"
+target = "any"
+reasoning_effort = "medium"
+context_window = "high"
+
+[agents.cf-explorer]
+description = """\
+Invoke when a controller needs read-only discovery of task-relevant project \
+resources before dispatching brainstorm, generate, analyze, or planning agents. \
+Returns a resource_context map with relevant files, summaries, suggested slices, \
+persona-specific needs, and missing-context questions."""
+mode = "readonly"
+isolation = false
+model = "cf:tier:balanced"
+role = "analyze"
 target = "any"
 reasoning_effort = "medium"
 context_window = "high"

@@ -80,8 +80,10 @@ MENU SilentModeDowngradeRecoveryMenu:
       CONTINUE round normally
     2 ->
       CONTINUE wrap-handoff.md WITH reason="silent-mode-downgrade"
+    W | wrap ->
+      CONTINUE wrap-handoff.md WITH reason="silent-mode-downgrade-wrap"
   INVALID:
-    EMIT "Please reply with 1 or 2."
+    EMIT "Please reply with 1, 2, or W."
     WAIT user.reply
     STOP_TURN
 
@@ -97,7 +99,8 @@ UNIT Phase07RoundLoop
 
 PURPOSE:
   Drive topic and challenge rounds, dispatch agents, validate contributions,
-  render output, parse user replies, and enforce the round cap.
+  walk the user through questions one by one, parse the post-round choice,
+  and enforce the round cap.
 
 STATE:
   pending_round_kind: topic | challenge
@@ -151,11 +154,11 @@ DO:
     # Post-dispatch processing
     CONTINUE Phase07PostDispatch
 
-    # Render output to user
-    CONTINUE Phase07Render
+    # Render and parse questions one by one
+    CONTINUE Phase07QuestionQueue
 
-    # Parse user reply
-    CONTINUE Phase07ReplyParsing
+    # Parse post-round next action after the queue is complete
+    CONTINUE Phase07PostRoundChoiceParsing
 
     # Iteration cap check
     SET state.round_count = state.round_count + 1
@@ -212,8 +215,10 @@ MENU AgentUnavailableMenu:
       CONTINUE Phase07AgentAvailabilityCheck (for newly resolved agent)
     3 ->
       CONTINUE wrap-handoff.md WITH reason="agent-unavailable"
+    W | wrap ->
+      CONTINUE wrap-handoff.md WITH reason="agent-unavailable-wrap"
   INVALID:
-    EMIT "Reply with 1, 2, or 3."
+    EMIT "Reply with 1, 2, 3, or W."
     WAIT user.reply
     STOP_TURN
 ```
@@ -229,7 +234,8 @@ DO:
 
   IF panel_mode == "fan-out":
     PARALLEL_DISPATCH [cf-brainstorm-expert for each e in state.panel]
-    WITH: persona=e, topic=state.topic_current, state, mode="topic"
+    WITH: persona=e, topic=state.topic_current, state,
+          resource_context=state.resource_context, mode="topic"
     SET contributions = all_results
 
   ELSE:  # single-agent
@@ -238,12 +244,14 @@ DO:
       IF status != "skipped":
         DISPATCH cf-brainstorm-panel
         WITH: panel=state.panel, topic=state.topic_current, state,
+              resource_context=state.resource_context,
               mode="topic", protocol=protocol
         SET envelope = result
         SET contributions = flatten_envelope(envelope)
     ELSE:
       DISPATCH cf-brainstorm-panel
       WITH: panel=state.panel, topic=state.topic_current, state,
+            resource_context=state.resource_context,
             mode="topic", protocol=protocol
       SET envelope = result
       SET contributions = flatten_envelope(envelope)
@@ -255,7 +263,7 @@ UNIT Phase07ChallengeDispatch
 PURPOSE:
   Dispatch panel for challenge-round based on resolved panel_mode.
   Precondition: state.rounds non-empty and state.rounds[-1].answer_keys non-empty
-  (parse-side guard in Phase07ReplyParsing refuses C when answer_keys is empty).
+  (parse-side guard in Phase07PostRoundChoiceParsing refuses C when answer_keys is empty).
 
 DO:
   REQUIRE pending_round_kind == "challenge"
@@ -266,6 +274,7 @@ DO:
   IF panel_mode == "fan-out":
     PARALLEL_DISPATCH [cf-brainstorm-expert for each e in state.panel]
     WITH: persona=e, topic=state.topic_current, state,
+          resource_context=state.resource_context,
           mode="challenge", challenged_decisions=challenged_decisions
     SET contributions = all_results
 
@@ -275,6 +284,7 @@ DO:
       IF status != "skipped":
         DISPATCH cf-brainstorm-panel
         WITH: panel=state.panel, topic=state.topic_current, state,
+              resource_context=state.resource_context,
               mode="challenge", challenged_decisions=challenged_decisions,
               protocol=protocol
         SET contributions = flatten_envelope(result)
@@ -377,7 +387,8 @@ DO:
 UNIT Phase07PostDispatch
 
 PURPOSE:
-  Process contributions after dispatch and validation.
+  Process contributions after dispatch and validation, then build the
+  one-question-at-a-time intake queue.
 
 DO:
   SET participating = [c for c in contributions if c.relevant]
@@ -388,17 +399,23 @@ DO:
         [c.next_topic_proposal for c in participating])
   # challenge-rounds reuse the most recent topic-round's proposals
 
+  SET question_queue = flatten questions from participating contributions
+    ordered by state.panel order, then each contribution.questions order
+  SET current_question_index = 1
+
 RULES:
   - MUST validate every participating topic-round question has non-empty decision_key
   - MUST reject duplicate topic-round decision_key values as malformed expert output
   - MUST NOT render critique-only challenge outputs as skipped (keep in participating)
+  - MUST NOT ask the user to answer the whole question_queue in one reply
 ```
 
 ```text
-UNIT Phase07Render
+UNIT Phase07QuestionQueue
 
 PURPOSE:
-  Render round output or skipped-round menu to user.
+  Render one brainstorm question per user turn, collect the reaction, and only
+  then show the post-round next-action menu.
 
 DO:
   SET header = "Round {N} — Topic: {topic_current.text}"
@@ -415,23 +432,127 @@ DO:
     STOP_TURN
 
   ELSE:  # status == "ok" or "degraded"
+    APPEND to state.rounds immediately with:
+      n = len(rounds)+1
+      kind = pending_round_kind
+      topic = state.topic_current
+      panel_mode = panel_mode
+      protocol = protocol (null if fan-out)
+      status = status
+      health = health
+      contributions = contributions
+      question_queue = question_queue
+      current_question_index = 1
+      answers = []
+      answer_keys = []
+      challenged_decisions = challenged_decisions (null on topic-rounds)
+      next_topic_chosen = null
+
     EMIT {header}
     EMIT "Panel reacted: {len(participating)} contributing, {len(skipped)} skipped."
+    IF skipped is non-empty:
+      EMIT "Skipped personas: {persona}: {reason}"
     IF pending_round_kind == "challenge":
       EMIT "Challenging these decisions (overwrite-on-accept):"
       FOR each key in challenged_decisions.keys():
         EMIT "  - {key}: current value = \"{state.decisions[key]}\""
-    EMIT "Questions:"
-    FOR each expert contribution:
-      EMIT "[{expert_id}] ..." (or skipped: {reason})
-    EMIT "Critique (cross-expert pushback): ..."
-    EMIT "Reply per question: `{id}: accept | keep | <answer> | skip`"
-    EMIT post-round menu with numbered topics + C + W options
-    NOTE: Option C is hidden when state.rounds[-1].answer_keys is empty
-    EMIT "then: custom: <text> — custom topic"
-    EMIT "You can also type `stop` / `enough` / `done` at any point to end now."
-    WAIT user.reply
-    STOP_TURN
+
+    IF question_queue is empty:
+      EMIT "No actionable questions were produced. Critique summary: {critique}"
+      CONTINUE Phase07PostRoundMenu
+
+    CONTINUE Phase07AskCurrentQuestion
+
+RULES:
+  - MUST show exactly one pending question per turn
+  - MUST NOT dump the full question_queue to the user
+  - MUST include concise context for the current question:
+      expert/persona, why it matters, proposed default, and relevant critique
+  - MUST offer numbered answer options for each current question
+```
+
+```text
+UNIT Phase07AskCurrentQuestion
+
+PURPOSE:
+  Ask exactly one current brainstorm question with helpful answer options.
+
+DO:
+  SET q = first state.rounds[-1].question_queue item with status == "pending"
+
+  IF no pending q:
+    CONTINUE Phase07PostRoundMenu
+
+  EMIT:
+    "Question {q.queue_index}/{len(question_queue)} — {expert_id}"
+    "{q.text}"
+    "Why it matters: {q.rationale}"
+    "Proposed default: {q.proposed_default}"
+    "Possible answer directions:"
+    "- Accept the proposed default as-is."
+    "- Adjust the default with your constraints or preference."
+    "- Skip to keep it open/unanswered for later PRD/DESIGN/ADR handling."
+    "Decision key: {q.decision_key}"
+    IF challenge-round:
+      "Current value: {state.decisions[q.decision_key]}"
+
+  EMIT_MENU QuestionReactionMenu
+  WAIT user.reply
+  STOP_TURN
+
+MENU QuestionReactionMenu:
+  TITLE: Reply with a number, or write a custom answer.
+  OPTIONS:
+    1 accept-default ->
+      record q.proposed_default as the answer
+      mark q.status = "accepted_default"
+      update state.decisions[q.decision_key]
+      CONTINUE Phase07AskCurrentQuestion
+    2 custom-answer ->
+      if reply has no custom text, ask for the custom answer and STOP_TURN
+      record user text as the answer
+      mark q.status = "answered"
+      update state.decisions[q.decision_key]
+      CONTINUE Phase07AskCurrentQuestion
+    3 skip ->
+      add q to state.open_questions with:
+        question_id = q.question_id
+        decision_key = q.decision_key
+        text = q.text
+        reason = "user_skipped"
+        source = "brainstorm"
+      mark q.status = "open_unanswered"
+      CONTINUE Phase07AskCurrentQuestion
+    4 keep-current ->
+      allowed only in challenge-round
+      leave state.decisions[q.decision_key] unchanged
+      mark q.status = "kept_prior"
+      CONTINUE Phase07AskCurrentQuestion
+    5 wrap-save ->
+      SET state.topic_current = None
+      CONTINUE wrap-handoff.md WITH reason="question-wrap"
+  INVALID:
+    IF reply is non-empty free text:
+      treat as option 2 custom-answer
+    ELSE:
+      EMIT "Reply with 1, 2, 3, 4 in challenge rounds, 5, wrap, or a custom answer."
+      WAIT user.reply
+      STOP_TURN
+
+RULES:
+  - In topic-rounds option 4 MUST be hidden; if user replies 4, re-render menu
+  - "accept", "yes", or "default" aliases map to option 1
+  - "skip" maps to option 3
+  - "keep" maps to option 4 only in challenge-round
+  - "W", "wrap", "save", "stop", "enough", or "done" maps to option 5
+  - After each recorded reaction, update rounds[-1].answers and
+    rounds[-1].answer_keys immediately
+  - answer_keys includes only accepted-default/custom topic answers and
+    accepted-default/custom challenge overwrites; skip/keep excluded
+  - skip MUST NOT update state.decisions
+  - skip MUST preserve the question as open_unanswered so downstream PRD,
+    DESIGN, ADR, or FEATURE generation can carry it as an open question
+  - MUST always show wrap/save as a user-facing option while asking questions
 
 MENU SkippedRoundMenu:
   TITLE: Round skipped
@@ -448,76 +569,64 @@ MENU SkippedRoundMenu:
       STOP_TURN
     W ->
       SET state.topic_current = None
+      CONTINUE wrap-handoff.md WITH reason="skipped-round-wrap"
     stop_token ->
       SET state.topic_current = None
-    then: custom: <text> ->
+      CONTINUE wrap-handoff.md WITH reason="skipped-round-wrap"
+    custom: <text> ->
       SET pending_round_kind = "topic"
       SET state.topic_current = custom topic
       CONTINUE round loop
 ```
 
 ```text
-UNIT Phase07ReplyParsing
+UNIT Phase07PostRoundMenu
 
 PURPOSE:
-  Parse user reply to record round state, update decisions, and set next topic/kind.
+  After all questions in the round are resolved, offer next topic, challenge,
+  or wrap choices.
 
 DO:
-  APPEND to state.rounds:
-    n = len(rounds)+1
-    kind = pending_round_kind
-    topic = state.topic_current
-    panel_mode = panel_mode
-    protocol = protocol (null if fan-out)
-    status = status
-    health = health
-    contributions = contributions
-    answers = parsed_answers
-    challenged_decisions = challenged_decisions (null on topic-rounds)
-
-  FOR each accepted/custom answer:
-    SET key = question.decision_key
-    IF challenge-round: REQUIRE key in challenged_decisions.keys()
-    WRITE state.decisions[key] = value  # OVERWRITES prior value
-
-  SET rounds[-1].answer_keys = deduped set of touched keys
-    NOTE: challenge-rounds: ONLY keys overwritten by accept/<custom>;
-          keep/skip answers excluded from answer_keys
-
-  IF user replies skip to question:
-    ADD question to state.open_questions
-  IF expert returns relevant=false:
-    MUST NOT add that expert's unposed questions to state.open_questions
-  IF challenge-round keep/skip:
-    leave state.decisions[key] unchanged
-    MUST NOT add to open_questions
-
-  IF reply answers questions but omits then::
-    RECORD answers
-    RE-RENDER only post-round menu
-    ASK for then: as follow-up
-    WAIT user.reply
-    STOP_TURN
-
-  # Shortcut semantics
-  # "accept all" = accept every currently rendered proposed/counter value
-  # "skip rest" = skip every unanswered rendered question
-  # "then:" may be sent as follow-up after questions answered
+  EMIT "Round {N} question queue complete."
+  EMIT "Recorded decisions this round: {rounds[-1].answer_keys or 'none'}"
+  EMIT "Critique summary: {critique summary from participating contributions}"
+  EMIT post-round menu with numbered topics + C + W options
+  NOTE: Option C is hidden when state.rounds[-1].answer_keys is empty
+  EMIT "custom: <text> — custom next topic"
+  EMIT "W / wrap — open the wrap/save menu now."
+  WAIT user.reply
+  STOP_TURN
 
 RULES:
-  - MUST NOT mutate state on malformed reply (multiple then: tokens, unknown
-    choice letter, then: C when C is hidden)
+  - MUST NOT show this menu before every pending question is resolved
+  - MUST offer either next topic or challenge only after the full queue is complete
+  - MUST always show W / wrap as a user-facing option
+```
+
+```text
+UNIT Phase07PostRoundChoiceParsing
+
+PURPOSE:
+  Parse the post-round next-action reply after all question reactions are recorded.
+
+DO:
+  REQUIRE every state.rounds[-1].question_queue item status != "pending"
+
+RULES:
+  - MUST NOT mutate state on malformed reply (multiple choice tokens, unknown
+    choice letter, C when C is hidden)
   - MUST re-render post-round menu prefixed with one-line clarifier on malformed reply
-  - MUST assert rounds[-1].answer_keys is a list before dispatching then: choice;
+  - MUST assert rounds[-1].answer_keys is a list before dispatching choice;
     if not a list, treat as malformed-state error and re-ask
 
-  SWITCH then: choice:
+  SWITCH user choice:
     W or stop_token ->
       SET state.topic_current = None
+      CONTINUE wrap-handoff.md WITH reason="post-round-wrap"
     C ->
       IF state.rounds[-1].answer_keys is empty:
         EMIT "Nothing to challenge — the previous round produced no accepted or custom
-              answers. Pick a numbered topic option, `then: custom: <text>`, or `W`
+              answers. Pick a numbered topic option, `custom: <text>`, or `W`
               to wrap instead."
         RE-SHOW post-round menu
         WAIT user.reply
@@ -548,8 +657,9 @@ MENU RoundCapMenu:
     extend: M (M must be positive integer > current BRAINSTORM_MAX_ROUNDS) ->
       SET state.BRAINSTORM_MAX_ROUNDS = M
       CONTINUE round loop
-    accept ->
+    W | wrap | accept ->
       SET state.topic_current = None
+      CONTINUE wrap-handoff.md WITH reason="manual-cap"
     stop ->
       CONTINUE wrap-handoff.md WITH reason="manual-cap"
   INVALID:
@@ -557,6 +667,20 @@ MENU RoundCapMenu:
     EMIT_MENU RoundCapMenu
     WAIT user.reply
     STOP_TURN
+```
+
+```text
+UNIT Phase07WrapOptionInvariant
+
+PURPOSE:
+  Ensure the user can exit to wrap/save at every brainstorm interaction point.
+
+RULES:
+  - Every user-facing brainstorm menu after brainstorm acceptance MUST expose
+    a `W` or `wrap` option
+  - Wrap MUST route to {cf-studio-path}/.core/workflows/generate/phase-0.7/wrap-handoff.md
+  - Wrap MUST NOT imply discard; wrap-handoff owns save/generate/analyze/continue
+    routing and must be shown before any handoff
 ```
 
 ### Pre-dispatch checkpoint (MANDATORY)
@@ -631,7 +755,7 @@ NOTES:
       repair_feedback = (optional) prior round violations and correction hints
       state = brainstorm state with sub-fields:
         ALWAYS: kind, rules_loaded, kit_rules_path, template_path, panel,
-                decisions, topic_history
+                decisions, topic_history, resource_context
         OPTIONAL when available: example_path, rounds, open_questions,
                 session_id, next_topic_proposals
 
@@ -640,9 +764,14 @@ NOTES:
     Open, load, and follow
     {cf-studio-path}/.core/skills/studio/agents/cf-brainstorm-panel.md
     for the full contract.
+    The final dispatch prompt MUST preserve the panel agent's canonical
+    contract sections for input, envelope shape, parse-time invariants, and
+    completion gate; do NOT replace them with a short bullet summary when the
+    canonical schema can be carried forward directly.
     Orchestrator-supplied values:
       panel = full state.panel array
       topic = full state.topic_current object
+      resource_context = state.resource_context
       mode = "topic" or "challenge"
       protocol = "independent-then-critique" or "single-pass"
       challenged_decisions = (required on mode="challenge") snapshot of keys under challenge

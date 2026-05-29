@@ -1375,6 +1375,11 @@ def _agents_skill_outputs() -> list:
             "template": list(_AGENTS_WORKFLOW_SKILL_TEMPLATE),
         },
         {
+            "path": ".agents/skills/cf-explore/SKILL.md",
+            "target": "workflows/explore.md",
+            "template": list(_AGENTS_WORKFLOW_SKILL_TEMPLATE),
+        },
+        {
             "path": ".agents/skills/cf-workspace/SKILL.md",
             "target": "workflows/workspace.md",
             "template": list(_AGENTS_WORKFLOW_SKILL_TEMPLATE),
@@ -1518,6 +1523,22 @@ def _default_agents_config() -> dict:
                                 "disable-model-invocation: false",
                                 "user-invocable: true",
                                 "allowed-tools: Bash, Read, Write, Edit, Glob, Grep",
+                                "---",
+                                _GENERATED_MARKER,
+                                "",
+                                _ALWAYS_FOLLOW_TARGET_PATH,
+                            ],
+                        },
+                        {
+                            "path": ".claude/skills/cf-explore/SKILL.md",
+                            "target": "workflows/explore.md",
+                            "template": [
+                                "---",
+                                "name: cf-explore",
+                                _TMPL_DESCRIPTION,
+                                "disable-model-invocation: false",
+                                "user-invocable: true",
+                                "allowed-tools: Bash, Read, Glob, Grep",
                                 "---",
                                 _GENERATED_MARKER,
                                 "",
@@ -4275,7 +4296,7 @@ def _human_generate_agents_ok(
         ui.success("Agent integration complete!")
         ui.blank()
         ui.info("Your IDE will now:")
-        ui.hint("• Route /cf-generate, /cf-analyze, /cf-plan, and /cf-workspace to Constructor Studio workflows")
+        ui.hint("• Route /cf-generate, /cf-analyze, /cf-plan, /cf-explore, and /cf-workspace to Constructor Studio workflows")
         ui.hint("• Recognize the Constructor Studio skill in chat")
     else:
         ui.warn("Agent setup finished with some errors (see above).")
