@@ -35,6 +35,8 @@ DO:
   RUN SubAgentDispatchExecute
   EMIT_MENU SubAgentFallbackRequest WHEN native dispatch fails AND SUB_AGENT_RETRY_COUNT < 2
   EMIT_MENU SubAgentFallbackLimitRequest WHEN native dispatch fails AND SUB_AGENT_RETRY_COUNT >= 2
+  WAIT user.reply WHEN native dispatch fails
+  STOP_TURN WHEN native dispatch fails
 RULES:
   ALWAYS ask before every dispatch group unless SUB_AGENT_DISPATCH_MODE is already approve-session or inline-session
   ALWAYS let the user choose native once, native for session, inline once, inline for session, or cancel
