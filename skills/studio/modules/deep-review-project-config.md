@@ -8,7 +8,32 @@ This plain Markdown module defines the deterministic per-project review-rule con
 ~/.cf-studio/.cache/deep-review/projects/<target-project-cache-key>/config.toml
 ```
 
-The file is optional. Absence means no project-required checks. The skill never searches the repository for another review config.
+The file is optional. Absence means no project-required checks.
+
+## Project cache key
+
+`cf-deep-review` and `cf-deep-review-config` compute the same canonical cache key so the plan and the config share one project directory.
+
+Algorithm:
+
+1. Resolve the project identity:
+   - GitHub remote or PR target: `github.com/<owner>/<repo>`.
+   - Local checkout with a GitHub origin remote: `github.com/<owner>/<repo>`.
+   - Local checkout without a known remote: `local/<stable-hash-of-absolute-project-root>`.
+   - Other targets: `target/<stable-hash-of-canonical-target-string>`.
+2. This identity **is** `TARGET_PROJECT_CACHE_KEY`.
+3. The plan path is `~/.cf-studio/.cache/deep-review/projects/<TARGET_PROJECT_CACHE_KEY>/reviews/<target-slug>/plan.md`.
+4. The config path is `~/.cf-studio/.cache/deep-review/projects/<TARGET_PROJECT_CACHE_KEY>/config.toml`.
+
+Legacy keys such as `<owner>__<repo>` are not canonical. When a legacy config exists but the canonical config does not, the skill may offer to migrate it once with explicit confirmation.
+
+## Legacy migration
+
+When the canonical `REVIEW_CONFIG_PATH` is absent but a legacy config exists (for example `<owner>__<repo>/config.toml` under the same cache root), emit the legacy path and ask:
+
+1. migrate -> atomically move the legacy config to the canonical path, then proceed.
+2. create new -> ignore the legacy config and start from scratch.
+3. cancel -> return blocked.
 
 ## Schema
 

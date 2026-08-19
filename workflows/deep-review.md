@@ -142,6 +142,8 @@ MENU DeepReviewExistingPlanActions:
     8 show report and event history -> EMIT compact final/phase reports and event log; CONTINUE DeepReviewExistingPlanMenu
     9 close monitoring -> RUN set PLAN_STATUS = closed and append event; RETURN plan status
     10 stop -> RETURN plan status without changes
+    11 configure or edit project review rules -> INVOKE skill cf-deep-review-config with target; CONTINUE DeepReviewExistingPlanMenu
+    12 mine patterns from this review -> WHEN VERIFIED_FINDINGS is not empty INVOKE skill cf-deep-review-config with target mode=postmortem plan=REVIEW_PLAN_PATH; CONTINUE DeepReviewExistingPlanMenu
   INVALID:
     EMIT_MENU DeepReviewExistingPlanActions
     WAIT user.reply
@@ -180,7 +182,8 @@ UNIT DeepReviewStudy
 PURPOSE: Resolve the target and build a basic target-only context.
 DO:
   - SET ORIGINAL_INTENT = the triggering request verbatim WHEN ORIGINAL_INTENT == unset
-  - RUN resolve TARGET, TARGET_VERSION, TARGET_KIND, TARGET_PROJECT_ID, TARGET_PROJECT_ROOT, TARGET_PROJECT_CACHE_KEY, and REVIEW_SCOPE from explicit input and authoritative target metadata; default PR scope to the full current diff
+  - RUN resolve TARGET, TARGET_VERSION, TARGET_KIND, TARGET_PROJECT_ID, TARGET_PROJECT_ROOT, and REVIEW_SCOPE from explicit input and authoritative target metadata; default PR scope to the full current diff
+  - RUN set TARGET_PROJECT_CACHE_KEY per deep-review-project-config.md Project cache key algorithm from TARGET_PROJECT_ID and TARGET_PROJECT_ROOT
   - EMIT_MENU DeepReviewMissingInputMenu WHEN TARGET, TARGET_VERSION, TARGET_PROJECT_ID, TARGET_PROJECT_CACHE_KEY, or REVIEW_SCOPE is unset
   - WAIT user.reply WHEN required input is unset
   - STOP_TURN WHEN required input is unset
@@ -247,8 +250,9 @@ MENU DeepReviewContextMenu:
   OPTIONS:
     1 give me the basic briefing -> SET HUMAN_CONTEXT_STATUS = briefing-requested; CONTINUE DeepReviewBriefingDelivery
     2 I already reviewed the current changes and am ready -> SET HUMAN_CONTEXT_STATUS = confirmed-familiar; CONTINUE DeepReviewCheckBuilderInit
+    3 configure or edit project review rules -> INVOKE skill cf-deep-review-config with target; AFTER RETURN CONTINUE DeepReviewNewPlanContext
   INVALID:
-    EMIT "Reply with 1 for the basic briefing or 2 to confirm familiarity."
+    EMIT "Reply with 1 for the basic briefing, 2 to confirm familiarity, or 3 to configure project review rules."
     EMIT_MENU DeepReviewContextMenu
     WAIT user.reply
     STOP_TURN

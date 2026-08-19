@@ -48,6 +48,7 @@ build/
 .agents/skills/cf-coding-tests/SKILL.md
 .agents/skills/cf-coding/SKILL.md
 .agents/skills/cf-debug-prompts/SKILL.md
+.agents/skills/cf-deep-review-config/SKILL.md
 .agents/skills/cf-deep-review/SKILL.md
 .agents/skills/cf-docs-ci/SKILL.md
 .agents/skills/cf-docs-planning/SKILL.md
@@ -152,6 +153,7 @@ build/
 .claude/skills/cf-coding-tests/SKILL.md
 .claude/skills/cf-coding/SKILL.md
 .claude/skills/cf-debug-prompts/SKILL.md
+.claude/skills/cf-deep-review-config/SKILL.md
 .claude/skills/cf-deep-review/SKILL.md
 .claude/skills/cf-docs-ci/SKILL.md
 .claude/skills/cf-docs-planning/SKILL.md
@@ -301,6 +303,7 @@ build/
 .cursor/commands/cf-coding-tests.md
 .cursor/commands/cf-coding.md
 .cursor/commands/cf-debug-prompts.md
+.cursor/commands/cf-deep-review-config.md
 .cursor/commands/cf-deep-review.md
 .cursor/commands/cf-docs-ci.md
 .cursor/commands/cf-docs-planning.md
@@ -406,6 +409,7 @@ build/
 .github/prompts/cf-coding-tests.prompt.md
 .github/prompts/cf-coding.prompt.md
 .github/prompts/cf-debug-prompts.prompt.md
+.github/prompts/cf-deep-review-config.prompt.md
 .github/prompts/cf-deep-review.prompt.md
 .github/prompts/cf-docs-ci.prompt.md
 .github/prompts/cf-docs-planning.prompt.md
@@ -466,6 +470,7 @@ build/
 .windsurf/workflows/cf-coding-tests.md
 .windsurf/workflows/cf-coding.md
 .windsurf/workflows/cf-debug-prompts.md
+.windsurf/workflows/cf-deep-review-config.md
 .windsurf/workflows/cf-deep-review.md
 .windsurf/workflows/cf-docs-ci.md
 .windsurf/workflows/cf-docs-planning.md

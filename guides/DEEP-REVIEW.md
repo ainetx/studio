@@ -132,6 +132,8 @@ Condition sources:
 
 Matching prompts generate required atomic checks before optional suggestions. Required checks are selected automatically and show rule ID and match evidence.
 
+You can create or update this config interactively with `cf-deep-review-config`. It uses the same batch-based UX as the check builder: the skill proposes up to ten rule candidates at a time, and you select, add, or reject them until you are done. Sources include manual authoring, discovery from project files using the reverse-engineering methodology, mining patterns from existing deep-review plans, and post-mortem analysis of a finished review's findings. When you finish, the skill writes the validated `config.toml` and returns you to `cf-deep-review`.
+
 Override requires a reason:
 
 ```text
